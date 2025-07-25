@@ -1,6 +1,6 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd, java_stack_trace } from "../utils/android_runtime_requests.js"
-
+import { Java } from "../utils/javalib.js"
 
 const PROFILE_HOOKING_TYPE: string = "REFELCTION"
 

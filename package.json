@@ -6,8 +6,8 @@
     "main": "agent/hooking_profile_loader.ts",
     "scripts": {
         "prepare": "npm run build",
-        "build": "frida-compile agent/hooking_profile_loader.ts -o src/androidmalwaremotionmonitor/profiling.js",
-        "watch": "frida-compile agent/hooking_profile_loader.ts -o src/androidmalwaremotionmonitor/profiling.js -w"
+        "build": "frida-compile agent/hooking_profile_loader.ts -o src/dexray_intercept/profiling.js",
+        "watch": "frida-compile agent/hooking_profile_loader.ts -o src/dexray_intercept/profiling.js -w"
     },
     "keywords": [
         "frida",

@@ -139,7 +139,7 @@ $ npm install .
 
 
 > Dexray Intercept@0.0.1.5 build
-> frida-compile agent/hooking_profile_loader.ts -o src/profiling.js
+> frida-compile agent/hooking_profile_loader.ts -o src/dexray_intercept/profiling.js
 
 
 up to date, audited 75 packages in 6s

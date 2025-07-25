@@ -1,4 +1,5 @@
 import { log, devlog, am_send } from "../utils/logging.js"
+import { Java } from "../utils/javalib.js"
 
 /**
  * Mostly stuff from TelephonyManager gets hooked
