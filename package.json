@@ -1,0 +1,33 @@
+{
+    "name": "Dexray Intercept",
+    "version": "0.2.6.0",
+    "description": "Dexray Intercept is a frida agent for creating runtime profiles to track the behavior of an application as part of the SanDroid project",
+    "private": true,
+    "main": "agent/hooking_profile_loader.ts",
+    "scripts": {
+        "prepare": "npm run build",
+        "build": "frida-compile agent/hooking_profile_loader.ts -o src/androidmalwaremotionmonitor/profiling.js",
+        "watch": "frida-compile agent/hooking_profile_loader.ts -o src/androidmalwaremotionmonitor/profiling.js -w"
+    },
+    "keywords": [
+        "frida",
+        "runtime",
+        "mobile",
+        "security",
+        "SanDroid"
+    ],
+    "devDependencies": {
+        "@types/frida-gum": "^19",
+        "@types/node": "^18",
+        "@types/source-map-support": "^0.5.6",
+        "frida-compile": "^19.0.4",
+        "source-map": "^0.7.4"
+    },
+    "dependencies": {
+        "frida": "^17.2.0",
+        "frida-fs": "^5.2.1",
+        "frida-java-bridge": "^7.0.7",
+        "frida-objc-bridge": "^8.0.5",
+        "util": "^0.12.4"
+    }
+}
