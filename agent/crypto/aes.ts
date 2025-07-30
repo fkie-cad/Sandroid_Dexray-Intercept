@@ -1,266 +1,217 @@
 import { log, devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd } from "../utils/android_runtime_requests.js"
-import { Where, bytesToHex, buffer2ArrayBuffer } from "../utils/misc.js"
+import { Where, bytesToHex } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
 
-/**
- * 
- * Some parts are taken from https://github.com/Areizen/Android-Malware-Sandbox/tree/master/plugins/cipher_plugin
- *  and also 
- * https://trustedsec.com/blog/mobile-hacking-using-frida-to-monitor-encryption
- */
- const PROFILE_HOOKING_TYPE: string = "CRYPTO_AES"
+const PROFILE_HOOKING_TYPE: string = "CRYPTO_AES"
 
- var cipher_id;
- var key_info;
- var opmode_info;
+interface CipherSession {
+    id: number;
+    key: number[];
+    opmode: number;
+    algorithm?: string;
+    iv?: number[];
+}
 
- function aes_info() {
+const activeCipherSessions = new Map<number, CipherSession>();
+
+function createAESEvent(eventType: string, data: any): void {
+    const event = {
+        event_type: eventType,
+        timestamp: Date.now(),
+        ...data
+    };
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
+function bytesToHexSafe(bytes: number[] | null): string {
+    if (!bytes || bytes.length === 0) return "";
+    return bytesToHex(new Uint8Array(bytes));
+}
+
+function extractPlaintext(hexData: string, opmode: number): string | null {
+    if (!hexData) return null;
+    try {
+        const bytes = hexData.match(/.{2}/g)?.map(byte => parseInt(byte, 16)) || [];
+        return String.fromCharCode(...bytes.filter(b => b >= 32 && b <= 126));
+    } catch {
+        return null;
+    }
+}
+
+export function install_aes_secrets() {
+    devlog("Installing AES secrets hooks (keys and IVs)");
+    
     Java.perform(() => {
-        let use_single_byte = false;
-        let complete_bytes: number[] = [];
-        let index = 0;
+        const secretKeySpec = Java.use("javax.crypto.spec.SecretKeySpec");
+        const ivParameterSpec = Java.use("javax.crypto.spec.IvParameterSpec");
 
-        const secretKeySpecDef = Java.use('javax.crypto.spec.SecretKeySpec');
-        const ivParameterSpecDef = Java.use('javax.crypto.spec.IvParameterSpec');
-        const cipherDef = Java.use('javax.crypto.Cipher');
-
-        const cipherDoFinal_1 = cipherDef.doFinal.overload();
-        const cipherDoFinal_2 = cipherDef.doFinal.overload('[B');
-        const cipherDoFinal_3 = cipherDef.doFinal.overload('[B', 'int');
-        const cipherDoFinal_4 = cipherDef.doFinal.overload('[B', 'int', 'int');
-        const cipherDoFinal_5 = cipherDef.doFinal.overload('[B', 'int', 'int', '[B');
-        const cipherDoFinal_6 = cipherDef.doFinal.overload('[B', 'int', 'int', '[B', 'int');
-
-        const cipherUpdate_1 = cipherDef.update.overload('[B');
-        const cipherUpdate_2 = cipherDef.update.overload('[B', 'int', 'int');
-        const cipherUpdate_3 = cipherDef.update.overload('[B', 'int', 'int', '[B');
-        const cipherUpdate_4 = cipherDef.update.overload('[B', 'int', 'int', '[B', 'int');
-
-        const secretKeySpecDef_init_1 = secretKeySpecDef.$init.overload('[B', 'java.lang.String');
-        const secretKeySpecDef_init_2 = secretKeySpecDef.$init.overload('[B', 'int', 'int', 'java.lang.String');
-
-        /*
-        const ivParameterSpecDef_init_1 = ivParameterSpecDef.$init.overload('[B');
-        const ivParameterSpecDef_init_2 = ivParameterSpecDef.$init.overload('[B', 'int', 'int');
-
-        secretKeySpecDef_init_1.implementation = function (arr: number[], alg: string) {
-            const key = b2s(arr);
-            am_send(PROFILE_HOOKING_TYPE, `Creating ${alg} secret key, ${alg}-key:\n${hexdump(key)}`);
-            return secretKeySpecDef_init_1.call(this, arr, alg);
+        secretKeySpec.$init.overload("[B", "java.lang.String").implementation = function (keyBytes: number[], algorithm: string) {
+            createAESEvent("crypto.key.creation", {
+                algorithm: algorithm,
+                key_length: keyBytes.length,
+                key_hex: bytesToHexSafe(keyBytes)
+            });
+            return this.$init(keyBytes, algorithm);
         };
 
-        secretKeySpecDef_init_2.implementation = function (arr: number[], off: number, len: number, alg: string) {
-            const key = b2s(arr);
-            am_send(PROFILE_HOOKING_TYPE, `Creating ${alg} secret key, ${alg}-key:\n${hexdump(key)}`);
-            return secretKeySpecDef_init_2.call(this, arr, off, len, alg);
-        };
-        */
-        secretKeySpecDef_init_1.implementation = function (arr: number[], alg: string) {
-            const key = b2s(arr);
-            am_send(PROFILE_HOOKING_TYPE, `Creating ${alg} secret key, ${alg}-key:\n${hexdump_local(key)}`);
-            return secretKeySpecDef_init_1.call(this, arr, alg);
+        secretKeySpec.$init.overload("[B", "int", "int", "java.lang.String").implementation = function (keyBytes: number[], offset: number, length: number, algorithm: string) {
+            createAESEvent("crypto.key.creation", {
+                algorithm: algorithm,
+                key_length: length,
+                key_hex: bytesToHexSafe(keyBytes.slice(offset, offset + length))
+            });
+            return this.$init(keyBytes, offset, length, algorithm);
         };
 
-        secretKeySpecDef_init_2.implementation = function (arr: number[], off: number, len: number, alg: string) {
-            const key = b2s(arr);
-            am_send(PROFILE_HOOKING_TYPE, `Creating ${alg} secret key, ${alg}-key:\n${hexdump_local(key)}`);
-            return secretKeySpecDef_init_2.call(this, arr, off, len, alg);
+        ivParameterSpec.$init.overload("[B").implementation = function (ivBytes: number[]) {
+            createAESEvent("crypto.iv.creation", {
+                iv_length: ivBytes.length,
+                iv_hex: bytesToHexSafe(ivBytes)
+            });
+            return this.$init(ivBytes);
         };
-
-        cipherDoFinal_1.implementation = function () {
-            const ret = cipherDoFinal_1.call(this);
-            info(this.getIV(), this.getAlgorithm(), complete_bytes, ret);
-            return ret;
-        };
-
-        cipherDoFinal_2.implementation = function (arr: number[]) {
-            addtoarray(arr);
-            const ret = cipherDoFinal_2.call(this, arr);
-            info(this.getIV(), this.getAlgorithm(), complete_bytes, ret);
-            return ret;
-        };
-
-        cipherDoFinal_3.implementation = function (arr: number[], a: number) {
-            addtoarray(arr);
-            const ret = cipherDoFinal_3.call(this, arr, a);
-            info(this.getIV(), this.getAlgorithm(), complete_bytes, ret);
-            return ret;
-        };
-
-        cipherDoFinal_4.implementation = function (arr: number[], a: number, b: number) {
-            addtoarray(arr);
-            const ret = cipherDoFinal_4.call(this, arr, a, b);
-            info(this.getIV(), this.getAlgorithm(), complete_bytes, ret);
-            return ret;
-        };
-
-        cipherDoFinal_5.implementation = function (arr: number[], a: number, b: number, c: number[]) {
-            addtoarray(arr);
-            const ret = cipherDoFinal_5.call(this, arr, a, b, c);
-            info(this.getIV(), this.getAlgorithm(), complete_bytes, ret);
-            return ret;
-        };
-
-        cipherDoFinal_6.implementation = function (arr: number[], a: number, b: number, c: number[], d: number) {
-            addtoarray(arr);
-            const ret = cipherDoFinal_6.call(this, arr, a, b, c, d);
-            info(this.getIV(), this.getAlgorithm(), complete_bytes, c);
-            return ret;
-        };
-
-        cipherUpdate_1.implementation = function (arr: number[]) {
-            addtoarray(arr);
-            return cipherUpdate_1.call(this, arr);
-        };
-
-        cipherUpdate_2.implementation = function (arr: number[], a: number, b: number) {
-            addtoarray(arr);
-            return cipherUpdate_2.call(this, arr, a, b);
-        };
-
-        cipherUpdate_3.implementation = function (arr: number[], a: number, b: number, c: number[]) {
-            addtoarray(arr);
-            return cipherUpdate_3.call(this, arr, a, b, c);
-        };
-
-        cipherUpdate_4.implementation = function (arr: number[], a: number, b: number, c: number[], d: number) {
-            addtoarray(arr);
-            return cipherUpdate_4.call(this, arr, a, b, c, d);
-        };
-
-        function info(iv: number[], alg: string, plain: number[], encoded: number[]) {
-            
-            if (iv) {
-                am_send(PROFILE_HOOKING_TYPE, `Initialization Vector: \n${hexdump_local(b2s(iv))}`);
-            } else {
-                am_send(PROFILE_HOOKING_TYPE, `Initialization Vector: ${iv}`);
-            }
-            var plain_as_buffer: ArrayBuffer = buffer2ArrayBuffer(plain);
-            var encoded_as_buffer: ArrayBuffer = buffer2ArrayBuffer(encoded);
-            am_send(PROFILE_HOOKING_TYPE, `Algorithm: ${alg}`);
-            am_send(PROFILE_HOOKING_TYPE, `In: \n${hexdump_local(b2s(plain))}`); // buffer2ArrayBuffer
-            console.log(hexdump(plain_as_buffer, {header: true, ansi:true}));
-            am_send(PROFILE_HOOKING_TYPE, `Out: \n${hexdump_local(b2s(encoded))}`);
-            console.log(hexdump(encoded_as_buffer, {header: true, ansi:true}));
-            complete_bytes = [];
-            index = 0;
-        }
-
-        function hexdump_local(buffer: string, blockSize: number = 16): string {
-            const lines: string[] = [];
-            const hex = "0123456789ABCDEF";
-            for (let b = 0; b < buffer.length; b += blockSize) {
-                const block = buffer.slice(b, Math.min(b + blockSize, buffer.length));
-                const addr = ("0000" + b.toString(16)).slice(-4);
-                let codes = Array.from(block).map(ch => {
-                    const code = ch.charCodeAt(0);
-                    return ` ${hex[(0xF0 & code) >> 4]}${hex[0x0F & code]}`;
-                }).join("");
-                codes += "   ".repeat(blockSize - block.length);
-                const chars = block.replace(/[\x00-\x1F\x20]/g, '.');
-                lines.push(`${addr} ${codes}  ${chars}`);
-            }
-            return lines.join("\n");
-        }
-
-        function b2s(array: number[]): string {
-            //return String.fromCharCode(...array.map(byte => modulus(byte, 256)));
-            let result = '';
-            for (let i = 0; i < array.length; i++) {
-                result += String.fromCharCode(modulus(array[i], 256));
-            }
-            return result;
-        }
-
-        function modulus(x: number, n: number): number {
-            return ((x % n) + n) % n;
-        }
-
-        function addtoarray(arr: number[]) {
-            for (let i = 0; i < arr.length; i++) {
-                complete_bytes[index] = arr[i];
-                index += 1;
-            }
-        }
     });
 }
 
+export function install_aes_keys() {
+    devlog("Installing AES keys hooks (cipher initialization)");
+    
+    Java.perform(() => {
+        const cipher = Java.use("javax.crypto.Cipher");
 
+        cipher.init.overload('int', 'java.security.Key').implementation = function (opmode: number, key: any) {
+            const cipherId = this.hashCode();
+            const keyBytes = key.getEncoded();
+            
+            activeCipherSessions.set(cipherId, {
+                id: cipherId,
+                key: keyBytes,
+                opmode: opmode
+            });
+            
+            return this.init(opmode, key);
+        };
 
- function hook_secrets(){
-    var secret_key_spec = Java.use("javax.crypto.spec.SecretKeySpec");
-    secret_key_spec.$init.overload("[B", "java.lang.String").implementation = function (x, y) {
-        var obj = {"event_type": "Javax::crypto.spec.SecretKeySpec"};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj)+x.buffer);
-        return this.$init(x, y);
-    }
-
-    var iv_parameter_spec = Java.use("javax.crypto.spec.IvParameterSpec");
-    iv_parameter_spec.$init.overload("[B").implementation = function (x) {
-        var obj = {"event_type": "Javax::crypto.spec.IvParameterSpec"};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj)+ x.buffer);
-        return this.$init(x);
-    }
+        cipher.init.overload('int', 'java.security.Key', 'java.security.spec.AlgorithmParameterSpec').implementation = function (opmode: number, key: any, params: any) {
+            const cipherId = this.hashCode();
+            const keyBytes = key.getEncoded();
+            
+            activeCipherSessions.set(cipherId, {
+                id: cipherId,
+                key: keyBytes,
+                opmode: opmode
+            });
+            
+            return this.init(opmode, key, params);
+        };
+    });
 }
 
+export function install_aes_info() {
+    devlog("Installing AES info hooks (cipher operations)");
+    
+    Java.perform(() => {
+        const cipher = Java.use("javax.crypto.Cipher");
+        const threadDef = Java.use('java.lang.Thread');
+        const threadInstance = threadDef.$new();
 
-
-function hook_aes_keys(){
-    var cipher = Java.use("javax.crypto.Cipher");
-    var threadef = Java.use('java.lang.Thread');
-    var threadinstance = threadef.$new();
-
-    cipher.init.overload('int', 'java.security.Key').implementation = function (opmode, key) {
-        cipher_id = this.hashCode();
-        key_info = key.getEncoded(); 
-        opmode_info = opmode;
-        return this.init(opmode, key);
-    }
-
-    cipher.init.overload('int', 'java.security.Key', 'java.security.spec.AlgorithmParameterSpec').implementation = function (opmode, key, params) {
-        cipher_id = this.hashCode();
-        key_info = key.getEncoded(); 
-        opmode_info = opmode;
-        return this.init(opmode, key, params);
-    }
-
-    cipher.doFinal.overload("[B").implementation = function (barr) {
-        var result = this.doFinal(barr);
-        if (cipher_id == this.hashCode()){
+        cipher.doFinal.overload("[B").implementation = function (inputBytes: number[]) {
+            const result = this.doFinal(inputBytes);
+            const cipherId = this.hashCode();
+            const session = activeCipherSessions.get(cipherId);
             
-            //var hexKey  = Buffer.from(new Uint8Array(key_info)).toString('hex');
-            var hexKey = bytesToHex(new Uint8Array(key_info));
+            if (session) {
+                const algorithm = this.getAlgorithm();
+                const iv = this.getIV();
+                const inputHex = bytesToHexSafe(inputBytes);
+                const outputHex = bytesToHexSafe(result);
+                const stack = threadInstance.currentThread().getStackTrace();
+                
+                createAESEvent("crypto.cipher.operation", {
+                    algorithm: algorithm,
+                    operation_mode: session.opmode,
+                    key_hex: bytesToHexSafe(session.key),
+                    iv_hex: bytesToHexSafe(iv),
+                    input_hex: inputHex,
+                    output_hex: outputHex,
+                    input_length: inputBytes.length,
+                    output_length: result.length,
+                    plaintext: session.opmode === 1 ? extractPlaintext(inputHex, session.opmode) : extractPlaintext(outputHex, session.opmode),
+                    stack_trace: Where(stack)
+                });
+                
+                activeCipherSessions.delete(cipherId);
+            }
             
-            //var hexIV = Buffer.from(new Uint8Array(this.getIV())).toString('hex');
-            var hexIV =  bytesToHex(new Uint8Array(this.getIV()));
+            return result;
+        };
 
-            //var hexArg = Buffer.from(new Uint8Array(barr)).toString('hex');
-            var hexArg =  bytesToHex(new Uint8Array(barr));
-            //var hexResult = Buffer.from(new Uint8Array(result)).toString('hex');
-            var hexResult =  bytesToHex(new Uint8Array(result));
+        const updateMethods = [
+            cipher.update.overload('[B'),
+            cipher.update.overload('[B', 'int', 'int'),
+            cipher.update.overload('[B', 'int', 'int', '[B'),
+            cipher.update.overload('[B', 'int', 'int', '[B', 'int')
+        ];
 
-            var stack = threadinstance.currentThread().getStackTrace();
-            var obj = {"event_type": "Javax::crypto.Cipher.doFinal", "algo" : this.getAlgorithm(), "iv" : hexIV, "opmode" : opmode_info, "key": hexKey, "arg": hexArg, "result": hexResult, 'stack': Where(stack)};
-            am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj));
+        updateMethods.forEach((method, index) => {
+            method.implementation = function (...args: any[]) {
+                const cipherId = this.hashCode();
+                const session = activeCipherSessions.get(cipherId);
+                
+                if (session) {
+                    createAESEvent("crypto.cipher.update", {
+                        algorithm: this.getAlgorithm(),
+                        operation_mode: session.opmode,
+                        update_call: index + 1
+                    });
+                }
+                
+                return method.apply(this, args);
+            };
+        });
 
-            cipher_id = '';
-            key_info = '';
-            opmode_info = '';          
-        }
-        return result;
-    }
+        const doFinalMethods = [
+            cipher.doFinal.overload(),
+            cipher.doFinal.overload('[B', 'int'),
+            cipher.doFinal.overload('[B', 'int', 'int'),
+            cipher.doFinal.overload('[B', 'int', 'int', '[B'),
+            cipher.doFinal.overload('[B', 'int', 'int', '[B', 'int')
+        ];
 
+        doFinalMethods.forEach((method, index) => {
+            method.implementation = function (...args: any[]) {
+                const result = method.apply(this, args);
+                const cipherId = this.hashCode();
+                const session = activeCipherSessions.get(cipherId);
+                
+                if (session) {
+                    const algorithm = this.getAlgorithm();
+                    const iv = this.getIV();
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    
+                    createAESEvent("crypto.cipher.operation", {
+                        algorithm: algorithm,
+                        operation_mode: session.opmode,
+                        key_hex: bytesToHexSafe(session.key),
+                        iv_hex: bytesToHexSafe(iv),
+                        doFinal_variant: index + 1,
+                        stack_trace: Where(stack)
+                    });
+                    
+                    activeCipherSessions.delete(cipherId);
+                }
+                
+                return result;
+            };
+        });
+    });
 }
 
-
-
-
-export function install_aes_hooks(){
+export function install_aes_hooks() {
     devlog("\n")
     devlog("install aes hooks");
-    aes_info();
-    hook_secrets();
-    hook_aes_keys();
-
+    
+    install_aes_secrets();
+    install_aes_keys();
+    install_aes_info();
 }

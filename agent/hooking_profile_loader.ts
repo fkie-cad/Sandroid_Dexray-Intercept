@@ -19,6 +19,7 @@ import { install_camera_hooks } from "./services/camera.js"
 import { install_clipboard_hooks } from "./services/clipboard.js"
 import { install_location_hooks } from "./services/location.js"
 import { install_telephony_manager_hooks } from "./services/telephony.js"
+import { am_send, log, devlog } from "./utils/logging.js"
 
 
 export let show_verbose: boolean = false;
@@ -103,7 +104,7 @@ const hook_config_recv_state = recv('hook_config', value => {
     if (typeof value.payload === 'object') {
         // Update entire hook configuration
         Object.assign(hook_config, value.payload);
-        console.log(`[HOOK] Received hook configuration: ${JSON.stringify(value.payload)}`);
+        devlog(`[HOOK] Received hook configuration: ${JSON.stringify(value.payload)}`);
     }
 });
 hook_config_recv_state.wait();
@@ -123,15 +124,18 @@ function install_hook_conditionally(hook_name: string, install_function: () => v
     if (hook_config[hook_name]) {
         try {
             install_function();
-            console.log(`[HOOK] Enabled: ${hook_name}`);
+            devlog(`[HOOK] Enabled: ${hook_name}`);
         } catch (error) {
-            console.log(`[HOOK] Failed to enable ${hook_name}: ${error}`);
+            devlog(`[HOOK] Failed to enable ${hook_name}: ${error}`);
         }
     }
 }
 
 function load_profile_hooks(){
-    console.log("[HOOK] Loading hooks based on configuration...");
+    if(enable_stacktrace){
+        log("[Dexray] Stacktrace enabled");
+    }
+    log("[HOOK] Loading hooks based on configuration...");
     
     // File system hooks
     install_hook_conditionally('file_system_hooks', install_file_system_hooks);
@@ -169,7 +173,7 @@ function load_profile_hooks(){
     install_hook_conditionally('location_hooks', install_location_hooks);
     
     const enabled_hooks = Object.entries(hook_config).filter(([_, enabled]) => enabled).map(([name, _]) => name);
-    console.log(`[HOOK] Active hooks: ${enabled_hooks.join(', ') || 'none'}`);
+    log(`[HOOK] Active hooks: ${enabled_hooks.join(', ') || 'none'}`);
 }
 
 load_profile_hooks();

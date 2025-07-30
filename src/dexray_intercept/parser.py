@@ -28,6 +28,89 @@ def escape_special_characters(data: str) -> str:
 def unescape_special_characters(data: str) -> str:
     return data.replace('\\\"','\"').replace('\\n', '\n').replace('\\t', '\t').replace('\\u001b','\u001b')
 
+
+def hexdump(hex_string: str, header: bool = True, ansi: bool = True) -> str:
+    """
+    Convert hex string to hexdump format with colors like the old frida hexdump
+    
+    Args:
+        hex_string: Hex string (e.g., "48656c6c6f")
+        header: Whether to show the header row
+        ansi: Whether to use ANSI color codes
+        
+    Returns:
+        Formatted hexdump string
+    """
+    if not hex_string:
+        return ""
+    
+    # Remove any spaces or non-hex characters
+    hex_clean = ''.join(c for c in hex_string if c in '0123456789abcdefABCDEF')
+    
+    if len(hex_clean) == 0:
+        return ""
+    
+    # Convert hex string to bytes
+    try:
+        if len(hex_clean) % 2 != 0:
+            hex_clean = '0' + hex_clean  # pad with leading zero
+        bytes_data = bytes.fromhex(hex_clean)
+    except ValueError:
+        return f"Invalid hex data: {hex_string}"
+    
+    # ANSI color codes
+    if ansi:
+        colors = {
+            'reset': '\033[0m',
+            'gray': '\033[90m',      # header and separators
+            'cyan': '\033[36m',      # hex values
+            'green': '\033[32m',     # printable ASCII
+            'yellow': '\033[33m'     # non-printable (dots)
+        }
+    else:
+        colors = {k: '' for k in ['reset', 'gray', 'cyan', 'green', 'yellow']}
+    
+    result = []
+    
+    # Header row
+    if header:
+        header_line = f"{colors['gray']}           00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f{colors['reset']}"
+        result.append(header_line)
+    
+    # Process 16 bytes per line
+    for i in range(0, len(bytes_data), 16):
+        # Address offset
+        address = f"{i:08x}"
+        line = f"{colors['gray']}{address}{colors['reset']}  "
+        
+        # Hex values
+        hex_part = ""
+        ascii_part = ""
+        
+        for j in range(16):
+            if i + j < len(bytes_data):
+                byte_val = bytes_data[i + j]
+                hex_part += f"{colors['cyan']}{byte_val:02x}{colors['reset']} "
+                
+                # ASCII representation
+                if 32 <= byte_val <= 126:  # printable ASCII
+                    ascii_part += f"{colors['green']}{chr(byte_val)}{colors['reset']}"
+                else:
+                    ascii_part += f"{colors['yellow']}.{colors['reset']}"
+            else:
+                hex_part += "   "
+                ascii_part += " "
+            
+            # Add extra space after 8 bytes
+            if j == 7:
+                hex_part += " "
+        
+        # Combine hex and ASCII parts
+        line += hex_part + f" {colors['gray']}|{colors['reset']}{ascii_part}{colors['gray']}|{colors['reset']}"
+        result.append(line)
+    
+    return '\n'.join(result)
+
 def format_xml_content(xml_content: str) -> str:
     # Parse the XML string and pretty-print it
     try:
@@ -225,8 +308,62 @@ def hex_to_string(hex_str):
     bytes_object = bytes.fromhex(hex_str)
     return bytes_object.decode("utf-8", errors='replace')
 
+def hex_to_string_safe(hex_str):
+    """Safe hex to string conversion with better error handling"""
+    if not hex_str or not isinstance(hex_str, str):
+        return None
+    try:
+        # Remove any whitespace and ensure even length
+        hex_str = hex_str.replace(" ", "").replace("\n", "")
+        if len(hex_str) % 2 != 0:
+            hex_str = "0" + hex_str
+        
+        bytes_object = bytes.fromhex(hex_str)
+        # Try UTF-8 first, then fall back to latin-1 for binary data
+        try:
+            return bytes_object.decode("utf-8")
+        except UnicodeDecodeError:
+            # For binary data, show printable chars and dots for non-printable
+            return ''.join(chr(b) if 32 <= b <= 126 else '.' for b in bytes_object)
+    except ValueError:
+        return f"<invalid_hex: {hex_str[:50]}{'...' if len(hex_str) > 50 else ''}>"
+
 def parse_aes(raw_data, event_time):
-    event_type = "Javax::unknown"
+    try:
+        # Direct JSON parsing - new format sends pure JSON
+        data = json.loads(raw_data)
+        
+        # Handle operation mode mapping if present
+        if 'operation_mode' in data:
+            mode_num = data['operation_mode']
+            mode_name = MODE_MAPPING.get(mode_num, f"UNKNOWN_MODE_{mode_num}")
+            data['operation_mode_desc'] = f"{mode_name} ({mode_num})"
+            
+            # Extract plaintext based on operation mode
+            if mode_name == "ENCRYPT_MODE" and 'input_hex' in data:
+                data['plaintext'] = hex_to_string_safe(data['input_hex'])
+            elif mode_name == "DECRYPT_MODE" and 'output_hex' in data:
+                data['plaintext'] = hex_to_string_safe(data['output_hex'])
+        
+        # Ensure timestamp is set
+        if 'timestamp' not in data:
+            data["timestamp"] = event_time
+            
+        return data
+        
+    except json.JSONDecodeError:
+        # Fallback for legacy format with regex parsing
+        return parse_aes_legacy(raw_data, event_time)
+    except Exception as e:
+        return {
+            "event_type": "parse_error",
+            "payload": raw_data,
+            "error": str(e),
+            "timestamp": event_time
+        }
+
+def parse_aes_legacy(raw_data, event_time):
+    """Fallback parser for old AES hook format"""
     try:
         # Regular expression to extract JSON parts
         json_pattern = re.compile(r'\{.*\}')
@@ -239,21 +376,17 @@ def parse_aes(raw_data, event_time):
                 mode = MODE_MAPPING.get(data['opmode'], None)
                 data['opmode'] = mode + " (" + str(data['opmode']) + ")"
                 if mode == "ENCRYPT_MODE" and 'arg' in data:
-                    data['plaintext'] = hex_to_string(data['arg'])
+                    data['plaintext'] = hex_to_string_safe(data['arg'])
                 elif mode == "DECRYPT_MODE" and 'result' in data:
-                    data['plaintext'] = hex_to_string(data['result'])
+                    data['plaintext'] = hex_to_string_safe(data['result'])
             
-            # Add further elements to JSON object´
             data["timestamp"] = event_time
             return data
     except Exception as e:
-        event_type = "Unknown"
-        exception_info = e
-
         return {
-            "event_type": event_type,
+            "event_type": "legacy_parse_error",
             "payload": raw_data,
-            "exception": exception_info,
+            "error": str(e),
             "timestamp": event_time
         }
 

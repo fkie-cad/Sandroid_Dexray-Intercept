@@ -8,7 +8,7 @@ from .resultManager import handle_output
 import json
 from datetime import datetime
 from colorama import Fore
-from .parser import parse_file_system_event, parse_native_lib_loading, parse_shared_pref, parse_aes, dex_loading_parser, parse_socket_infos, parse_web_infos, parse_telephony_infos, remove_empty_entries, get_event_type_infos, get_demangled_method_for_DEX_unpacking, parse_broadcast_infos, url_parser, parse_generic_infos
+from .parser import parse_file_system_event, parse_native_lib_loading, parse_shared_pref, parse_aes, dex_loading_parser, parse_socket_infos, parse_web_infos, parse_telephony_infos, remove_empty_entries, get_event_type_infos, get_demangled_method_for_DEX_unpacking, parse_broadcast_infos, url_parser, parse_generic_infos, hexdump
 
 # Define a custom exception for handling frida based exceptions
 class FridaBasedException(Exception):
@@ -199,10 +199,63 @@ class AppProfiler:
                 else:
                     print("[*] SharedPref: " + data)
             elif category == "CRYPTO_AES":
-                if "In:" in data:
-                    print("[*] AES input:")
-                elif "Out:" in data:
-                    print("[*] AES output:")
+                parsed_data = parse_aes(data, timestamp)
+                if parsed_data:
+                    event_type = parsed_data.get('event_type', 'unknown')
+                    
+                    if event_type == 'crypto.cipher.operation':
+                        print(f"\n[*] AES {parsed_data.get('operation_mode_desc', 'UNKNOWN')} Operation:")
+                        print(f"    Algorithm: {parsed_data.get('algorithm', 'N/A')}")
+                        
+                        # Display input data with hexdump
+                        if 'input_hex' in parsed_data and parsed_data['input_hex']:
+                            print(f"    Input ({parsed_data.get('input_length', 0)} bytes):")
+                            input_dump = hexdump(parsed_data['input_hex'], header=True, ansi=True)
+                            if input_dump:
+                                for line in input_dump.split('\n'):
+                                    print(f"      {line}")
+                        
+                        # Display output data with hexdump  
+                        if 'output_hex' in parsed_data and parsed_data['output_hex']:
+                            print(f"    Output ({parsed_data.get('output_length', 0)} bytes):")
+                            output_dump = hexdump(parsed_data['output_hex'], header=True, ansi=True)
+                            if output_dump:
+                                for line in output_dump.split('\n'):
+                                    print(f"      {line}")
+                        
+                        # Display plaintext if available (truncated for terminal)
+                        if 'plaintext' in parsed_data and parsed_data['plaintext']:
+                            plaintext = parsed_data['plaintext']
+                            if len(plaintext) > 100:
+                                truncated_plaintext = plaintext[:100] + "..."
+                                print(f"    Plaintext: {truncated_plaintext}")
+                            else:
+                                print(f"    Plaintext: {plaintext}")
+                        
+                        print()
+                    elif event_type == 'crypto.key.creation':
+                        print(f"[*] AES Key Created:")
+                        print(f"    Algorithm: {parsed_data.get('algorithm', 'N/A')}")
+                        print(f"    Key Length: {parsed_data.get('key_length', 0)} bytes")
+                        if 'key_hex' in parsed_data and parsed_data['key_hex']:
+                            print(f"    Key:")
+                            key_dump = hexdump(parsed_data['key_hex'], header=True, ansi=True)
+                            if key_dump:
+                                for line in key_dump.split('\n'):
+                                    print(f"      {line}")
+                        print()
+                    elif event_type == 'crypto.iv.creation':
+                        print(f"[*] AES IV Created:")
+                        print(f"    IV Length: {parsed_data.get('iv_length', 0)} bytes")
+                        if 'iv_hex' in parsed_data and parsed_data['iv_hex']:
+                            print(f"    IV:")
+                            iv_dump = hexdump(parsed_data['iv_hex'], header=True, ansi=True)
+                            if iv_dump:
+                                for line in iv_dump.split('\n'):
+                                    print(f"      {line}")
+                        print()
+                    else:
+                        print("[*] " + data + "\n")
                 else:
                     print("[*] " + data + "\n")
             elif category == "NETWORK_SOCKETS":

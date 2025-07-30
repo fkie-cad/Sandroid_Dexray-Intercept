@@ -23,7 +23,7 @@ export function log(str: string, context?: CpuContext) {
     message["profileType"] = "console"
     const now = new Date().toISOString();
     message["timestamp"] = now
-    message["console"] = escapeJsonString(str)
+    message["console"] = str
     
     if (enable_stacktrace) {
         message["stacktrace"] = escapeJsonString(getStackTrace(context));
@@ -36,7 +36,7 @@ export function log(str: string, context?: CpuContext) {
 export function devlog(str: string, context?: CpuContext) {
     var message: { [key: string]: string } = {}
     message["profileType"] = "console_dev"
-    message["console_dev"] = escapeJsonString(str)
+    message["console_dev"] = str
     const now = new Date().toISOString();
     message["timestamp"] = now
     
@@ -69,11 +69,13 @@ export function am_send(hooking_type: string, str: string, data?: ArrayBuffer, c
     
     var message: { [key: string]: string } = {}
     message["profileType"] = hooking_type
-    message["profileContent"] = escapeJsonString(str)
+    //message["profileContent"] = escapeJsonString(str)
+    message["profileContent"] = str
     const now = new Date().toISOString();
     message["timestamp"] = now
     
     if (enable_stacktrace) {
+        console.log("Stacktrace enabled, adding stacktrace to message");
         message["stacktrace"] = escapeJsonString(getStackTrace(context));
     }
     
