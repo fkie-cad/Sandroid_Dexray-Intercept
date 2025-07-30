@@ -179,7 +179,88 @@ class AppProfiler:
                 if data.startswith("[Libc::write]"):
                     return
                 else:
-                    print("[*] " + data)
+                    parsed_data = parse_file_system_event(data, timestamp)
+                    if parsed_data:
+                        event_type = parsed_data.get('event_type', 'unknown')
+                        
+                        if event_type == 'file.create':
+                            print(f"\n[*] [File] File Creation:")
+                            print(f"[*] Operation: {parsed_data.get('operation', 'Unknown')}")
+                            print(f"[*] File Path: {parsed_data.get('file_path', 'Unknown')}")
+                            if 'parent_path' in parsed_data:
+                                print(f"[*] Parent: {parsed_data['parent_path']}")
+                                print(f"[*] Child: {parsed_data['child_path']}")
+                        
+                        elif event_type == 'file.stream.create':
+                            print(f"\n[*] [File] Stream Creation:")
+                            print(f"[*] Operation: {parsed_data.get('operation', 'Unknown')}")
+                            print(f"[*] Stream Type: {parsed_data.get('stream_type', 'Unknown')}")
+                            print(f"[*] File Path: {parsed_data.get('file_path', 'Unknown')}")
+                        
+                        elif event_type == 'file.read':
+                            print(f"\n[*] [File] Read Operation:")
+                            print(f"[*] Operation: {parsed_data.get('operation', 'Unknown')}")
+                            print(f"[*] File Path: {parsed_data.get('file_path', 'Unknown')}")
+                            print(f"[*] Buffer Size: {parsed_data.get('buffer_size', 0)} bytes")
+                            if 'offset' in parsed_data:
+                                print(f"[*] Offset: {parsed_data['offset']}, Length: {parsed_data.get('length', 0)}")
+                            if 'bytes_read' in parsed_data:
+                                print(f"[*] Bytes Read: {parsed_data['bytes_read']}")
+                            
+                            # Display data if available
+                            if 'hexdump_display' in parsed_data and parsed_data['hexdump_display']:
+                                print(f"[*] Data:")
+                                for line in parsed_data['hexdump_display'].split('\n'):
+                                    print(f"    {line}")
+                            elif 'plaintext' in parsed_data and parsed_data['plaintext']:
+                                plaintext = parsed_data['plaintext']
+                                if len(plaintext) > 100:
+                                    plaintext = plaintext[:100] + "..."
+                                print(f"[*] Content: {plaintext}")
+                        
+                        elif event_type == 'file.write':
+                            print(f"\n[*] [File] Write Operation:")
+                            print(f"[*] Operation: {parsed_data.get('operation', 'Unknown')}")
+                            print(f"[*] File Path: {parsed_data.get('file_path', 'Unknown')}")
+                            print(f"[*] Buffer Size: {parsed_data.get('buffer_size', 0)} bytes")
+                            if 'offset' in parsed_data:
+                                print(f"[*] Offset: {parsed_data['offset']}, Length: {parsed_data.get('length', 0)}")
+                            if parsed_data.get('is_large_data', False):
+                                print(f"[*] Data truncated (showing {parsed_data.get('displayed_length', 0)} of {parsed_data.get('original_length', 0)} bytes)")
+                            
+                            # Display data based on file type
+                            file_type = parsed_data.get('file_type', 'other')
+                            if file_type == 'xml' and 'plaintext' in parsed_data:
+                                plaintext = parsed_data['plaintext']
+                                if len(plaintext) > 200:
+                                    plaintext = plaintext[:200] + "..."
+                                print(f"[*] XML Content: {plaintext}")
+                            elif file_type == 'binary' and 'hexdump_display' in parsed_data:
+                                print(f"[*] Binary Data:")
+                                for line in parsed_data['hexdump_display'].split('\n'):
+                                    print(f"    {line}")
+                            elif 'hexdump_display' in parsed_data and parsed_data['hexdump_display']:
+                                print(f"[*] Data:")
+                                for line in parsed_data['hexdump_display'].split('\n'):
+                                    print(f"    {line}")
+                            elif 'plaintext' in parsed_data and parsed_data['plaintext']:
+                                plaintext = parsed_data['plaintext']
+                                if len(plaintext) > 100:
+                                    plaintext = plaintext[:100] + "..."
+                                print(f"[*] Content: {plaintext}")
+                        
+                        elif event_type.startswith('file.delete'):
+                            print(f"\n[*] [File] File Deletion ({event_type}):")
+                            print(f"[*] File Path: {parsed_data.get('file_path', 'Unknown')}")
+                        
+                        else:
+                            # Fallback for unknown filesystem events or legacy format
+                            print(f"[*] [File] {event_type}: {data}")
+                        
+                        print()
+                    else:
+                        # Fallback for unparseable data
+                        print("[*] " + data)
             elif category == "DEX_LOADING":
                 if "even_type" in data:
                     dex_unpacking_method = get_event_type_infos(data)

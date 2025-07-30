@@ -122,9 +122,41 @@ def format_xml_content(xml_content: str) -> str:
 
 def parse_file_system_event(raw_data, event_time):
     try:
-        # Custom parser for raw file system event data
-        # This is just an example; you'll need to adjust it based on the actual format of your dat
-        # Regular expression to extract information
+        # First, try to parse as JSON (new format)
+        try:
+            data = json.loads(raw_data)
+            
+            # Ensure timestamp is set
+            if 'timestamp' not in data:
+                data["timestamp"] = event_time
+            
+            # Handle hexdump for display if data_hex is present
+            if 'data_hex' in data and data['data_hex']:
+                hex_data = data['data_hex']
+                
+                # Add plaintext conversion for ASCII-compatible data
+                if data.get('should_dump_ascii', False):
+                    data['plaintext'] = hex_to_string_safe(hex_data)
+                
+                # Add formatted hexdump for display
+                if data.get('should_dump_hex', False) or data.get('file_type') in ['binary', 'xml']:
+                    data['hexdump_display'] = hexdump(hex_data, header=True, ansi=True)
+                
+                # Handle truncation if needed
+                if data.get('is_large_data', False):
+                    max_len = data.get('max_display_length', 1024)
+                    if len(hex_data) > max_len * 2:  # hex string is 2x byte length
+                        data['truncated'] = True
+                        data['original_length'] = len(hex_data) // 2
+                        data['displayed_length'] = max_len
+            
+            return data
+            
+        except (json.JSONDecodeError, ValueError):
+            # Fall back to legacy string parsing
+            pass
+        
+        # Legacy parser for raw file system event data
         if raw_data.startswith("[Java::"):
             pattern = re.compile(
                 r"\[(?P<event_type>[^\]]+)\] Write (?P<bytes>\d+) bytes from offset (?P<offset>\d+)\s+\((?P<file_path>[^)]+)\):\\n\\u001b\[33m(?P<content>.*?)\\u001b\[0m"

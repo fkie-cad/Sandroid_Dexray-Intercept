@@ -1,6 +1,6 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
-import { hexdump_selfmade, buffer2ArrayBuffer, b2s, isPatternPresent, byteArray2JString } from "../utils/misc.js"
+import { buffer2ArrayBuffer, b2s, isPatternPresent, byteArray2JString, bytesToHex } from "../utils/misc.js"
 import { show_verbose } from "../hooking_profile_loader.js"
 import { deactivate_unlink } from "../hooking_profile_loader.js"
 import { Java } from "../utils/javalib.js"
@@ -28,16 +28,7 @@ var CONFIG = {
     // filter file access which is typically not of interest
     filter_out_access_to_these_files: ["anon_inode", "/dev/urandom", "/system/framework/", "/data/dalvik-cache/"],
     // Maximum length of data to display (bytes)
-    max_output_length: 1024,
-    // Color settings
-    colors: {
-        operation: '\x1b[1;35m',  // Bright magenta for operation names
-        path: '\x1b[1;36m',       // Bright cyan for file paths
-        parameter: '\x1b[1;33m',  // Bright yellow for parameters
-        data: '\x1b[32m',         // Green for data content
-        warning: '\x1b[1;31m',    // Bright red for warnings
-        reset: '\x1b[0m'          // Reset color
-    }
+    max_output_length: 1024
 }
 
 function isFileFromInterest(file_string) {
@@ -51,45 +42,6 @@ function isFileFromInterest(file_string) {
     return true
 }
 
-function prettyPrint(path, buffer, offset?, length?) {
-    if (show_verbose) {
-        // Determine maximum output length
-        const maxLength = CONFIG.max_output_length || 1024;
-
-        if (isPatternPresent(path, CONFIG.dump_ascii_If_Path_contains)) {
-            let output = b2s(buffer);
-
-            // Truncate if too long
-            if (output.length > maxLength) {
-                const truncated = output.substring(0, maxLength);
-                return CONFIG.colors.data + truncated + CONFIG.colors.reset +
-                    "\n" + CONFIG.colors.warning +
-                    `[Output truncated, showing ${maxLength} of ${output.length} bytes]` +
-                    CONFIG.colors.reset;
-            }
-            return CONFIG.colors.data + output + CONFIG.colors.reset;
-        }
-        else if (!isPatternPresent(path, CONFIG.dump_hex_If_Path_NOT_contains)) {
-            // For hexdump, we need to limit based on buffer size
-            let bufferToUse = buffer;
-            let truncationMessage = "";
-
-            // If buffer is too large, truncate it
-            if (buffer.length > maxLength) {
-                // Create a smaller buffer with limited size
-                bufferToUse = new Uint8Array(buffer).slice(0, maxLength);
-                truncationMessage = "\n" + CONFIG.colors.warning +
-                    `[Output truncated, showing ${maxLength} of ${buffer.length} bytes]` +
-                    CONFIG.colors.reset;
-            }
-
-            return CONFIG.colors.data + hexdump_selfmade(b2s(bufferToUse), 16) +
-                CONFIG.colors.reset + truncationMessage;
-        }
-        return CONFIG.colors.warning + "[dump skipped by config]" + CONFIG.colors.reset;
-    }
-    return CONFIG.colors.warning + "[dump skipped by verbose level]" + CONFIG.colors.reset;
-}
 
 function createFileSystemEvent(eventType: string, data: any): void {
     const event = {
@@ -98,6 +50,21 @@ function createFileSystemEvent(eventType: string, data: any): void {
         ...data
     };
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
+function bytesToHexSafe(bytes: number[] | null): string {
+    if (!bytes || bytes.length === 0) return "";
+    return bytesToHex(new Uint8Array(bytes));
+}
+
+function shouldSkipFile(filePath: string): boolean {
+    // Check against filter_out_access_to_these_files
+    for (const filter of CONFIG.filter_out_access_to_these_files) {
+        if (filePath.includes(filter)) {
+            return true;
+        }
+    }
+    return !isFileFromInterest(filePath);
 }
 
 function hook_filesystem_accesses() {
@@ -156,10 +123,13 @@ function hook_filesystem_accesses() {
         File.new[1].implementation = function (a0) {
             var file_path = a0;
             if (!createdFiles.has(file_path)) {
-                if (file_path.length > 2 && isFileFromInterest(file_path)) {
-                    am_send(PROFILE_HOOKING_TYPE,
-                        CONFIG.colors.operation + "[Java::File.new.1]" + CONFIG.colors.reset +
-                        " New file: " + CONFIG.colors.path + file_path + CONFIG.colors.reset + "\n");
+                if (file_path.length > 2 && !shouldSkipFile(file_path)) {
+                    createFileSystemEvent("file.create", {
+                        operation: "File.new",
+                        variant: 1,
+                        file_path: file_path,
+                        method: "java.io.File.init(String)"
+                    });
                     createdFiles.add(file_path);
                 }
             }
@@ -171,10 +141,15 @@ function hook_filesystem_accesses() {
         }
         File.new[2].implementation = function (a0, a1) {
             var file_path = a0 + "/" + a1;
-            if (!createdFiles.has(file_path) && file_path.length > 3 && isFileFromInterest(file_path)) {
-                am_send(PROFILE_HOOKING_TYPE,
-                    CONFIG.colors.operation + "[Java::File.new.2]" + CONFIG.colors.reset +
-                    " New file: " + CONFIG.colors.path + file_path + CONFIG.colors.reset + "\n");
+            if (!createdFiles.has(file_path) && file_path.length > 3 && !shouldSkipFile(file_path)) {
+                createFileSystemEvent("file.create", {
+                    operation: "File.new",
+                    variant: 2,
+                    file_path: file_path,
+                    parent_path: a0,
+                    child_path: a1,
+                    method: "java.io.File.init(String, String)"
+                });
                 createdFiles.add(file_path);
             }
 
@@ -204,11 +179,15 @@ function hook_filesystem_accesses() {
                 }
             }
 
-            if (isFileFromInterest(fname)) {
+            if (!shouldSkipFile(fname)) {
                 if (!createdFileStreams.has(fname)) {
-                    am_send(PROFILE_HOOKING_TYPE,
-                        CONFIG.colors.operation + "[Java::FileInputStream.new.0]" + CONFIG.colors.reset +
-                        " New input stream from file: " + CONFIG.colors.path + fname + CONFIG.colors.reset);
+                    createFileSystemEvent("file.stream.create", {
+                        operation: "FileInputStream.new",
+                        variant: 0,
+                        file_path: fname,
+                        stream_type: "input",
+                        method: "java.io.FileInputStream.init(File)"
+                    });
                     createdFileStreams.add(fname)
                 }
             }
@@ -235,16 +214,28 @@ function hook_filesystem_accesses() {
                 fname = "[unknown]"
             }
 
+            var result = FileInputStream.read[1].call(this, a0);
             var b = Java.array('byte', a0);
 
-            if (isFileFromInterest(fname)) {
-                am_send(PROFILE_HOOKING_TYPE,
-                    CONFIG.colors.operation + "[Java::FileInputStream.read.1]" + CONFIG.colors.reset +
-                    " Read from file, offset (" + CONFIG.colors.path + fname + CONFIG.colors.reset + ", " +
-                    CONFIG.colors.parameter + a0 + CONFIG.colors.reset + "):\n" + prettyPrint(fname, b));
+            if (!shouldSkipFile(fname)) {
+                // Determine content type for proper processing
+                const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
+                const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
+                
+                createFileSystemEvent("file.read", {
+                    operation: "FileInputStream.read",
+                    variant: 1,
+                    file_path: fname,
+                    buffer_size: a0.length,
+                    bytes_read: result,
+                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(b) : null,
+                    should_dump_ascii: shouldDumpAscii,
+                    should_dump_hex: shouldDumpHex,
+                    method: "java.io.FileInputStream.read(byte[])"
+                });
             }
 
-            return FileInputStream.read[1].call(this, a0);
+            return result;
         }
         FileInputStream.read[2].implementation = function (a0, a1, a2) {
             var fname = TraceFS["fd" + this.hashCode()];
@@ -258,17 +249,30 @@ function hook_filesystem_accesses() {
                 fname = "[unknown]"
             }
 
+            var result = FileInputStream.read[2].call(this, a0, a1, a2);
             var b = Java.array('byte', a0);
 
-            if (isFileFromInterest(fname)) {
-                am_send(PROFILE_HOOKING_TYPE,
-                    CONFIG.colors.operation + "[Java::FileInputStream.read.2]" + CONFIG.colors.reset +
-                    " Read from file, offset, len (" + CONFIG.colors.path + fname + CONFIG.colors.reset + ", " +
-                    CONFIG.colors.parameter + a1 + CONFIG.colors.reset + ", " +
-                    CONFIG.colors.parameter + a2 + CONFIG.colors.reset + ")\n" + prettyPrint(fname, b));
+            if (!shouldSkipFile(fname)) {
+                // Determine content type for proper processing
+                const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
+                const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
+                
+                createFileSystemEvent("file.read", {
+                    operation: "FileInputStream.read",
+                    variant: 2,
+                    file_path: fname,
+                    buffer_size: a0.length,
+                    offset: a1,
+                    length: a2,
+                    bytes_read: result,
+                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(b) : null,
+                    should_dump_ascii: shouldDumpAscii,
+                    should_dump_hex: shouldDumpHex,
+                    method: "java.io.FileInputStream.read(byte[], int, int)"
+                });
             }
 
-            return FileInputStream.read[2].call(this, a0, a1, a2);
+            return result;
         }
 
         // =============== File Output Stream ============
@@ -285,51 +289,36 @@ function hook_filesystem_accesses() {
                 fname = "[unknown]";
             }
 
-            if (isFileFromInterest(fname)) {
-                var displayLen = Math.min(a2, CONFIG.max_output_length);
-                var isTruncated = displayLen < a2;
+            var result = FileOuputStream.write[2].call(this, a0, a1, a2);
 
-                var message = CONFIG.colors.operation + "[Java::FileOuputStream.write.2]" + CONFIG.colors.reset +
-                    " Write " + CONFIG.colors.parameter + a2 + CONFIG.colors.reset +
-                    " bytes from offset " + CONFIG.colors.parameter + a1 + CONFIG.colors.reset +
-                    " to " + CONFIG.colors.path + fname + CONFIG.colors.reset;
-
-                if (isTruncated) {
-                    message += " " + CONFIG.colors.warning +
-                        "[Showing first " + displayLen + " of " + a2 + " bytes]" +
-                        CONFIG.colors.reset;
-                }
-                message += ":\n";
-
-                am_send(PROFILE_HOOKING_TYPE, message);
-
-                if (fname.endsWith(".apk") || fname.endsWith(".dex") || fname.endsWith(".jar")) {
-                    var arrayBuffer = buffer2ArrayBuffer(a0);
-                    console.log(hexdump(arrayBuffer, {
-                        offset: a1,
-                        length: displayLen,
-                        header: true,
-                        ansi: true
-                    }));
-                }
-                else if (fname.endsWith(".xml")) {
-                    var result = Java.array('byte', a0);
-                    const JString = Java.use('java.lang.String');
-                    const fullStr = JString.$new(result);
-
-                    const displayStr = fullStr.length() > displayLen ?
-                        fullStr.substring(0, displayLen) +
-                        CONFIG.colors.warning + "... [truncated]" + CONFIG.colors.reset :
-                        fullStr;
-
-                    am_send(PROFILE_HOOKING_TYPE, CONFIG.colors.data + displayStr + CONFIG.colors.reset);
-                }
-                else {
-                    am_send(PROFILE_HOOKING_TYPE, prettyPrint(fname, a0));
-                }
+            if (!shouldSkipFile(fname)) {
+                // Determine content type for proper processing
+                const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
+                const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
+                const isLargeData = a2 > CONFIG.max_output_length;
+                
+                // Special handling for different file types
+                const isApkDexJar = fname.endsWith(".apk") || fname.endsWith(".dex") || fname.endsWith(".jar");
+                const isXmlFile = fname.endsWith(".xml");
+                
+                createFileSystemEvent("file.write", {
+                    operation: "FileOutputStream.write",
+                    variant: 2,
+                    file_path: fname,
+                    buffer_size: a0.length,
+                    offset: a1,
+                    length: a2,
+                    data_hex: (shouldDumpHex || shouldDumpAscii || isApkDexJar || isXmlFile) ? bytesToHexSafe(a0) : null,
+                    should_dump_ascii: shouldDumpAscii,
+                    should_dump_hex: shouldDumpHex,
+                    is_large_data: isLargeData,
+                    max_display_length: CONFIG.max_output_length,
+                    file_type: isApkDexJar ? "binary" : (isXmlFile ? "xml" : "other"),
+                    method: "java.io.FileOutputStream.write(byte[], int, int)"
+                });
             }
 
-            return FileOuputStream.write[2].call(this, a0, a1, a2);
+            return result;
         }
     });
 }
