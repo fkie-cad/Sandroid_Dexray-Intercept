@@ -8,7 +8,7 @@ from .resultManager import handle_output
 import json
 from datetime import datetime
 from colorama import Fore
-from .parser import parse_file_system_event, parse_native_lib_loading, parse_shared_pref, parse_aes, dex_loading_parser, parse_socket_infos, parse_web_infos, parse_telephony_infos, remove_empty_entries, get_event_type_infos, get_demangled_method_for_DEX_unpacking, parse_broadcast_infos, url_parser, parse_generic_infos, hexdump
+from .parser import parse_file_system_event, parse_native_lib_loading, parse_shared_pref, parse_aes, parse_binder, parse_intent, dex_loading_parser, parse_socket_infos, parse_web_infos, parse_telephony_infos, remove_empty_entries, get_event_type_infos, get_demangled_method_for_DEX_unpacking, parse_broadcast_infos, url_parser, parse_generic_infos, hexdump
 
 # Define a custom exception for handling frida based exceptions
 class FridaBasedException(Exception):
@@ -134,6 +134,12 @@ class AppProfiler:
         elif category == "IPC_SHARED-PREF":
             parsed_data = parse_shared_pref(data, timestamp)
             self.output_data[category].append(parsed_data)
+        elif category == "IPC_BINDER":
+            parsed_data = parse_binder(data, timestamp)
+            self.output_data[category].append(parsed_data)
+        elif category == "IPC_INTENT":
+            parsed_data = parse_intent(data, timestamp)
+            self.output_data[category].append(parsed_data)
         elif category == "CRYPTO_AES":
             parsed_data = parse_aes(data, timestamp)
             self.output_data[category].append(parsed_data)
@@ -175,29 +181,152 @@ class AppProfiler:
                 else:
                     print("[*] " + data)
             elif category == "WEB":
-                if "URI" in data or "Java::net.url" in data:
-                    parsed_data = url_parser(data, timestamp)
-                    print(f"[*] [{parsed_data['event_type']}] URI: {parsed_data['uri']}")
-
-                if "HttpURLConnectionImpl" in data and "event_type" not in data:
-                    print(f"[*] [OkHttp]: {data}")
-
                 parsed_data_web = parse_web_infos(data, timestamp)
                 if parsed_data_web is not None:
-                    if "body" in parsed_data_web:
-                        print(f"[*] {parsed_data_web['event_type']}: Headers: {parsed_data_web['headers']}")
-                        print(f"[*] {parsed_data_web['event_type']}: Body: {parsed_data_web['body']}\n\n")
+                    event_type = parsed_data_web.get('event_type', 'unknown')
+                    
+                    # Handle different web event types
+                    if event_type.startswith('url.'):
+                        print(f"[*] [{event_type}] URL: {parsed_data_web.get('url', 'unknown')}")
+                        if 'req_method' in parsed_data_web:
+                            print(f"[*] [{event_type}] Method: {parsed_data_web['req_method']}")
+                    
+                    elif event_type.startswith('uri.'):
+                        print(f"[*] [{event_type}] URI: {parsed_data_web.get('uri', 'unknown')}")
+                    
+                    elif event_type.startswith('http.') or event_type.startswith('https.'):
+                        print(f"[*] [{event_type}] URL: {parsed_data_web.get('url', 'unknown')}")
+                        if 'status_code' in parsed_data_web:
+                            print(f"[*] [{event_type}] Status: {parsed_data_web['status_code']}")
+                        if 'method' in parsed_data_web:
+                            print(f"[*] [{event_type}] Method: {parsed_data_web['method']}")
+                    
+                    elif event_type.startswith('okhttp.'):
+                        print(f"[*] [{event_type}] URL: {parsed_data_web.get('url', 'unknown')}")
+                        if 'headers' in parsed_data_web and parsed_data_web['headers']:
+                            print(f"[*] [{event_type}] Headers: {parsed_data_web['headers']}")
+                        if 'body' in parsed_data_web and parsed_data_web['body']:
+                            body = parsed_data_web['body']
+                            if len(body) > 100:
+                                body = body[:100] + "..."
+                            print(f"[*] [{event_type}] Body: {body}")
+                    
+                    elif event_type.startswith('webview.'):
+                        print(f"[*] [{event_type}] URL: {parsed_data_web.get('url', 'N/A')}")
+                        if 'data' in parsed_data_web and parsed_data_web['data']:
+                            print(f"[*] [{event_type}] Data: {parsed_data_web['data']}")
+                        if 'mime_type' in parsed_data_web:
+                            print(f"[*] [{event_type}] MIME Type: {parsed_data_web['mime_type']}")
+                    
+                    else:
+                        # Fallback for unknown web events
+                        print(f"[*] [{event_type}] {data}")
+                    
+                    print()
+            elif category == "IPC_BINDER":
+                parsed_data = parse_binder(data, timestamp)
+                if parsed_data:
+                    event_type = parsed_data.get('event_type', 'unknown')
+                    
+                    if event_type == 'binder.transaction':
+                        transaction_desc = parsed_data.get('transaction_desc', 'Unknown')
+                        sender_pid = parsed_data.get('sender_pid', 'unknown')
+                        code = parsed_data.get('code', 'unknown')
+                        data_size = parsed_data.get('data_size', 0)
+                        print(f"\n[*] [Binder] {transaction_desc}:")
+                        print(f"[*] Sender PID: {sender_pid}, Code: {code}, Data Size: {data_size} bytes")
+                        if 'payload_hex' in parsed_data and parsed_data['payload_hex']:
+                            payload_preview = parsed_data['payload_hex'][:200] + "..." if len(parsed_data['payload_hex']) > 200 else parsed_data['payload_hex']
+                            print(f"[*] Payload Preview: {payload_preview}")
+                    else:
+                        print(f"[*] [Binder] {event_type}: {data}")
+                    
+                    print()
             elif category == "IPC_BROADCAST":
                 parsed_data = parse_broadcast_infos(data, timestamp)
-                print(f"[*] [Broadcast] {parsed_data['event_type']}")
-                if "intent_name" in parsed_data:
-                    print(f"[*] [Broadcast] Intent component name: {parsed_data['intent_name']}\n")
+                if parsed_data:
+                    event_type = parsed_data.get('event_type', 'unknown')
+                    
+                    if event_type.startswith('broadcast.'):
+                        print(f"\n[*] [Broadcast] {event_type}:")
+                        if 'intent_name' in parsed_data:
+                            print(f"[*] Intent: {parsed_data['intent_name']}")
+                        if 'intent_details' in parsed_data:
+                            details = parsed_data['intent_details']
+                            if details.get('action'):
+                                print(f"[*] Action: {details['action']}")
+                            if details.get('component'):
+                                print(f"[*] Component: {details['component']}")
+                            if details.get('data_uri'):
+                                print(f"[*] Data URI: {details['data_uri']}")
+                    elif event_type.startswith('activity.'):
+                        print(f"\n[*] [Activity] {event_type}:")
+                        if 'intent_name' in parsed_data:
+                            print(f"[*] Intent: {parsed_data['intent_name']}")
+                    elif event_type.startswith('service.'):
+                        print(f"\n[*] [Service] {event_type}:")
+                        if 'intent_name' in parsed_data:
+                            print(f"[*] Service: {parsed_data['intent_name']}")
+                    else:
+                        print(f"[*] [Broadcast] {event_type}: {data}")
+                    
+                    print()
+            elif category == "IPC_INTENT":
+                parsed_data = parse_intent(data, timestamp)
+                if parsed_data:
+                    event_type = parsed_data.get('event_type', 'unknown')
+                    
+                    if event_type.startswith('intent.'):
+                        print(f"\n[*] [Intent] {event_type}:")
+                        if 'intent_name' in parsed_data:
+                            print(f"[*] Intent: {parsed_data['intent_name']}")
+                        if 'intent' in parsed_data:
+                            intent_info = parsed_data['intent']
+                            if intent_info.get('action'):
+                                print(f"[*] Action: {intent_info['action']}")
+                            if intent_info.get('component'):
+                                print(f"[*] Component: {intent_info['component']}")
+                            if intent_info.get('data_uri'):
+                                print(f"[*] Data URI: {intent_info['data_uri']}")
+                            if intent_info.get('mime_type'):
+                                print(f"[*] MIME Type: {intent_info['mime_type']}")
+                        if 'extras_formatted' in parsed_data and parsed_data['extras_formatted']:
+                            print(f"[*] Extras:")
+                            for extra in parsed_data['extras_formatted']:
+                                print(f"    {extra}")
+                    else:
+                        print(f"[*] [Intent] {event_type}: {data}")
+                    
+                    print()
             elif category == "IPC_SHARED-PREF":
                 parsed_data = parse_shared_pref(data, timestamp)
-                if "value" in parsed_data:
-                    print(f"[*] SharedPref Content: {parsed_data['value']}\n")
-                else:
-                    print("[*] SharedPref: " + data)
+                if parsed_data:
+                    event_type = parsed_data.get('event_type', 'unknown')
+                    
+                    if event_type.startswith('shared_prefs.'):
+                        if 'key' in parsed_data and 'value' in parsed_data:
+                            print(f"[*] [{event_type}] {parsed_data['key']} = {parsed_data['value']}")
+                        elif 'file' in parsed_data:
+                            print(f"[*] [{event_type}] File: {parsed_data['file']}")
+                        else:
+                            print(f"[*] [{event_type}] {parsed_data.get('method', 'unknown')}")
+                    
+                    elif event_type.startswith('datastore'):
+                        if 'key' in parsed_data and 'value' in parsed_data:
+                            print(f"[*] [{event_type}] {parsed_data['key']} = {parsed_data['value']}")
+                        elif 'data' in parsed_data:
+                            print(f"[*] [{event_type}] Data: {parsed_data['data']}")
+                        else:
+                            print(f"[*] [{event_type}] {parsed_data.get('method', 'unknown')}")
+                    
+                    else:
+                        # Fallback for legacy format
+                        if "value" in parsed_data:
+                            print(f"[*] SharedPref Content: {parsed_data['value']}")
+                        else:
+                            print(f"[*] [{event_type}] {data}")
+                    
+                    print()
             elif category == "CRYPTO_AES":
                 parsed_data = parse_aes(data, timestamp)
                 if parsed_data:
@@ -260,10 +389,35 @@ class AppProfiler:
                     print("[*] " + data + "\n")
             elif category == "NETWORK_SOCKETS":
                 parsed_data = parse_socket_infos(data, timestamp)
-                if parsed_data is None:
-                    return
-                else:
-                    print("[*] Network Infos: " + data)
+                if parsed_data:
+                    event_type = parsed_data.get('event_type', 'unknown')
+                    
+                    if event_type.startswith('socket.'):
+                        operation = parsed_data.get('operation', 'Socket Operation')
+                        socket_desc = parsed_data.get('socket_description', 'Unknown Socket')
+                        print(f"\n[*] [Socket] {operation} ({socket_desc}):")
+                        
+                        if 'socket_descriptor' in parsed_data:
+                            print(f"[*] Socket FD: {parsed_data['socket_descriptor']}")
+                        
+                        if 'local_address' in parsed_data:
+                            print(f"[*] Local: {parsed_data['local_address']}")
+                            
+                        if 'remote_address' in parsed_data:
+                            print(f"[*] Remote: {parsed_data['remote_address']}")
+                            
+                        if 'connection_string' in parsed_data:
+                            print(f"[*] Connection: {parsed_data['connection_string']}")
+                            
+                        if 'data_length' in parsed_data:
+                            print(f"[*] Data Length: {parsed_data['data_length']} bytes")
+                            
+                        if 'has_buffer' in parsed_data and parsed_data['has_buffer']:
+                            print(f"[*] Buffer Data: Available")
+                    else:
+                        print(f"[*] [Socket] {event_type}: {data}")
+                    
+                    print()
             elif category == "TELEPHONY":
                 parsed_data = parse_telephony_infos(data, timestamp)
                 if "key" in parsed_data:

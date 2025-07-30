@@ -391,6 +391,43 @@ def parse_aes_legacy(raw_data, event_time):
         }
 
 
+def parse_binder(raw_data, event_time):
+    try:
+        # Direct JSON parsing - new format sends pure JSON
+        data = json.loads(raw_data)
+        
+        # Add transaction type description
+        if 'transaction_type' in data:
+            trans_type = data['transaction_type']
+            if trans_type == 'BC_TRANSACTION':
+                data['transaction_desc'] = 'Binder Transaction'
+            elif trans_type == 'BC_REPLY':
+                data['transaction_desc'] = 'Binder Reply'
+            else:
+                data['transaction_desc'] = f'Unknown ({trans_type})'
+        
+        # Ensure timestamp is set
+        if 'timestamp' not in data:
+            data["timestamp"] = event_time
+            
+        return data
+        
+    except json.JSONDecodeError:
+        # Fallback for legacy format
+        return {
+            "event_type": "binder.legacy",
+            "payload": raw_data,
+            "timestamp": event_time
+        }
+    except Exception as e:
+        return {
+            "event_type": "parse_error",
+            "payload": raw_data,
+            "error": str(e),
+            "timestamp": event_time
+        }
+
+
 def dex_loading_parser(lines):
     parsed_data = {}
     even_not_identified = True
@@ -423,31 +460,71 @@ def dex_loading_parser(lines):
 
 
 def parse_socket_infos(raw_data, event_time):
-    event_type = "Socket::unknown"
     try:
-        if "path" in raw_data:
-            return {
-            "event_type": event_type,
+        # Direct JSON parsing - new format sends pure JSON
+        data = json.loads(raw_data)
+        
+        # Add socket type description
+        if 'socket_type' in data:
+            socket_type = data['socket_type']
+            if socket_type in ['tcp', 'tcp6']:
+                data['socket_description'] = 'TCP Socket'
+            elif socket_type in ['udp', 'udp6']:
+                data['socket_description'] = 'UDP Socket'
+            else:
+                data['socket_description'] = f'Socket ({socket_type})'
+        
+        # Format connection info for easy display
+        if 'local_ip' in data and 'local_port' in data:
+            data['local_address'] = f"{data['local_ip']}:{data['local_port']}"
+        
+        if 'remote_ip' in data and 'remote_port' in data:
+            data['remote_address'] = f"{data['remote_ip']}:{data['remote_port']}"
+        
+        # Add method description
+        if 'method' in data:
+            method = data['method']
+            if method == 'connect':
+                data['operation'] = 'Socket Connection'
+            elif method == 'bind':
+                data['operation'] = 'Socket Binding'
+            elif method in ['read', 'recv', 'recvfrom']:
+                data['operation'] = 'Data Received'
+            elif method in ['write', 'send', 'sendto']:
+                data['operation'] = 'Data Sent'
+            else:
+                data['operation'] = f'Socket {method.title()}'
+        
+        # Ensure timestamp is set
+        if 'timestamp' not in data:
+            data["timestamp"] = event_time
+            
+        return data
+        
+    except json.JSONDecodeError:
+        # Fallback for legacy format
+        try:
+            # Regular expression to extract JSON parts
+            json_pattern = re.compile(r'\{.*\}')
+            match = json_pattern.search(raw_data)
+            if match:
+                json_str = match.group()
+                data = json.loads(json_str)
+                data["timestamp"] = event_time
+                return data
+        except:
+            pass
+        
+        return {
+            "event_type": "socket.legacy",
             "payload": raw_data,
             "timestamp": event_time
         }
-        # Regular expression to extract JSON parts
-        json_pattern = re.compile(r'\{.*\}')
-        match = json_pattern.search(raw_data)
-        if match:
-            json_str = match.group()
-            data = json.loads(json_str)
-            
-            # Add further elements to JSON object´
-            data["timestamp"] = event_time
-            return data
     except Exception as e:
-        exception_info = e
-
         return {
-            "event_type": event_type,
+            "event_type": "parse_error",
             "payload": raw_data,
-            "exception": exception_info,
+            "error": str(e),
             "timestamp": event_time
         }
 
@@ -565,30 +642,119 @@ def parse_intent_value_for_broadcasts(intent_value):
     return intent_name, intent_flag
 
 def parse_broadcast_infos(raw_data, timestamp):
-        # Load the JSON data into a dictionary
-    data = json.loads(raw_data)
+    try:
+        # Direct JSON parsing - new format sends pure JSON
+        data = json.loads(raw_data)
+        
+        # Handle new structured format
+        if 'intent' in data:
+            intent_info = data['intent']
+            
+            # Extract component name if available
+            if 'component' in intent_info:
+                data['intent_name'] = intent_info['component']
+            elif 'action' in intent_info:
+                data['intent_name'] = intent_info['action']
+            
+            # Extract intent details
+            data['intent_details'] = {
+                'action': intent_info.get('action'),
+                'component': intent_info.get('component'),
+                'data_uri': intent_info.get('data_uri'),
+                'flags': intent_info.get('flags'),
+                'extras': intent_info.get('extras')
+            }
+        
+        # Handle legacy format
+        elif 'artifact' in data and data["artifact"]:
+            intent_value = data["artifact"][0]["value"]
+            intent_name, intent_flag = parse_intent_value_for_broadcasts(intent_value)
+            data['intent_name'] = intent_name
+            data['intent_flag'] = intent_flag
+        
+        # Ensure timestamp is set
+        if 'timestamp' not in data:
+            data["timestamp"] = timestamp
+            
+        return data
+        
+    except json.JSONDecodeError:
+        # Fallback for non-JSON data
+        return {
+            "event_type": "broadcast.legacy",
+            "payload": raw_data,
+            "timestamp": timestamp
+        }
+    except Exception as e:
+        return {
+            "event_type": "parse_error",
+            "payload": raw_data,
+            "error": str(e),
+            "timestamp": timestamp
+        }
 
-    # Initialize the result map
-    result = {
-        "event_type": data.get("event_type"),
-        "class": data.get("class", None),
-        "method": data.get("method"),
-        "artifact": data.get("artifact", [])
-    }
 
-    # Extract the intent name and flag from the artifact value
-    if data["artifact"]:
-        intent_value = data["artifact"][0]["value"]
-        intent_name, intent_flag = parse_intent_value_for_broadcasts(intent_value)
-        result["intent_name"] = intent_name
-        result["intent_flag"] = intent_flag
-
-    # Remove keys with null values
-    result = {k: v for k, v in result.items() if v is not None}
-    
-    result["timestamp"] = timestamp
-    
-    return result
+def parse_intent(raw_data, event_time):
+    try:
+        # Direct JSON parsing - new format sends pure JSON
+        data = json.loads(raw_data)
+        
+        # Extract intent information for display
+        if 'intent' in data:
+            intent_info = data['intent']
+            
+            # Set intent name for easy access
+            if 'component' in intent_info:
+                data['intent_name'] = intent_info['component']
+            elif 'action' in intent_info:
+                data['intent_name'] = intent_info['action']
+            
+            # Format extras for better display
+            if 'extras' in intent_info and intent_info['extras']:
+                extras_formatted = []
+                for key, extra_data in intent_info['extras'].items():
+                    extras_formatted.append(f"{key} ({extra_data['type']}): {extra_data['value']}")
+                data['extras_formatted'] = extras_formatted
+        
+        # Ensure timestamp is set
+        if 'timestamp' not in data:
+            data["timestamp"] = event_time
+            
+        return data
+        
+    except json.JSONDecodeError:
+        # Fallback for legacy format (string with line breaks)
+        lines = raw_data.split('\n')
+        intent_data = {}
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('Activity:'):
+                intent_data['component'] = line.replace('Activity:', '').strip()
+            elif line.startswith('Action:'):
+                intent_data['action'] = line.replace('Action:', '').strip()
+            elif line.startswith('URI:'):
+                intent_data['data_uri'] = line.replace('URI:', '').strip()
+            elif line.startswith('Type:'):
+                intent_data['mime_type'] = line.replace('Type:', '').strip()
+            elif line.startswith('Extras:'):
+                if 'extras_list' not in intent_data:
+                    intent_data['extras_list'] = []
+                intent_data['extras_list'].append(line.replace('Extras:', '').strip())
+        
+        return {
+            "event_type": "intent.legacy",
+            "intent": intent_data,
+            "payload": raw_data,
+            "timestamp": event_time
+        }
+    except Exception as e:
+        return {
+            "event_type": "parse_error",
+            "payload": raw_data,
+            "error": str(e),
+            "timestamp": event_time
+        }
 
 
 def url_parser(json_string,time):

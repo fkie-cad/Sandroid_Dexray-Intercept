@@ -1,9 +1,16 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Java } from "../utils/javalib.js"
 
-
 const PROFILE_HOOKING_TYPE: string = "IPC_BINDER"
-var CACHE_LOG = "";
+
+function createBinderEvent(eventType: string, data: any): void {
+    const event = {
+        event_type: eventType,
+        timestamp: Date.now(),
+        ...data
+    };
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
 /*
     This hooks are mostly based on the work from the following blog post:
     https://bhamza.me/blogpost/2019/04/24/Frida-Android-libbinder.html
@@ -114,11 +121,23 @@ function handle_write(write_buffer, write_size, write_consumed) { // binder_thre
             // log('INFO', "TRANSACTION / BC_REPLY!");
             var binder_transaction_data = parse_binder_transaction_data(ptr);
 
-            // Show me the secrets
-            am_send(PROFILE_HOOKING_TYPE,"[Libbinder::ioctl] payload:"+hexdump(binder_transaction_data.data.ptr.buffer, {
+            // Send structured binder transaction data
+            const payload = hexdump(binder_transaction_data.data.ptr.buffer, {
                 length: binder_transaction_data.data_size,
                 ansi: true,
-            }))
+            });
+            
+            createBinderEvent("binder.transaction", {
+                transaction_type: cmd === binder_driver_command_protocol.BC_TRANSACTION ? "BC_TRANSACTION" : "BC_REPLY",
+                target_handle: binder_transaction_data.target.handle,
+                code: binder_transaction_data.code,
+                flags: binder_transaction_data.flags,
+                sender_pid: binder_transaction_data.sender_pid,
+                sender_euid: binder_transaction_data.sender_euid,
+                data_size: binder_transaction_data.data_size,
+                offsets_size: binder_transaction_data.offsets_size,
+                payload_hex: payload
+            });
             break;
         default:
             // log('ERR', 'NOOP handler')

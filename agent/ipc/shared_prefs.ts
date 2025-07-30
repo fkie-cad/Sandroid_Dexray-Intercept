@@ -4,119 +4,163 @@ import { Java } from "../utils/javalib.js"
 
 const PROFILE_HOOKING_TYPE: string = "IPC_SHARED-PREF"
 
-/**
- * 
- * Some parts are taken from https://github.com/Areizen/Android-Malware-Sandbox/tree/master/plugins/shared_preferences_plugin
- * 
- */
-
-
-  
-  
-
-function hook_shared_preferences(){
-    Java.perform(function() {
-    var sharedPrefs = Java.use('android.app.SharedPreferencesImpl');
-  
-    sharedPrefs.$init.overload('java.io.File', 'int').implementation = function(file, mode) {
-      var result = this.$init(file, mode);
-      var obj = {"event_type": "Java::SharedPreferencesImpl$EditorImpl.$init", "method": "SharedPreferencesImpl.$init('java.lang.String', 'int')", "file": file.getAbsolutePath(), "mode": mode};
-      am_send(PROFILE_HOOKING_TYPE,"[Java::SharedPreferencesImpl$EditorImpl] SharedPref File : " + JSON.stringify(obj)); 
-      return result;
-    }
-  
-    Java.use('android.app.SharedPreferencesImpl$EditorImpl').putString.overload('java.lang.String', 'java.lang.String').implementation = function(k, v) {
-      var obj = {"event_type": "Java::SharedPreferencesImpl$EditorImpl.putString", "method":"SharedPreferences.Editor.putString('java.lang.String', 'java.lang.String')", "file": 'NULL', "value": k+" = "+v};
-      am_send(PROFILE_HOOKING_TYPE,"[Java::SharedPreferencesImpl$EditorImpl] SharedPref Content : " + JSON.stringify(obj)); 
-      return this.putString(k, v);
-    }
-
-
-
-
-  console.log("Starting DataStore hooks...");
-
-        // Hook the DataStore class
-        const DataStore = Java.use("androidx.datastore.core.DataStore");
-
-        // Hook updateData
-        DataStore.updateData.overload("kotlin.coroutines.Continuation").implementation = function (continuation) {
-          console.log("DataStore.updateData() called");
-          const result = this.updateData(continuation);
-
-          // Log the result if possible
-          result.then((data: any) => {
-            //console.log(`Updated DataStore data: ${data}`);
-            var obj = {"event_type": "Java::androidx.datastore.core.DataStore.updateData", "method":"updateData('kotlin.coroutines.Continuation')", "data": data};
-            am_send(PROFILE_HOOKING_TYPE,"[Java::androidx.datastore.core.DataStore] updateData : " + JSON.stringify(obj));
-          });
-
-          return result;
-        };
-
-        // Hook data (flow)
-        DataStore.getData.overload().implementation = function () {
-          console.log("DataStore.getData() called");
-          const flow = this.getData();
-
-          // Hook into the flow to log emitted data
-          flow.collect((data: any) => {
-            //console.log(`Data emitted from DataStore: ${data}`);
-            var obj = {"event_type": "Java::androidx.datastore.core.DataStore.getData", "method":"getData()", "data": data};
-            am_send(PROFILE_HOOKING_TYPE,"[Java::androidx.datastore.core.DataStore] getData : " + JSON.stringify(obj));
-          });
-
-          return flow;
-        };
-
-        // Hook Preferences DataStore (key-value)
-        const Preferences = Java.use("androidx.datastore.preferences.core.Preferences");
-        Preferences.get.overload("androidx.datastore.preferences.core.Preferences$Key").implementation = function (key) {
-          //console.log(`Preferences.get() called for key: ${key}`);
-          const value = this.get(key);
-
-          //console.log(`Value for key '${key}': ${value}`);
-          var obj = {"event_type": "Java::androidx.datastore.core.DataStore.Preferences.get()", "method":"get()", "Value for key ": key+" = "+value};
-          am_send(PROFILE_HOOKING_TYPE,"[Java::androidx.datastore.core.DataStore.Preferences] .get() : " + JSON.stringify(obj));
-          return value;
-        };
-
-        // Hook Preferences.Key class
-        const PreferencesKey = Java.use("androidx.datastore.preferences.core.Preferences$Key");
-        PreferencesKey.$init.overload("java.lang.String").implementation = function (key) {
-          //console.log(`Preferences.Key initialized with key: ${key}`);
-          var obj = {"event_type": "Java::androidx.datastore.dataStore.core.Preferences$Key", "method":"$init", "Preferences.Key initialized with key ": key};
-          am_send(PROFILE_HOOKING_TYPE,"[Java::androidx.datastore.core.Preferences$Key] .$init (constructor) : " + JSON.stringify(obj));
-          return this.$init(key);
-        };
-
-        // Hook Proto DataStore (typed objects)
-        const ProtoDataStore = Java.use("androidx.datastore.core.DataStore");
-        ProtoDataStore.updateData.overload("kotlin.coroutines.Continuation").implementation = function (continuation) {
-          console.log("Proto DataStore updateData called");
-          const result = this.updateData(continuation);
-
-          result.then((data: any) => {
-            //console.log(`Proto DataStore updated data: ${data}`);
-            var obj = {"event_type": "Java::androidx.datastore.dataStore", "method":"updateData", "Proto DataStore updated data ": data};
-          am_send(PROFILE_HOOKING_TYPE,"[Java::androidx.datastore.core.Preferences$Key] .updateData : " + JSON.stringify(obj));
-          });
-
-          return result;
-        };
-
-
-
-      });
-
+interface SharedPrefEvent {
+    event_type: string;
+    timestamp: number;
+    method?: string;
+    file?: string;
+    key?: string;
+    value?: string;
+    mode?: number;
+    data?: any;
 }
 
+function createSharedPrefEvent(eventType: string, data: Partial<SharedPrefEvent>): void {
+    const event: SharedPrefEvent = {
+        event_type: eventType,
+        timestamp: Date.now(),
+        ...data
+    };
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
+function install_shared_preferences_hooks() {
+    devlog("Installing SharedPreferences hooks");
+    
+    Java.perform(() => {
+        const SharedPrefs = Java.use('android.app.SharedPreferencesImpl');
+        const SharedPrefsEditor = Java.use('android.app.SharedPreferencesImpl$EditorImpl');
+
+        // Hook SharedPreferences initialization
+        SharedPrefs.$init.overload('java.io.File', 'int').implementation = function(file, mode) {
+            const result = this.$init(file, mode);
+            
+            createSharedPrefEvent("shared_prefs.init", {
+                method: "SharedPreferencesImpl.$init",
+                file: file.getAbsolutePath(),
+                mode: mode
+            });
+            
+            return result;
+        };
+
+        // Hook SharedPreferences Editor putString
+        SharedPrefsEditor.putString.overload('java.lang.String', 'java.lang.String').implementation = function(key, value) {
+            createSharedPrefEvent("shared_prefs.put_string", {
+                method: "putString",
+                key: key,
+                value: value
+            });
+            
+            return this.putString(key, value);
+        };
+
+        // Hook other Editor methods
+        const editorMethods = [
+            { method: 'putInt', args: ['java.lang.String', 'int'] },
+            { method: 'putLong', args: ['java.lang.String', 'long'] },
+            { method: 'putFloat', args: ['java.lang.String', 'float'] },
+            { method: 'putBoolean', args: ['java.lang.String', 'boolean'] }
+        ];
+
+        editorMethods.forEach(({ method, args }) => {
+            try {
+                SharedPrefsEditor[method].overload(...args).implementation = function(key: string, value: any) {
+                    createSharedPrefEvent(`shared_prefs.${method.toLowerCase()}`, {
+                        method: method,
+                        key: key,
+                        value: value.toString()
+                    });
+                    
+                    return this[method](key, value);
+                };
+            } catch (e) {
+                devlog(`Could not hook SharedPrefsEditor.${method}: ${e}`);
+            }
+        });
 
 
+    });
+}
+
+function install_datastore_hooks() {
+    devlog("Installing DataStore hooks");
+    
+    Java.perform(() => {
+        try {
+            // Hook the DataStore class
+            const DataStore = Java.use("androidx.datastore.core.DataStore");
+
+            // Hook updateData
+            DataStore.updateData.overload("kotlin.coroutines.Continuation").implementation = function (continuation) {
+                const result = this.updateData(continuation);
+
+                // Log the result if possible
+                result.then((data: any) => {
+                    createSharedPrefEvent("datastore.update", {
+                        method: "updateData",
+                        data: data ? data.toString() : null
+                    });
+                });
+
+                return result;
+            };
+
+            // Hook data (flow)
+            if (DataStore.getData) {
+                DataStore.getData.overload().implementation = function () {
+                    const flow = this.getData();
+
+                    // Hook into the flow to log emitted data
+                    flow.collect((data: any) => {
+                        createSharedPrefEvent("datastore.get", {
+                            method: "getData",
+                            data: data ? data.toString() : null
+                        });
+                    });
+
+                    return flow;
+                };
+            }
+        } catch (e) {
+            devlog(`DataStore not available: ${e}`);
+        }
+
+        try {
+            // Hook Preferences DataStore (key-value)
+            const Preferences = Java.use("androidx.datastore.preferences.core.Preferences");
+            Preferences.get.overload("androidx.datastore.preferences.core.Preferences$Key").implementation = function (key) {
+                const value = this.get(key);
+                
+                createSharedPrefEvent("datastore_prefs.get", {
+                    method: "get",
+                    key: key ? key.toString() : "unknown",
+                    value: value ? value.toString() : null
+                });
+                
+                return value;
+            };
+
+            // Hook Preferences.Key class
+            const PreferencesKey = Java.use("androidx.datastore.preferences.core.Preferences$Key");
+            PreferencesKey.$init.overload("java.lang.String").implementation = function (keyName) {
+                createSharedPrefEvent("datastore_prefs.key_init", {
+                    method: "$init",
+                    key: keyName
+                });
+                
+                return this.$init(keyName);
+            };
+        } catch (e) {
+            devlog(`Preferences DataStore not available: ${e}`);
+        }
+    });
+}
 
 export function install_shared_prefs_hooks(){
-    devlog("\n")
-    devlog("install shared preferences hooks");
-    hook_shared_preferences();
-
+    devlog("\n");
+    devlog("Installing shared preferences hooks");
+    
+    install_shared_preferences_hooks();
+    install_datastore_hooks();
 }

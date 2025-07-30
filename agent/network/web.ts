@@ -5,588 +5,400 @@ import { Java } from "../utils/javalib.js"
 
 const PROFILE_HOOKING_TYPE: string = "WEB"
 
+interface WebEvent {
+    event_type: string;
+    timestamp: number;
+    url?: string;
+    method?: string;
+    headers?: Record<string, any>;
+    body?: string;
+    stack_trace?: string;
+    class?: string;
+    uri?: string;
+    req_method?: string;
+    status_code?: number;
+    data?: string;
+    mime_type?: string;
+    encoding?: string;
+}
 
-function url_init(){
-    Java.perform(function () {
-        var url = Java.use("java.net.URL");
-        var HttpURLConnection = Java.use('java.net.HttpURLConnection');
-        var URLConnection = Java.use('java.net.URLConnection');
-        var HttpURLConnectionImpl = Java.use('com.android.okhttp.internal.huc.HttpURLConnectionImpl');
+function createWebEvent(eventType: string, data: Partial<WebEvent>): void {
+    const event: WebEvent = {
+        event_type: eventType,
+        timestamp: Date.now(),
+        ...data
+    };
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
 
-        var threadef = Java.use('java.lang.Thread');
-        var threadinstance = threadef.$new();
 
-        url.$init.overload('java.lang.String').implementation = function (var0) {
-            var stack = threadinstance.currentThread().getStackTrace()
+function install_url_hooks() {
+    devlog("Installing URL hooks");
+    
+    Java.perform(() => {
+        const URL = Java.use("java.net.URL");
+        const HttpURLConnection = Java.use('java.net.HttpURLConnection');
+        const URLConnection = Java.use('java.net.URLConnection');
+        const HttpURLConnectionImpl = Java.use('com.android.okhttp.internal.huc.HttpURLConnectionImpl');
+        const URI = Java.use('java.net.URI');
+        const threadDef = Java.use('java.lang.Thread');
+        const threadInstance = threadDef.$new();
 
-            if(! var0.startsWith("null")){
-                var obj = {"event_type": "Java::net.url", "url" : var0, 'stack': Where(stack), "req_method" : "NULL"};
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj))
+        // Hook URL constructor
+        URL.$init.overload('java.lang.String').implementation = function (urlString: string) {
+            const result = this.$init(urlString);
+            
+            if (!urlString.startsWith("null")) {
+                const stack = threadInstance.currentThread().getStackTrace();
+                createWebEvent("url.creation", {
+                    url: urlString,
+                    stack_trace: Where(stack),
+                    req_method: "GET"
+                });
             }
-            return this.$init(var0);
+            return result;
         };
 
-        var URLConnectionClasses = [HttpURLConnectionImpl, HttpURLConnection, URLConnection];
-
-        URLConnectionClasses.forEach(URLClass => {
-            URLClass.connect.overload().implementation = function(){
-                var stack = threadinstance.currentThread().getStackTrace()
-                var obj = {"event_type": "Java::net.URLConnection", "url" : this.getURL().toString(), 'stack': Where(stack), "req_method" : this.getRequestMethod()};
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj));
-                return this.connect();
+        // Hook URL connection methods
+        const connectionClasses = [HttpURLConnectionImpl, HttpURLConnection, URLConnection];
+        connectionClasses.forEach(ConnectionClass => {
+            try {
+                ConnectionClass.connect.overload().implementation = function() {
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    createWebEvent("url.connection", {
+                        url: this.getURL().toString(),
+                        stack_trace: Where(stack),
+                        req_method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+                    });
+                    return this.connect();
+                };
+            } catch (e) {
+                devlog(`Could not hook ${ConnectionClass.$className}.connect: ${e}`);
             }
         });
 
-        url.openConnection.overload().implementation = function(){
-            var result = this.openConnection();
-            var stack = threadinstance.currentThread().getStackTrace()
-            // Cannot retrieve directly the req method, by default GET
-            var obj = {"event_type": "Java.net.URLConnection", "url_id": result.hashCode(), "url" : result.getURL().toString(), 'stack': Where(stack), "req_method" : 'NULL'};
-            am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj))
-            return result;
-        }
-
-
-        // Hooking java.net.URI methods
-        const URI = Java.use('java.net.URI');
-
-        // Hook the URI constructor
-        URI.$init.overload('java.lang.String').implementation = function(uriString: string) {
-            const result = this.$init(uriString);
-
-            // Send the data
-            const json_obj = {
-                event_type: "URI Constructor",
-                class: "java.net.URI",
-                method: "URI(String)",
-                event: "Creating new URI",
-                uri: uriString
-            };
-            am_send(PROFILE_HOOKING_TYPE, JSON.stringify(json_obj));
-
+        // Hook URL openConnection
+        URL.openConnection.overload().implementation = function() {
+            const result = this.openConnection();
+            const stack = threadInstance.currentThread().getStackTrace();
+            
+            createWebEvent("url.open_connection", {
+                url: result.getURL().toString(),
+                stack_trace: Where(stack),
+                req_method: "GET"
+            });
             return result;
         };
 
-        // Hook the toString method
-        /*
-        URI.toString.overload().implementation = function() {
-            const result = this.toString();
-
-            // Send the data
-            const json_obj = {
-                event_type: "URI toString",
+        // Hook URI constructor
+        URI.$init.overload('java.lang.String').implementation = function(uriString: string) {
+            const result = this.$init(uriString);
+            
+            createWebEvent("uri.creation", {
                 class: "java.net.URI",
-                method: "toString()",
-                event: "Converting URI to string",
-                uri: result
-            };
-            am_send(PROFILE_HOOKING_TYPE, JSON.stringify(json_obj));
-
+                method: "URI(String)",
+                uri: uriString
+            });
+            
             return result;
-        }; */
+        };
     });
-
 }
 
 
-function hook_http_communication(){
+function install_http_hooks() {
+    devlog("Installing HTTP communication hooks");
+    
     Java.perform(() => {
         const HttpURLConnection = Java.use("java.net.HttpURLConnection");
 
-        // Hooking into HttpURLConnection
+        // Hook request method setting
         HttpURLConnection.setRequestMethod.implementation = function(method: string) {
-            am_send(PROFILE_HOOKING_TYPE,`HttpURLConnection.setRequestMethod called with method: ${method}`);
-            return this.setRequestMethod.apply(this, arguments);
+            createWebEvent("http.request_method", {
+                method: method,
+                url: this.getURL ? this.getURL().toString() : "unknown"
+            });
+            return this.setRequestMethod(method);
         };
 
+        // Hook connection
         HttpURLConnection.connect.implementation = function() {
-            am_send(PROFILE_HOOKING_TYPE,`HttpURLConnection.connect called`);
-            const responseCode = this.getResponseCode();
-            am_send(PROFILE_HOOKING_TYPE,`HttpURLConnection response code: ${responseCode}`);
-            return this.connect.apply(this, arguments);
+            const result = this.connect();
+            try {
+                const responseCode = this.getResponseCode();
+                createWebEvent("http.connect", {
+                    url: this.getURL ? this.getURL().toString() : "unknown",
+                    status_code: responseCode,
+                    method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+                });
+            } catch (e) {
+                createWebEvent("http.connect", {
+                    url: this.getURL ? this.getURL().toString() : "unknown",
+                    method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+                });
+            }
+            return result;
         };
 
+        // Hook output stream (for request body)
         HttpURLConnection.getOutputStream.implementation = function() {
-            am_send(PROFILE_HOOKING_TYPE,`HttpURLConnection.getOutputStream called`);
-            const outputStream = this.getOutputStream.apply(this, arguments);
-            am_send(PROFILE_HOOKING_TYPE,`HttpURLConnection output stream: ${outputStream}`);
+            const outputStream = this.getOutputStream();
+            createWebEvent("http.output_stream", {
+                url: this.getURL ? this.getURL().toString() : "unknown",
+                method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+            });
             return outputStream;
         };
 
+        // Hook input stream (for response body)
         HttpURLConnection.getInputStream.implementation = function() {
-            am_send(PROFILE_HOOKING_TYPE,`HttpURLConnection.getInputStream called`);
-            const inputStream = this.getInputStream.apply(this, arguments);
-            am_send(PROFILE_HOOKING_TYPE,`HttpURLConnection input stream: ${inputStream}`);
+            const inputStream = this.getInputStream();
+            createWebEvent("http.input_stream", {
+                url: this.getURL ? this.getURL().toString() : "unknown",
+                method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+            });
             return inputStream;
         };
     });
-
 }
 
 
-function hook_https_commuication(){
+function install_https_hooks() {
+    devlog("Installing HTTPS communication hooks");
+    
     Java.perform(() => {
         const HttpsURLConnection = Java.use("javax.net.ssl.HttpsURLConnection");
 
-        // Hooking into HttpsURLConnection
+        // Hook HTTPS request method setting
         HttpsURLConnection.setRequestMethod.implementation = function(method: string) {
-            am_send(PROFILE_HOOKING_TYPE,`HttpsURLConnection.setRequestMethod called with method: ${method}`);
-            return this.setRequestMethod.apply(this, arguments);
+            createWebEvent("https.request_method", {
+                method: method,
+                url: this.getURL ? this.getURL().toString() : "unknown"
+            });
+            return this.setRequestMethod(method);
         };
 
+        // Hook HTTPS connection
         HttpsURLConnection.connect.implementation = function() {
-            am_send(PROFILE_HOOKING_TYPE,`HttpsURLConnection.connect called`);
-            const responseCode = this.getResponseCode();
-            am_send(PROFILE_HOOKING_TYPE,`HttpsURLConnection response code: ${responseCode}`);
-            return this.connect.apply(this, arguments);
+            const result = this.connect();
+            try {
+                const responseCode = this.getResponseCode();
+                createWebEvent("https.connect", {
+                    url: this.getURL ? this.getURL().toString() : "unknown",
+                    status_code: responseCode,
+                    method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+                });
+            } catch (e) {
+                createWebEvent("https.connect", {
+                    url: this.getURL ? this.getURL().toString() : "unknown",
+                    method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+                });
+            }
+            return result;
         };
 
+        // Hook HTTPS output stream
         HttpsURLConnection.getOutputStream.implementation = function() {
-            am_send(PROFILE_HOOKING_TYPE,`HttpsURLConnection.getOutputStream called`);
-            const outputStream = this.getOutputStream.apply(this, arguments);
-            am_send(PROFILE_HOOKING_TYPE,`HttpsURLConnection output stream: ${outputStream}`);
+            const outputStream = this.getOutputStream();
+            createWebEvent("https.output_stream", {
+                url: this.getURL ? this.getURL().toString() : "unknown",
+                method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+            });
             return outputStream;
         };
 
+        // Hook HTTPS input stream
         HttpsURLConnection.getInputStream.implementation = function() {
-            am_send(PROFILE_HOOKING_TYPE,`HttpsURLConnection.getInputStream called`);
-            const inputStream = this.getInputStream.apply(this, arguments);
-            am_send(PROFILE_HOOKING_TYPE,`HttpsURLConnection input stream: ${inputStream}`);
+            const inputStream = this.getInputStream();
+            createWebEvent("https.input_stream", {
+                url: this.getURL ? this.getURL().toString() : "unknown",
+                method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+            });
             return inputStream;
         };
-
-      
     });
-    
 }
 
 
-function hook_webview(){
-    // taken and adjusted from https://github.com/dpnishant/appmon/blob/master/scripts/Android/WebView/WebView.js
+function install_webview_hooks(){
+    devlog("Installing WebView hooks");
+    
     Java.perform(() => {
         const WebView = Java.use("android.webkit.WebView");
-        const WebSettings = Java.use("android.webkit.WebSettings");
 
-        if (WebView.loadUrl) {
+        // Hook WebView.loadUrl (single argument)
+        if (WebView.loadUrl && WebView.loadUrl.overloads.length > 0) {
             WebView.loadUrl.overloads[0].implementation = function(url: string) {
-                let send_data: any = {
-                    time: new Date(),
-                    txnType: 'WebView',
-                    lib: 'android.webkit.WebView',
-                    method: 'loadUrl',
-                    artifact: []
-                };
-                let data: any = {
-                    name: "URL",
-                    value: url,
-                    argSeq: 0
-                };
-                send_data.artifact.push(data);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-                return this.loadUrl.overloads[0].apply(this, arguments);
+                createWebEvent("webview.load_url", {
+                    url: url,
+                    method: "loadUrl"
+                });
+                return this.loadUrl(url);
             };
 
-            WebView.loadUrl.overloads[1].implementation = function(url: string, additionalHttpHeaders: any) {
-                let send_data: any = {
-                    time: new Date(),
-                    txnType: 'WebView',
-                    lib: 'android.webkit.WebView',
-                    method: 'loadUrl',
-                    artifact: []
+            // Hook WebView.loadUrl (with headers)
+            if (WebView.loadUrl.overloads.length > 1) {
+                WebView.loadUrl.overloads[1].implementation = function(url: string, additionalHttpHeaders: any) {
+                    createWebEvent("webview.load_url_with_headers", {
+                        url: url,
+                        headers: additionalHttpHeaders || {},
+                        method: "loadUrl"
+                    });
+                    return this.loadUrl(url, additionalHttpHeaders);
                 };
-                let dataUrl: any = {
-                    name: "URL",
-                    value: url,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataUrl);
-                let dataHeaders: any = {
-                    name: "Additional Headers",
-                    value: additionalHttpHeaders,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataHeaders);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-                return this.loadUrl.overloads[1].apply(this, arguments);
-            };
+            }
         }
 
+        // Hook WebView.loadData
         if (WebView.loadData) {
             WebView.loadData.implementation = function(data: string, mimeType: string, encoding: string) {
-                let send_data: any = {
-                    time: new Date(),
-                    txnType: 'WebView',
-                    lib: 'android.webkit.WebView',
-                    method: 'loadData',
-                    artifact: []
-                };
-                let dataContent: any = {
-                    name: "Data",
-                    value: data,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataContent);
-                let dataMimeType: any = {
-                    name: "MIME Type",
-                    value: mimeType,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataMimeType);
-                let dataEncoding: any = {
-                    name: "Encoding",
-                    value: encoding,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataEncoding);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-                return this.loadData.apply(this, arguments);
+                createWebEvent("webview.load_data", {
+                    data: data.length > 100 ? data.substring(0, 100) + "..." : data,
+                    mime_type: mimeType,
+                    encoding: encoding,
+                    method: "loadData"
+                });
+                return this.loadData(data, mimeType, encoding);
             };
         }
 
+        // Hook WebView.loadDataWithBaseURL
         if (WebView.loadDataWithBaseURL) {
             WebView.loadDataWithBaseURL.implementation = function(baseUrl: string, data: string, mimeType: string, encoding: string, historyUrl: string) {
-                let send_data: any = {
-                    time: new Date(),
-                    txnType: 'WebView',
-                    lib: 'android.webkit.WebView',
-                    method: 'loadDataWithBaseURL',
-                    artifact: []
-                };
-                let dataBaseUrl: any = {
-                    name: "Base URL",
-                    value: baseUrl,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataBaseUrl);
-                let dataContent: any = {
-                    name: "Data",
-                    value: data,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataContent);
-                let dataMimeType: any = {
-                    name: "MIME Type",
-                    value: mimeType,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataMimeType);
-                let dataEncoding: any = {
-                    name: "Encoding",
-                    value: encoding,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataEncoding);
-                let dataHistoryUrl: any = {
-                    name: "History URL",
-                    value: historyUrl,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataHistoryUrl);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-                return this.loadDataWithBaseURL.apply(this, arguments);
+                createWebEvent("webview.load_data_with_base_url", {
+                    url: baseUrl,
+                    data: data.length > 100 ? data.substring(0, 100) + "..." : data,
+                    mime_type: mimeType,
+                    encoding: encoding,
+                    method: "loadDataWithBaseURL"
+                });
+                return this.loadDataWithBaseURL(baseUrl, data, mimeType, encoding, historyUrl);
             };
         }
 
+        // Hook WebView.addJavascriptInterface
         if (WebView.addJavascriptInterface) {
             WebView.addJavascriptInterface.implementation = function(object: any, name: string) {
-                let send_data: any = {
-                    time: new Date(),
-                    txnType: 'WebView',
-                    lib: 'android.webkit.WebView',
-                    method: 'addJavascriptInterface',
-                    artifact: []
-                };
-                let dataObject: any = {
-                    name: "Object",
-                    value: object,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataObject);
-                let dataName: any = {
-                    name: "Name",
-                    value: name,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataName);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-                return this.addJavascriptInterface.apply(this, arguments);
+                createWebEvent("webview.add_javascript_interface", {
+                    method: "addJavascriptInterface",
+                    data: `Interface name: ${name}`
+                });
+                return this.addJavascriptInterface(object, name);
             };
         }
 
+        // Hook WebView.evaluateJavascript
         if (WebView.evaluateJavascript) {
             WebView.evaluateJavascript.implementation = function(script: string, resultCallback: any) {
-                let send_data: any = {
-                    time: new Date(),
-                    txnType: 'WebView',
-                    lib: 'android.webkit.WebView',
-                    method: 'evaluateJavascript',
-                    artifact: []
-                };
-                let dataScript: any = {
-                    name: "Script",
-                    value: script,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataScript);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-                return this.evaluateJavascript.apply(this, arguments);
+                createWebEvent("webview.evaluate_javascript", {
+                    method: "evaluateJavascript",
+                    data: script.length > 100 ? script.substring(0, 100) + "..." : script
+                });
+                return this.evaluateJavascript(script, resultCallback);
             };
         }
 
+        // Hook WebView.postUrl
         if (WebView.postUrl) {
             WebView.postUrl.implementation = function(url: string, postData: any) {
-                let send_data: any = {
-                    time: new Date(),
-                    txnType: 'WebView',
-                    lib: 'android.webkit.WebView',
-                    method: 'postUrl',
-                    artifact: []
-                };
-                let dataUrl: any = {
-                    name: "URL",
-                    value: url,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataUrl);
-                let dataPostData: any = {
-                    name: "POST Data",
-                    value: JSON.stringify(postData),
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataPostData);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-                return this.postUrl.apply(this, arguments);
-            };
-        }
-
-        if (WebView.postWebMessage) {
-            WebView.postWebMessage.implementation = function(message: any, targetOrigin: string) {
-                let send_data: any = {
-                    time: new Date(),
-                    txnType: 'WebView',
-                    lib: 'android.webkit.WebView',
-                    method: 'postWebMessage',
-                    artifact: []
-                };
-                let dataMessage: any = {
-                    name: "Message",
-                    value: JSON.stringify(message.getData()),
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataMessage);
-                let dataTargetOrigin: any = {
-                    name: "Target Origin",
-                    value: targetOrigin,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataTargetOrigin);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-                return this.postWebMessage.apply(this, arguments);
-            };
-        }
-
-        if (WebView.savePassword) {
-            WebView.savePassword.implementation = function(host: string, username: string, password: string) {
-                let send_data: any = {
-                    time: new Date(),
-                    txnType: 'WebView',
-                    lib: 'android.webkit.WebView',
-                    method: 'savePassword',
-                    artifact: []
-                };
-                let dataHost: any = {
-                    name: "Host",
-                    value: host,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataHost);
-                let dataUsername: any = {
-                    name: "Username",
-                    value: username,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataUsername);
-                let dataPassword: any = {
-                    name: "Password",
-                    value: password,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataPassword);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-                return this.savePassword.apply(this, arguments);
-            };
-        }
-
-        if (WebView.setHttpAuthUsernamePassword) {
-            WebView.setHttpAuthUsernamePassword.implementation = function(host: string, realm: string, username: string, password: string) {
-                let send_data: any = {
-                    time: new Date(),
-                    txnType: 'WebView',
-                    lib: 'android.webkit.WebView',
-                    method: 'setHttpAuthUsernamePassword',
-                    artifact: []
-                };
-                let dataHost: any = {
-                    name: "Host",
-                    value: host,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataHost);
-                let dataRealm: any = {
-                    name: "Realm",
-                    value: realm,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataRealm);
-                let dataUsername: any = {
-                    name: "Username",
-                    value: username,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataUsername);
-                let dataPassword: any = {
-                    name: "Password",
-                    value: password,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataPassword);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-                return this.setHttpAuthUsernamePassword.apply(this, arguments);
-            };
-        }
-
-        if (WebView.getHttpAuthUsernamePassword) {
-            WebView.getHttpAuthUsernamePassword.implementation = function(host: string, realm: string) {
-                const credentials = this.getHttpAuthUsernamePassword.apply(this, arguments);
-                let send_data: any = {
-                    time: new Date(),
-                    txnType: 'WebView',
-                    lib: 'android.webkit.WebView',
-                    method: 'getHttpAuthUsernamePassword',
-                    artifact: []
-                };
-                let dataHost: any = {
-                    name: "Host",
-                    value: host,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataHost);
-                let dataRealm: any = {
-                    name: "Realm",
-                    value: realm,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataRealm);
-                let dataCredentials: any = {
-                    name: "Credentials",
-                    value: credentials,
-                    argSeq: 0
-                };
-                send_data.artifact.push(dataCredentials);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-                return credentials;
+                createWebEvent("webview.post_url", {
+                    url: url,
+                    method: "postUrl",
+                    data: postData ? JSON.stringify(postData) : null
+                });
+                return this.postUrl(url, postData);
             };
         }
     });
 }
 
-function hook_okHTTP(){
-    Java.perform(function () {
+function install_okhttp_hooks(){
+    devlog("Installing OkHTTP hooks");
+    
+    Java.perform(() => {
         try {
-            let OkHttpClient = Java.use('okhttp3.OkHttpClient');
+            // Hook OkHttp3 client
+            const OkHttpClient = Java.use('okhttp3.OkHttpClient');
             OkHttpClient.newCall.overload('okhttp3.Request').implementation = function (request) {
-                let logData = {
-                    "event_type": '[Request - OkHttpClient]',
+                const headers: Record<string, string> = {};
+                const requestHeaders = request.headers();
+                const headerNames = requestHeaders.names().toArray();
+                
+                for (let i = 0; i < headerNames.length; i++) {
+                    headers[headerNames[i]] = requestHeaders.get(headerNames[i]);
+                }
+
+                createWebEvent("okhttp.request", {
                     url: request.url().toString(),
                     method: request.method(),
-                    headers: {},
-                    body: null
-                };
-                let headers = request.headers();
-                let headerNames = headers.names().toArray();
-                for (let i = 0; i < headerNames.length; i++) {
-                    logData.headers[headerNames[i]] = headers.get(headerNames[i]);
-                }
-                if (request.body()) {
-                    logData.body = request.body().toString();
-                }
+                    headers: headers,
+                    body: request.body() ? request.body().toString() : null
+                });
 
-                am_send(PROFILE_HOOKING_TYPE, JSON.stringify(logData, null, 2));
-                let response = this.newCall(request).execute();
-                let responseData = {
-                    "event_type": '[Response - OkHttpClient]',
-                    statusCode: response.code(),
-                    headers: {},
-                    body: response.body().string()
-                };
-                let responseHeaders = response.headers();
-                let responseHeaderNames = responseHeaders.names().toArray();
-                for (let i = 0; i < responseHeaderNames.length; i++) {
-                    responseData.headers[responseHeaderNames[i]] = responseHeaders.get(responseHeaderNames[i]);
+                const call = this.newCall(request);
+                try {
+                    const response = call.execute();
+                    const responseHeaders: Record<string, string> = {};
+                    const respHeaders = response.headers();
+                    const respHeaderNames = respHeaders.names().toArray();
+                    
+                    for (let i = 0; i < respHeaderNames.length; i++) {
+                        responseHeaders[respHeaderNames[i]] = respHeaders.get(respHeaderNames[i]);
+                    }
+
+                    createWebEvent("okhttp.response", {
+                        url: request.url().toString(),
+                        status_code: response.code(),
+                        headers: responseHeaders,
+                        body: response.body() ? response.body().string() : null
+                    });
+                } catch (e) {
+                    devlog(`OkHttp response processing error: ${e}`);
                 }
-    
                 
-                am_send(PROFILE_HOOKING_TYPE, JSON.stringify(responseData, null, 4));
-                return this.newCall(request);
+                return call;
             };
 
-            let OkHttpClient_old = Java.use('okhttp.OkHttpClient');
-            OkHttpClient_old.newCall.overload('okhttp.Request').implementation = function (request) {
-                let logData = {
-                    "event_type": '[Request - OkHttpClient]',
-                    url: request.url().toString(),
-                    method: request.method(),
-                    headers: {},
-                    body: null
+            // Hook legacy OkHttp client
+            try {
+                const OkHttpClientOld = Java.use('okhttp.OkHttpClient');
+                OkHttpClientOld.newCall.overload('okhttp.Request').implementation = function (request) {
+                    createWebEvent("okhttp_old.request", {
+                        url: request.url().toString(),
+                        method: request.method()
+                    });
+                    return this.newCall(request);
                 };
-                let headers = request.headers();
-                let headerNames = headers.names().toArray();
-                for (let i = 0; i < headerNames.length; i++) {
-                    logData.headers[headerNames[i]] = headers.get(headerNames[i]);
-                }
-                if (request.body()) {
-                    logData.body = request.body().toString();
-                }
+            } catch (e) {
+                devlog("Legacy OkHttpClient not found");
+            }
 
-                am_send(PROFILE_HOOKING_TYPE, JSON.stringify(logData, null, 2));
-                let response = this.newCall(request).execute();
-                let responseData = {
-                    "event_type": '[Response - OkHttpClient]',
-                    statusCode: response.code(),
-                    headers: {},
-                    body: response.body().string()
-                };
-                let responseHeaders = response.headers();
-                let responseHeaderNames = responseHeaders.names().toArray();
-                for (let i = 0; i < responseHeaderNames.length; i++) {
-                    responseData.headers[responseHeaderNames[i]] = responseHeaders.get(responseHeaderNames[i]);
-                }
-    
+            // Hook HttpURLConnectionImpl from OkHttp
+            try {
+                const HttpURLConnectionImpl = Java.use("com.android.okhttp.internal.huc.HttpURLConnectionImpl");
                 
-                am_send(PROFILE_HOOKING_TYPE, JSON.stringify(responseData, null, 4));
-                return this.newCall(request);
-            };
+                HttpURLConnectionImpl.setRequestProperty.implementation = function (name: string, value: string) {
+                    createWebEvent("okhttp.request_property", {
+                        url: this.getURL ? this.getURL().toString() : "unknown",
+                        method: "setRequestProperty",
+                        data: `${name}: ${value}`
+                    });
+                    return this.setRequestProperty(name, value);
+                };
 
-
-
-            const HttpURLConnectionImpl = Java.use("com.android.okhttp.internal.huc.HttpURLConnectionImpl");
-             // Hook HttpURLConnection.setRequestProperty to get various request headers and properties
-            HttpURLConnectionImpl.setRequestProperty.implementation = function (str1: string, str2: string) {
-                const result = this.setRequestProperty(str1, str2);
-                am_send(PROFILE_HOOKING_TYPE,"HttpURLConnectionImpl.setRequestProperty result, str1, str2 =>"+ result+  "("+ str1 +","+ str2+")");
-                return result;
-            };
-
-            // Hook HttpURLConnection.setRequestMethod to get the request method
-            HttpURLConnectionImpl.setRequestMethod.implementation = function (str1: string) {
-                const result = this.setRequestMethod(str1);
-                am_send(PROFILE_HOOKING_TYPE,"HttpURLConnectionImpl.setRequestMethod result, str1 =>"+ result + "("+ str1+")");
-                return result;
-            };
-    
+                HttpURLConnectionImpl.setRequestMethod.implementation = function (method: string) {
+                    createWebEvent("okhttp.request_method", {
+                        url: this.getURL ? this.getURL().toString() : "unknown",
+                        method: method
+                    });
+                    return this.setRequestMethod(method);
+                };
+            } catch (e) {
+                devlog("HttpURLConnectionImpl not found");
+            }
 
         } catch (error) {
-            //console.error('OkHttpClient not found or there was an issue hooking it.');
+            devlog(`OkHttpClient hook error: ${error}`);
         }
     });
 
@@ -596,11 +408,11 @@ function hook_okHTTP(){
 
 export function install_web_hooks(){
     devlog("\n")
-    devlog("install web hooks");
-    url_init();
-    hook_http_communication();
-    hook_https_commuication();
-    hook_okHTTP();
-    hook_webview();
-
+    devlog("Installing web hooks");
+    
+    install_url_hooks();
+    install_http_hooks();
+    install_https_hooks();
+    install_okhttp_hooks();
+    install_webview_hooks();
 }

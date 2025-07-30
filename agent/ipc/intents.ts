@@ -1,62 +1,116 @@
 import { log, devlog, am_send } from "../utils/logging.js"
+import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
 
 const PROFILE_HOOKING_TYPE: string = "IPC_INTENT"
 
+function createIntentEvent(eventType: string, data: any): void {
+    const event = {
+        event_type: eventType,
+        timestamp: Date.now(),
+        ...data
+    };
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
 
-function hook(intent: any): void {
-    const text: string[] = [];
-    let tmp: any = null;
+function getStackTrace() {
+    const threadDef = Java.use('java.lang.Thread');
+    const threadInstance = threadDef.$new();
+    return Where(threadInstance.currentThread().getStackTrace());
+}
 
-    tmp = intent.getComponent();
-    if (tmp) {
-        text.push(`Activity: ${tmp.getClassName()}`);
-    }
-    tmp = intent.getAction();
-    if (tmp) {
-        text.push(`Action: ${tmp}`);
-    }
-    tmp = intent.getData();
-    if (tmp) {
-        text.push(`URI: ${tmp}`);
-    }
-    tmp = intent.getType();
-    if (tmp) {
-        text.push(`Type: ${tmp}`);
-    }
-    tmp = intent.getExtras();
-    if (tmp) {
-        const keys = tmp.keySet().iterator();
-        while (keys.hasNext()) {
-            const key = keys.next();
-            let value = tmp.get(key);
-            let type = "null";
-            if (value) {
-                try {
-                    type = value.getClass().getSimpleName();
-                    if (value.getClass().isArray()) {
-                        value = Java.use('org.json.JSONArray').$new(value);
-                    }
-                    value = value.toString();
-                } catch (error) {
-                    value = null;
-                }
-            }
-            text.push(value ? `Extras: ${key} (${type}): ${value}` : `Extras: ${key} (${type})`);
+
+function extractIntentData(intent: any): any {
+    const intentData: any = {};
+    
+    try {
+        const component = intent.getComponent();
+        if (component) {
+            intentData.component = component.getClassName();
         }
+        
+        const action = intent.getAction();
+        if (action) {
+            intentData.action = action;
+        }
+        
+        const data = intent.getData();
+        if (data) {
+            intentData.data_uri = data.toString();
+        }
+        
+        const type = intent.getType();
+        if (type) {
+            intentData.mime_type = type;
+        }
+        
+        const flags = intent.getFlags();
+        if (flags) {
+            intentData.flags = flags;
+        }
+        
+        const extras = intent.getExtras();
+        if (extras) {
+            const extrasData: any = {};
+            const keys = extras.keySet().iterator();
+            
+            while (keys.hasNext()) {
+                const key = keys.next();
+                let value = extras.get(key);
+                let type = "null";
+                
+                if (value) {
+                    try {
+                        type = value.getClass().getSimpleName();
+                        if (value.getClass().isArray()) {
+                            value = Java.use('org.json.JSONArray').$new(value);
+                        }
+                        value = value.toString();
+                    } catch (error) {
+                        value = `<error extracting value: ${error}>`;
+                    }
+                }
+                
+                extrasData[key] = {
+                    type: type,
+                    value: value
+                };
+            }
+            
+            intentData.extras = extrasData;
+        }
+        
+        intentData.intent_string = intent.toString();
+        
+    } catch (error) {
+        intentData.error = `Error extracting intent: ${error}`;
     }
-    text.push("--------------------");
-    am_send(PROFILE_HOOKING_TYPE,text.join("\n"));
+    
+    return intentData;
 }
 
 function hookGetData(this: any): any {
-    hook(this);
+    const intentData = extractIntentData(this);
+    
+    createIntentEvent("intent.data_accessed", {
+        intent: intentData,
+        method: 'getData',
+        stack_trace: getStackTrace()
+    });
+    
     return this.getData();
 }
 
 function hookGetIntent(this: any): any {
     const intent = this.getIntent();
-    hook(intent);
+    const intentData = extractIntentData(intent);
+    
+    createIntentEvent("intent.accessed", {
+        intent: intentData,
+        method: 'getIntent',
+        stack_trace: getStackTrace()
+    });
+    
     return intent;
 }
 

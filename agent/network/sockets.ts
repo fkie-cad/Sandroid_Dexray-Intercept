@@ -11,7 +11,22 @@ import { Java } from "../utils/javalib.js"
  * muss noch um UDP erweitert werden
  */
 
- const PROFILE_HOOKING_TYPE: string = "NETWORK_SOCKETS"
+const PROFILE_HOOKING_TYPE: string = "NETWORK_SOCKETS"
+
+function createSocketEvent(eventType: string, data: any): void {
+    const event = {
+        event_type: eventType,
+        timestamp: Date.now(),
+        ...data
+    };
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
+function getStackTrace() {
+    const threadDef = Java.use('java.lang.Thread');
+    const threadInstance = threadDef.$new();
+    return Where(threadInstance.currentThread().getStackTrace());
+}
 
 // we need this in order to handle the compiling 
  function isTcpEndpointAddress(address: SocketEndpointAddress): address is TcpEndpointAddress {
@@ -29,52 +44,84 @@ function hook_java_socket_communication(){
 
     ServerSocket.accept.overload().implementation = function(){
         var result = this.accept();
-        var stack = threadinstance.currentThread().getStackTrace();
-        var obj = {"event_type": "Java::net.ServerSocket", "method" : "ServerSocket.accept()", "value": this.toString(), 'stack': Where(stack)};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj));
+        
+        createSocketEvent("socket.java.server_accept", {
+            class: "java.net.ServerSocket",
+            method: "accept",
+            server_info: this.toString(),
+            stack_trace: getStackTrace()
+        });
+        
         return result;
     }
 
     Socket.$init.overload('java.lang.String', 'int').implementation = function(host, port){
-        var stack = threadinstance.currentThread().getStackTrace();
         var result = this.$init(host, port);
-        var msg = host + ":" + port;
-        var obj = {"event_type": "Java::net.Socket", "method" : "Socket.$init('java.lang.String', 'int')", "value": msg, 'stack': Where(stack)};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj));
+        
+        createSocketEvent("socket.java.init", {
+            class: "java.net.Socket",
+            method: "$init",
+            host: host,
+            port: port,
+            connection_string: `${host}:${port}`,
+            stack_trace: getStackTrace()
+        });
+        
         return result;
     }
 
     Socket.connect.overload('java.net.SocketAddress', 'int').implementation = function(p_endpoint, p_timeout){
-        var stack = threadinstance.currentThread().getStackTrace();
         var result = this.connect(p_endpoint, p_timeout);
-        var msg = p_endpoint.toString() + "\n Timeout: " + p_timeout;
-        var obj = {"event_type": "Java::net.Socket", "method" : "Socket.connect('java.net.SocketAddress', 'int')", "value": msg, 'stack': Where(stack)};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj));
+        
+        createSocketEvent("socket.java.connect", {
+            class: "java.net.Socket",
+            method: "connect",
+            endpoint: p_endpoint.toString(),
+            timeout: p_timeout,
+            stack_trace: getStackTrace()
+        });
+        
         return result;
     }
 
     Socket.connect.overload('java.net.SocketAddress').implementation = function(p_endpoint){
-        var stack = threadinstance.currentThread().getStackTrace();
         var result = this.connect(p_endpoint);
-        var obj = {"event_type": "Java::net.Socket", "method" : "Socket.connect('java.net.SocketAddress')", "value": p_endpoint.toString(), 'stack': Where(stack)};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj));
+        
+        createSocketEvent("socket.java.connect", {
+            class: "java.net.Socket",
+            method: "connect",
+            endpoint: p_endpoint.toString(),
+            stack_trace: getStackTrace()
+        });
+        
         return result;
     }
 
     LocalServerSocket.accept.overload().implementation = function(){
-        var stack = threadinstance.currentThread().getStackTrace();
         var result = this.accept();
-        var obj = {"event_type": "Java::net.LocalServerSocket", "method" : "LocalServerSocket.accept()", "value": this, 'stack': Where(stack)};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj));
+        
+        createSocketEvent("socket.java.local_accept", {
+            class: "android.net.LocalServerSocket",
+            method: "accept",
+            server_info: this.toString(),
+            stack_trace: getStackTrace()
+        });
+        
         return result;
     }
 
     DatagramSocket.connect.overload('java.net.InetAddress','int').implementation = function(address, port){
-        var stack = threadinstance.currentThread().getStackTrace();
         var result = this.connect(address, port);
-        var msg = address + ":" + port;
-        var obj = {"event_type": "Java::net.DatagramSocket", "method" : "DatagramSocket.connect('java.net.InetAddress','int')", "value": msg, 'stack': Where(stack)};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(obj));
+        
+        createSocketEvent("socket.java.datagram_connect", {
+            class: "java.net.DatagramSocket",
+            method: "connect",
+            address: address.toString(),
+            port: port,
+            connection_string: `${address}:${port}`,
+            stack_trace: getStackTrace()
+        });
+        
         return result;
     }
 
@@ -140,8 +187,12 @@ function addSocketToList(sd, type){
     }
     socket_list.unshift(sd);
 
-    var data = {"event_type": "Libc::socket","method": "socket", "sd": sd, "time": getTimestamp(), "type": type};
-    am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data));
+    createSocketEvent("socket.native.created", {
+        method: "socket",
+        socket_descriptor: sd,
+        socket_type: type
+    });
+    
     return -1;
 }
 
@@ -208,8 +259,14 @@ Interceptor.attach(bind_ptr, {
     
             // send bind data
             addSocketToList(this.sd, sockType);
-            var data = {"event_type": "Libc::bind","method":"int bind(int sockfd, const struct sockaddr *addr,socklen_t addrlen)", "sd": this.sd,  "src_ip": local.ip, "src_port": local.port, "type": sockType};
-            am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data));
+            
+            createSocketEvent("socket.native.bind", {
+                method: "bind",
+                socket_descriptor: this.sd,
+                socket_type: sockType,
+                local_ip: local.ip,
+                local_port: local.port
+            });
         }
     }
 });
@@ -250,8 +307,16 @@ Interceptor.attach(connect_ptr, {
         
         // send connect data
         addSocketToList(this.sd, sockType);
-        var data = {"event_type": "Libc::connect","method": "connect", "sd": this.sd,  "src_ip": local.ip,"src_port": local.port,"dst_ip": remote.ip, "dst_port": remote.port, "type": sockType} //, "dst_family": dst_family, "addrlen": dst_addrlen};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data));
+        
+        createSocketEvent("socket.native.connect", {
+            method: "connect",
+            socket_descriptor: this.sd,
+            socket_type: sockType,
+            local_ip: local.ip,
+            local_port: local.port,
+            remote_ip: remote.ip,
+            remote_port: remote.port
+        });
     }
 });
 
@@ -287,8 +352,28 @@ Interceptor.attach(write_ptr, {
 
         // send write data
         addSocketToList(this.sd, sockType);
-        var data = {"event_type": "Libc::write","method": "write", "sd": this.sd,  "src_ip": local.ip,"src_port": local.port,"dst_ip": remote.ip, "dst_port": remote.port, "len": len, "type": sockType};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data), buffer);
+        
+        createSocketEvent("socket.native.write", {
+            method: "write",
+            socket_descriptor: this.sd,
+            socket_type: sockType,
+            local_ip: local.ip,
+            local_port: local.port,
+            remote_ip: remote.ip,
+            remote_port: remote.port,
+            data_length: len,
+            has_buffer: buffer !== undefined
+        });
+        
+        // Send buffer data separately if available
+        if (buffer) {
+            am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
+                event_type: "socket.native.write_data",
+                timestamp: Date.now(),
+                socket_descriptor: this.sd,
+                data_length: len
+            }), buffer);
+        }
     }
 });
         
@@ -325,8 +410,28 @@ Interceptor.attach(read_ptr, {
 
         // send read data
         addSocketToList(this.sd, sockType);
-        var data = {"event_type": "Libc::read","method": "read", "sd": this.sd,  "src_ip": remote.ip,"src_port": remote.port,"dst_ip": local.ip, "dst_port": local.port, "len": len, "type": sockType};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data), buffer);
+        
+        createSocketEvent("socket.native.read", {
+            method: "read",
+            socket_descriptor: this.sd,
+            socket_type: sockType,
+            local_ip: local.ip,
+            local_port: local.port,
+            remote_ip: remote.ip,
+            remote_port: remote.port,
+            data_length: len,
+            has_buffer: buffer !== undefined
+        });
+        
+        // Send buffer data separately if available
+        if (buffer) {
+            am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
+                event_type: "socket.native.read_data",
+                timestamp: Date.now(),
+                socket_descriptor: this.sd,
+                data_length: len
+            }), buffer);
+        }
     }
 });
 
@@ -372,8 +477,28 @@ Interceptor.attach(sendto_ptr, {
 
             //send data 
             addSocketToList(this.sd, sockType);
-            data = {"event_type": "Libc::send","method": "send", "sd": this.sd,  "src_ip": local.ip,"src_port": local.port,"dst_ip": remote.ip, "dst_port": remote.port, "len": len, "type": sockType};
-            am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data), buffer);
+            
+            createSocketEvent("socket.native.sendto", {
+                method: "sendto",
+                socket_descriptor: this.sd,
+                socket_type: sockType,
+                local_ip: local.ip,
+                local_port: local.port,
+                remote_ip: remote.ip,
+                remote_port: remote.port,
+                data_length: len,
+                has_buffer: buffer !== undefined
+            });
+            
+            // Send buffer data separately if available
+            if (buffer) {
+                am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
+                    event_type: "socket.native.sendto_data",
+                    timestamp: Date.now(),
+                    socket_descriptor: this.sd,
+                    data_length: len
+                }), buffer);
+            }
         } else {
 
             // read ip addr from memory
@@ -394,8 +519,29 @@ Interceptor.attach(sendto_ptr, {
     
                 // send data
                 addSocketToList(this.sd, sockType);
-                data = {"event_type": "Libc::sendto","method": "sendto", "sd" : this.sd,  "len": len, "src_ip": local.ip,"src_port": local.port, "dst_ip": ip_string, "dst_port": port, "dst_family": family, "type": sockType};
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data), buffer);
+                
+                createSocketEvent("socket.native.sendto", {
+                    method: "sendto",
+                    socket_descriptor: this.sd,
+                    socket_type: sockType,
+                    local_ip: local.ip,
+                    local_port: local.port,
+                    remote_ip: ip_string,
+                    remote_port: port,
+                    address_family: family,
+                    data_length: len,
+                    has_buffer: buffer !== undefined
+                });
+                
+                // Send buffer data separately if available
+                if (buffer) {
+                    am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
+                        event_type: "socket.native.sendto_data",
+                        timestamp: Date.now(),
+                        socket_descriptor: this.sd,
+                        data_length: len
+                    }), buffer);
+                }
             }
         }
 
