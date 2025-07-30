@@ -7,7 +7,6 @@ from .deviceUtils import getFilePath, create_unpacking_folder, get_orig_path, ge
 from .resultManager import handle_output
 import json
 from datetime import datetime
-import colorama
 from colorama import Fore, Style
 from .parser import parse_file_system_event, parse_native_lib_loading, parse_shared_pref, parse_aes, dex_loading_parser, parse_socket_infos, parse_web_infos, parse_telephony_infos, remove_empty_entries, get_event_type_infos, get_demangled_method_for_DEX_unpacking, parse_broadcast_infos, url_parser, parse_generic_infos
 
@@ -237,7 +236,7 @@ class AppProfiler:
     
     
     def on_appProfiling_message(self,job, message, data):
-        if self.script == None:
+        if self.script is None:
             self.script = job.script
 
         if self.startup and message.get('payload') == 'verbose_mode':
@@ -370,7 +369,7 @@ class AppProfiler:
                 self.dex_list.clear()
         else:
             if output_format == "CMD":
-                self.handle_output(f"Unpacking detected!", category ,output_format,timestamp)
+                self.handle_output("Unpacking detected!", category ,output_format,timestamp)
             else:
                 parsed_data = dex_loading_parser(self.dex_list)
                 parsed_data["unpacking"] = "True"
@@ -433,13 +432,13 @@ def setup_frida_handler(host="", enable_spawn_gating=False):
         # to handle forks
         def on_child_added(child):
             handle_output(f"Attached to child process with pid {child.pid}","none","CMD")
-            instrument(device.attach(child.pid))
+            self.instrument(device.attach(child.pid))
             device.resume(child.pid)
 
         # if the target process is starting another process 
         def on_spawn_added(spawn):
             handle_output(f"Process spawned with pid {spawn.pid}. Name: {spawn.identifier}","none","CMD")
-            instrument(device.attach(spawn.pid))
+            self.instrument(device.attach(spawn.pid))
             device.resume(spawn.pid)
 
         device.on("child_added", on_child_added)

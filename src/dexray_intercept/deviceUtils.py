@@ -7,7 +7,7 @@ import os
 import shutil
 import hashlib
 import colorama
-from colorama import Fore, Style
+# colorama imported for init only
 from .resultManager import handle_output
 
 # some global definitions
@@ -74,7 +74,7 @@ def pull_file_from_device(remote_path, local_path, category ,output_format):
             handle_output("[-] Failed to pull the file:","error","CMD")
             handle_output(stderr.decode(),"error","CMD")
         else:
-            handle_output(f"File successfully pulled from device",category ,output_format)
+            handle_output("File successfully pulled from device",category ,output_format)
 
 
 def getFilePath(dumpString):

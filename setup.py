@@ -43,7 +43,7 @@ setup(
 
     url="https://github.com/fkie-cad/Sandroid_Dexray-Intercept",
 
-    author_name=__author__,
+    author=__author__,
     author_email="daniel.baier@fkie.fraunhofer.de",
     license='GPL v3',
 

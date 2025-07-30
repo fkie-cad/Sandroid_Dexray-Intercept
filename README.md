@@ -1,10 +1,10 @@
 <div align="center">
-    <img src="assets/logo.png" alt="Dexray Intercept Logo" width="300"/>
+    <img src="assets/logo.png" alt="Dexray Intercept Logo" width="500"/>
     <p></p><strong>Android Binary API Tracer</strong></div></p>
 </div>
 
 # SanDroid - Dexray Intercept
-![version](https://img.shields.io/badge/version-0.2.7.0-blue) [![PyPI version](https://badge.fury.io/py/dexray-intercept.svg)](https://badge.fury.io/py/dexray-intercept) [![CI](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml)
+![version](https://img.shields.io/badge/version-0.2.7.1-blue) [![PyPI version](https://badge.fury.io/py/dexray-intercept.svg)](https://badge.fury.io/py/dexray-intercept) [![CI](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml)
 [![Ruff](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/lint.yml)
 [![Publish status](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/publish.yml)
 
