@@ -43,6 +43,99 @@ class ArgParser(argparse.ArgumentParser):
         self.exit(0)
 
 
+def parse_hook_config(parsed_args):
+    """Convert CLI arguments to hook configuration dictionary"""
+    hook_config = {}
+    
+    # Handle group selections
+    if parsed_args.hooks_all:
+        # Enable all hooks
+        return {hook: True for hook in [
+            'file_system_hooks', 'database_hooks', 'dex_unpacking_hooks', 
+            'java_dex_unpacking_hooks', 'native_library_hooks', 'shared_prefs_hooks',
+            'binder_hooks', 'intent_hooks', 'broadcast_hooks', 'aes_hooks',
+            'encodings_hooks', 'keystore_hooks', 'web_hooks', 'socket_hooks',
+            'process_hooks', 'runtime_hooks', 'bluetooth_hooks', 'camera_hooks',
+            'clipboard_hooks', 'location_hooks', 'telephony_hooks'
+        ]}
+    
+    if parsed_args.hooks_crypto:
+        hook_config.update({
+            'aes_hooks': True,
+            'encodings_hooks': True,
+            'keystore_hooks': True
+        })
+    
+    if parsed_args.hooks_network:
+        hook_config.update({
+            'web_hooks': True,
+            'socket_hooks': True
+        })
+    
+    if parsed_args.hooks_filesystem:
+        hook_config.update({
+            'file_system_hooks': True,
+            'database_hooks': True
+        })
+    
+    if parsed_args.hooks_ipc:
+        hook_config.update({
+            'shared_prefs_hooks': True,
+            'binder_hooks': True,
+            'intent_hooks': True,
+            'broadcast_hooks': True
+        })
+    
+    if parsed_args.hooks_process:
+        hook_config.update({
+            'dex_unpacking_hooks': True,
+            'java_dex_unpacking_hooks': True,
+            'native_library_hooks': True,
+            'process_hooks': True,
+            'runtime_hooks': True
+        })
+    
+    if parsed_args.hooks_services:
+        hook_config.update({
+            'bluetooth_hooks': True,
+            'camera_hooks': True,
+            'clipboard_hooks': True,
+            'location_hooks': True,
+            'telephony_hooks': True
+        })
+    
+    # Handle individual hook selections
+    individual_hooks = {
+        'enable_aes': 'aes_hooks',
+        'enable_keystore': 'keystore_hooks',
+        'enable_encodings': 'encodings_hooks',
+        'enable_web': 'web_hooks',
+        'enable_sockets': 'socket_hooks',
+        'enable_filesystem': 'file_system_hooks',
+        'enable_database': 'database_hooks',
+        'enable_dex_unpacking': 'dex_unpacking_hooks',
+        'enable_java_dex': 'java_dex_unpacking_hooks',
+        'enable_native_libs': 'native_library_hooks',
+        'enable_shared_prefs': 'shared_prefs_hooks',
+        'enable_binder': 'binder_hooks',
+        'enable_intents': 'intent_hooks',
+        'enable_broadcasts': 'broadcast_hooks',
+        'enable_process': 'process_hooks',
+        'enable_runtime': 'runtime_hooks',
+        'enable_bluetooth': 'bluetooth_hooks',
+        'enable_camera': 'camera_hooks',
+        'enable_clipboard': 'clipboard_hooks',
+        'enable_location': 'location_hooks',
+        'enable_telephony': 'telephony_hooks'
+    }
+    
+    for arg_name, hook_name in individual_hooks.items():
+        if getattr(parsed_args, arg_name, False):
+            hook_config[hook_name] = True
+    
+    return hook_config
+
+
 def setup_frida_server():
     afm_obj = FridaManager()
     if not afm_obj.is_frida_server_running():
@@ -80,6 +173,49 @@ Examples:
                       help="Catch newly spawned processes. ATTENTION: These could be unrelated to the current process!")
     args.add_argument("-v","--verbose", required=False, action="store_const", const=True, default=False,
                       help="Show verbose output. This could very noisy.")
+    args.add_argument("-st", "--enable-full-stacktrace", required=False, action="store_const", const=True, default=False,
+                      help="Enable full stack traces for hook invocations (shows call origin in binary)")
+    
+    # Hook selection arguments
+    hooks = parser.add_argument_group("Hook Selection (all disabled by default)")
+    hooks.add_argument("--hooks-all", required=False, action="store_const", const=True, default=False,
+                       help="Enable all available hooks")
+    hooks.add_argument("--hooks-crypto", required=False, action="store_const", const=True, default=False,
+                       help="Enable crypto hooks (AES, encodings, keystore)")
+    hooks.add_argument("--hooks-network", required=False, action="store_const", const=True, default=False,
+                       help="Enable network hooks (web, sockets)")
+    hooks.add_argument("--hooks-filesystem", required=False, action="store_const", const=True, default=False,
+                       help="Enable filesystem hooks (file operations, database)")
+    hooks.add_argument("--hooks-ipc", required=False, action="store_const", const=True, default=False,
+                       help="Enable IPC hooks (binder, intents, broadcasts, shared prefs)")
+    hooks.add_argument("--hooks-process", required=False, action="store_const", const=True, default=False,
+                       help="Enable process hooks (native libs, runtime, DEX unpacking)")
+    hooks.add_argument("--hooks-services", required=False, action="store_const", const=True, default=False,
+                       help="Enable service hooks (bluetooth, camera, clipboard, location, telephony)")
+    
+    # Individual hook arguments
+    hooks.add_argument("--enable-aes", action="store_true", help="Enable AES hooks")
+    hooks.add_argument("--enable-keystore", action="store_true", help="Enable keystore hooks")
+    hooks.add_argument("--enable-encodings", action="store_true", help="Enable encoding hooks")
+    hooks.add_argument("--enable-web", action="store_true", help="Enable web hooks")
+    hooks.add_argument("--enable-sockets", action="store_true", help="Enable socket hooks")
+    hooks.add_argument("--enable-filesystem", action="store_true", help="Enable filesystem hooks")
+    hooks.add_argument("--enable-database", action="store_true", help="Enable database hooks")
+    hooks.add_argument("--enable-dex-unpacking", action="store_true", help="Enable DEX unpacking hooks")
+    hooks.add_argument("--enable-java-dex", action="store_true", help="Enable Java DEX hooks (may crash apps)")
+    hooks.add_argument("--enable-native-libs", action="store_true", help="Enable native library hooks")
+    hooks.add_argument("--enable-shared-prefs", action="store_true", help="Enable shared preferences hooks")
+    hooks.add_argument("--enable-binder", action="store_true", help="Enable binder hooks")
+    hooks.add_argument("--enable-intents", action="store_true", help="Enable intent hooks")
+    hooks.add_argument("--enable-broadcasts", action="store_true", help="Enable broadcast hooks")
+    hooks.add_argument("--enable-process", action="store_true", help="Enable process hooks")
+    hooks.add_argument("--enable-runtime", action="store_true", help="Enable runtime hooks")
+    hooks.add_argument("--enable-bluetooth", action="store_true", help="Enable bluetooth hooks")
+    hooks.add_argument("--enable-camera", action="store_true", help="Enable camera hooks")
+    hooks.add_argument("--enable-clipboard", action="store_true", help="Enable clipboard hooks")
+    hooks.add_argument("--enable-location", action="store_true", help="Enable location hooks")
+    hooks.add_argument("--enable-telephony", action="store_true", help="Enable telephony hooks")
+    
     parsed = parser.parse_args()
     script_name = sys.argv[0]
 
@@ -109,8 +245,17 @@ Examples:
                 print("[*] attaching to app: "+ target_process)
                 process_session = device.attach(int(target_process) if target_process.isnumeric() else target_process)
             print("[*] starting app profiling")
+            
+            # Parse hook configuration from CLI arguments
+            hook_config = parse_hook_config(parsed)
+            enabled_hooks = [hook for hook, enabled in hook_config.items() if enabled]
+            if enabled_hooks:
+                print(f"[*] enabled hooks: {', '.join(enabled_hooks)}")
+            else:
+                print("[*] no hooks enabled - use --help to see hook options")
+            
             # Assuming 'process' is a valid frida.Process object
-            profiler = AppProfiler(process_session, parsed.verbose, output_format="CMD", base_path=None, deactivate_unlink=False)
+            profiler = AppProfiler(process_session, parsed.verbose, output_format="CMD", base_path=None, deactivate_unlink=False, hook_config=hook_config, enable_stacktrace=parsed.enable_full_stacktrace)
             profiler.start_profiling()
 
 

@@ -23,6 +23,49 @@ import { install_telephony_manager_hooks } from "./services/telephony.js"
 
 export let show_verbose: boolean = false;
 export let deactivate_unlink: boolean = false;
+export let enable_stacktrace: boolean = false;
+
+// Hook configuration - all hooks disabled by default
+interface HookConfig {
+    [key: string]: boolean;
+}
+
+export let hook_config: HookConfig = {
+    // File system hooks
+    'file_system_hooks': false,
+    'database_hooks': false,
+    
+    // DEX and native library hooks
+    'dex_unpacking_hooks': false,
+    'java_dex_unpacking_hooks': false,
+    'native_library_hooks': false,
+    
+    // IPC hooks
+    'shared_prefs_hooks': false,
+    'binder_hooks': false,
+    'intent_hooks': false,
+    'broadcast_hooks': false,
+    
+    // Crypto hooks
+    'aes_hooks': false,
+    'encodings_hooks': false,
+    'keystore_hooks': false,
+    
+    // Network hooks
+    'web_hooks': false,
+    'socket_hooks': false,
+    
+    // Process hooks
+    'process_hooks': false,
+    'runtime_hooks': false,
+    
+    // Service hooks
+    'bluetooth_hooks': false,
+    'camera_hooks': false,
+    'clipboard_hooks': false,
+    'location_hooks': false,
+    'telephony_hooks': false,
+};
 
 /* TODO
 - Globalen Shalter ob die Ausgaben von read/write operationen mehr ausgegeben werden sollen
@@ -36,7 +79,6 @@ export let deactivate_unlink: boolean = false;
 --> https://github.com/frida/frida/issues/1483 als ertes
 --> Hooking von String Deryption
 - function AliasInfo(keyAlias)  in der keystore reparieren sowie am_send einführen
---> rewrite the code so that we are able to deaticvate certain hook modules
 
 */
 
@@ -55,35 +97,79 @@ const deactivate_unlink_recv_state = recv('deactivate_unlink', value => {
 });
 deactivate_unlink_recv_state.wait();
 
+// Handle initial hook configuration
+send("hook_config")
+const hook_config_recv_state = recv('hook_config', value => {
+    if (typeof value.payload === 'object') {
+        // Update entire hook configuration
+        Object.assign(hook_config, value.payload);
+        console.log(`[HOOK] Received hook configuration: ${JSON.stringify(value.payload)}`);
+    }
+});
+hook_config_recv_state.wait();
+
+send("enable_stacktrace")
+const enable_stacktrace_recv_state = recv('enable_stacktrace', value => {
+    enable_stacktrace = value.payload;
+});
+enable_stacktrace_recv_state.wait();
+
 
 /*
  * our final hooks gets loaded
  */ 
 
+function install_hook_conditionally(hook_name: string, install_function: () => void) {
+    if (hook_config[hook_name]) {
+        try {
+            install_function();
+            console.log(`[HOOK] Enabled: ${hook_name}`);
+        } catch (error) {
+            console.log(`[HOOK] Failed to enable ${hook_name}: ${error}`);
+        }
+    }
+}
+
 function load_profile_hooks(){
-    //install_file_system_hooks();
-    //install_database_hooks(); 
-    // install_dex_unpacking_hooks();
-    // // install_java_dex_unpacking_hooks(); // these hooks seem to crash certain apps uncomment when you know what you are doing
-    // install_shared_prefs_hooks();
-    // install_intent_hooks();
-    // install_broadcast_hooks();
-    // install_binder_hooks();
-    install_aes_hooks();
-    install_keystore_hooks();
-    install_encodings_hooks();
-    install_web_hooks();
-    install_socket_hooks();
-    // install_process_hooks();
-    // install_native_library_hooks();
-    // install_runtime_hooks();
-    // install_bluetooth_hooks();
-    // install_telephony_manager_hooks();
-    // install_camera_hooks();
-    install_clipboard_hooks();
-    // install_location_hooks();
-
-
+    console.log("[HOOK] Loading hooks based on configuration...");
+    
+    // File system hooks
+    install_hook_conditionally('file_system_hooks', install_file_system_hooks);
+    install_hook_conditionally('database_hooks', install_database_hooks);
+    
+    // DEX and native library hooks
+    install_hook_conditionally('dex_unpacking_hooks', install_dex_unpacking_hooks);
+    install_hook_conditionally('java_dex_unpacking_hooks', install_java_dex_unpacking_hooks); // Warning: may crash certain apps
+    install_hook_conditionally('native_library_hooks', install_native_library_hooks);
+    
+    // IPC hooks
+    install_hook_conditionally('shared_prefs_hooks', install_shared_prefs_hooks);
+    install_hook_conditionally('binder_hooks', install_binder_hooks);
+    install_hook_conditionally('intent_hooks', install_intent_hooks);
+    install_hook_conditionally('broadcast_hooks', install_broadcast_hooks);
+    
+    // Crypto hooks
+    install_hook_conditionally('aes_hooks', install_aes_hooks);
+    install_hook_conditionally('encodings_hooks', install_encodings_hooks);
+    install_hook_conditionally('keystore_hooks', install_keystore_hooks);
+    
+    // Network hooks
+    install_hook_conditionally('web_hooks', install_web_hooks);
+    install_hook_conditionally('socket_hooks', install_socket_hooks);
+    
+    // Process hooks
+    install_hook_conditionally('process_hooks', install_process_hooks);
+    install_hook_conditionally('runtime_hooks', install_runtime_hooks);
+    
+    // Service hooks
+    install_hook_conditionally('bluetooth_hooks', install_bluetooth_hooks);
+    install_hook_conditionally('telephony_hooks', install_telephony_manager_hooks);
+    install_hook_conditionally('camera_hooks', install_camera_hooks);
+    install_hook_conditionally('clipboard_hooks', install_clipboard_hooks);
+    install_hook_conditionally('location_hooks', install_location_hooks);
+    
+    const enabled_hooks = Object.entries(hook_config).filter(([_, enabled]) => enabled).map(([name, _]) => name);
+    console.log(`[HOOK] Active hooks: ${enabled_hooks.join(', ') || 'none'}`);
 }
 
 load_profile_hooks();

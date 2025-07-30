@@ -17,7 +17,7 @@ class FridaBasedException(Exception):
 
 
 class AppProfiler:
-    def __init__(self, process, verbose_mode=False, output_format="CMD", base_path=None, deactivate_unlink=False, path_filters=None):
+    def __init__(self, process, verbose_mode=False, output_format="CMD", base_path=None, deactivate_unlink=False, path_filters=None, hook_config=None, enable_stacktrace=False):
         self.process = process
         self.verbose_mode = verbose_mode
         self.output_format = output_format
@@ -36,10 +36,72 @@ class AppProfiler:
         self.downloaded_origins = {}
         self.dex_list = []
         self.path_filters = path_filters  # New: filter(s) as a string or a list
+        self.enable_stacktrace = enable_stacktrace  # Enable full stack traces
+        
+        # Hook configuration - all hooks disabled by default
+        self.hook_config = self._init_hook_config(hook_config)
 
+
+    def _init_hook_config(self, hook_config):
+        """Initialize hook configuration with all hooks disabled by default"""
+        default_config = {
+            # File system hooks
+            'file_system_hooks': False,
+            'database_hooks': False,
+            
+            # DEX and native library hooks
+            'dex_unpacking_hooks': False,
+            'java_dex_unpacking_hooks': False,
+            'native_library_hooks': False,
+            
+            # IPC hooks
+            'shared_prefs_hooks': False,
+            'binder_hooks': False,
+            'intent_hooks': False,
+            'broadcast_hooks': False,
+            
+            # Crypto hooks
+            'aes_hooks': False,
+            'encodings_hooks': False,
+            'keystore_hooks': False,
+            
+            # Network hooks
+            'web_hooks': False,
+            'socket_hooks': False,
+            
+            # Process hooks
+            'process_hooks': False,
+            'runtime_hooks': False,
+            
+            # Service hooks
+            'bluetooth_hooks': False,
+            'camera_hooks': False,
+            'clipboard_hooks': False,
+            'location_hooks': False,
+            'telephony_hooks': False,
+        }
+        
+        if hook_config:
+            default_config.update(hook_config)
+        
+        return default_config
 
     def update_script(self, script):
         self.script = script
+    
+    def enable_hook(self, hook_name, enabled=True):
+        """Enable or disable a specific hook at runtime"""
+        if hook_name in self.hook_config:
+            self.hook_config[hook_name] = enabled
+            if self.script:
+                # Send updated hook configuration to Frida script
+                self.script.post({'type': 'hook_config', 'payload': {hook_name: enabled}})
+        else:
+            raise ValueError(f"Unknown hook: {hook_name}")
+    
+    def get_enabled_hooks(self):
+        """Return list of currently enabled hooks"""
+        return [hook for hook, enabled in self.hook_config.items() if enabled]
 
     
     def handle_output(self, data, category, output_format, timestamp):
@@ -178,13 +240,18 @@ class AppProfiler:
         if self.script == None:
             self.script = job.script
 
-        if self.startup and message['payload'] == 'verbose_mode':
+        if self.startup and message.get('payload') == 'verbose_mode':
             self.script.post({'type': 'verbose_mode', 'payload': self.verbose_mode})
             self.startup = False
 
-        if self.startup_unlink and message['payload'] == 'deactivate_unlink':
+        if self.startup_unlink and message.get('payload') == 'deactivate_unlink':
             self.script.post({'type': 'deactivate_unlink', 'payload': self.deactivate_unlink})
             self.startup_unlink = False
+
+        if message.get('payload') == 'hook_config':
+            self.script.post({'type': 'hook_config', 'payload': self.hook_config})
+        if message.get('payload') == 'enable_stacktrace':
+            self.script.post({'type': 'enable_stacktrace', 'payload': self.enable_stacktrace})
 
         # Send the path filter rules once to the agent
         if self.path_filters is not None:

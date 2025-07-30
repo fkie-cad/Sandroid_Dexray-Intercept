@@ -1,4 +1,4 @@
 frida>=15.0.0
 frida-tools>=11.0.0
-AndroidFridaManager>=1.7.0
+AndroidFridaManager>=1.8.3
 cxxfilt

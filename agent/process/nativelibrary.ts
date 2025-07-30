@@ -29,7 +29,7 @@ if(dlopen != null){
     Interceptor.attach(dlopen,{
         onEnter: function(args){
             var soName = args[0].readCString();
-            am_send(PROFILE_HOOKING_TYPE,"[Libc::dlopen] loading dynamic library:"+soName );
+            am_send(PROFILE_HOOKING_TYPE,"[Libc::dlopen] loading dynamic library:"+soName, undefined, this.context);
             //console.log(soName);
             if(soName.indexOf("libc.so") != -1){
                 this.hook = true;
@@ -59,7 +59,7 @@ if(android_dlopen_ext != null){
     Interceptor.attach(android_dlopen_ext,{
         onEnter: function(args){
             var soName = args[0].readCString();
-            am_send(PROFILE_HOOKING_TYPE,"[Libc::android_dlopen_ext] loading dynamic library:"+soName );
+            am_send(PROFILE_HOOKING_TYPE,"[Libc::android_dlopen_ext] loading dynamic library:"+soName, undefined, this.context);
             //console.log(soName);
             if(soName.indexOf("libc.so") != -1){
                 this.hook = true;

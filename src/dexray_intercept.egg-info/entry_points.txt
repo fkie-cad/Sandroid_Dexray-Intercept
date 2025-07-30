@@ -1,3 +1,0 @@
-[console_scripts]
-ammm = dexray_intercept.ammm:main
-dexray-intercept = dexray_intercept.ammm:main

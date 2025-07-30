@@ -1,4 +1,12 @@
+<div align="center">
+    <img src="assets/logo.png" alt="Dexray Intercept Logo" width="300"/>
+    <p></p><strong>Android Binary API Tracer</strong></div></p>
+</div>
+
 # SanDroid - Dexray Intercept
+![version](https://img.shields.io/badge/version-0.2.7.0-blue) [![PyPI version](https://badge.fury.io/py/dexray-intercept.svg)](https://badge.fury.io/py/dexray-intercept) [![CI](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml)
+[![Ruff](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/lint.yml)
+[![Publish status](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/publish.yml)
 
 Dexray Intercept is part of the dynamic Sandbox Sandroid. Its purpose is to create runtime profiles to track the behavior of an Android application. This is done utilizing frida.
 
@@ -6,11 +14,11 @@ Dexray Intercept is part of the dynamic Sandbox Sandroid. Its purpose is to crea
 
 Just install it with pip:
 ```bash
-python3 -m pip install .
+python3 -m pip install dexray-intercept
 ```
 
 This will install Dexray Intercept as command line tool `ammm` or `dexray-intercept`. 
-Further it will provide a package `dexray-intercept`. More on how to use the package below. 
+Further it will provide a package `dexray_intercept`. More on how to use the package below. 
 
 ## Run
 
@@ -56,7 +64,7 @@ ammm Chrome
 In order to use this project just install Dexray Intercept as a package and use 
 
 ```python
-from androidmalwaremotionmonitor import AppProfiler 
+from dexray_intercept import AppProfiler 
  ...
 profiler = AppProfiler(process_session, parsed.verbose, output_format="CMD", base_path=None, deactivate_unlink=False)
 profiler.start_profiling()
@@ -72,7 +80,7 @@ In order to run it as a package in SanDroid ensure that you also installed the `
 All you have to do is running the following code:
 ```python
 from AndroidFridaManager import JobManager
-from dexray-intercept import AppProfiler 
+from dexray_intercept import AppProfiler 
 
 job_manager = JobManager()
 app_package = "net.classwindexampleyear.bookseapiececountry"
