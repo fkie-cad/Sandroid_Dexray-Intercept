@@ -1,6 +1,6 @@
 <div align="center">
-    <img src="assets/logo.png" alt="Dexray Intercept Logo" width="500"/>
-    <p></p><strong>Android Binary API Tracer</strong></div></p>
+    <img src="assets/logo.png" alt="Dexray Intercept Logo" width="400"/>
+    <p></p><strong>Android Binary API Tracer</strong>
 </div>
 
 # SanDroid - Dexray Intercept
