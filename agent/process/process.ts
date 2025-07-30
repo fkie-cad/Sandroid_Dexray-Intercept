@@ -1,28 +1,25 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
+import { Where } from "../utils/misc.js"
 
-/**
- * 
-/**
- * https://github.com/dpnishant/appmon/tree/master/scripts/Android
- * 
- */
- const PROFILE_HOOKING_TYPE: string = "PROCESS_CREATION"
+const PROFILE_HOOKING_TYPE: string = "PROCESS_CREATION"
 
- function hook_java_process_creation() {
+function createProcessEvent(eventType: string, data: any): void {
+    const event = {
+        event_type: eventType,
+        timestamp: Date.now(),
+        ...data
+    };
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
+function hook_java_process_creation() {
     Java.perform(() => {
         try {
             const Process = Java.use('android.os.Process');
-
-            const sendHookEvent = (event: any) => {
-                for (const key in event) {
-                    if (event[key] === null || event[key] === '') {
-                        delete event[key];
-                    }
-                }
-                am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
-            };
+            const threadDef = Java.use('java.lang.Thread');
+            const threadInstance = threadDef.$new();
 
             if (Process.start) {
                 Process.start.implementation = function (
@@ -31,87 +28,62 @@ import { Java } from "../utils/javalib.js"
                     targetSdkVersion: number, seInfo: string, abi: string,
                     instructionSet: string, appDataDir: string, zygoteArgs: any
                 ) {
-                    const send_data = {
-                        event_type: "Process",
-                        lib: 'android.os.Process',
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    
+                    createProcessEvent("process.creation", {
+                        library: 'android.os.Process',
                         method: 'start',
-                        time: new Date(),
-                        artifact: [
-                            {
-                                name: "Process Class",
-                                value: processClass.toString(),
-                                argSeq: 0
-                            },
-                            {
-                                name: "Nice Name",
-                                value: niceName,
-                                argSeq: 1
-                            },
-                            {
-                                name: "uid",
-                                value: uid.toString(),
-                                argSeq: 2
-                            },
-                            {
-                                name: "gid",
-                                value: gid.toString(),
-                                argSeq: 3
-                            },
-                            {
-                                name: "gids",
-                                value: gids.toString(),
-                                argSeq: 4
-                            },
-                            {
-                                name: "Debug Flags",
-                                value: debugFlags.toString(),
-                                argSeq: 5
-                            },
-                            {
-                                name: "Mount External",
-                                value: mountExternal.toString(),
-                                argSeq: 6
-                            },
-                            {
-                                name: "Target Sdk Version",
-                                value: targetSdkVersion.toString(),
-                                argSeq: 7
-                            },
-                            {
-                                name: "SElinux Info",
-                                value: seInfo,
-                                argSeq: 8
-                            },
-                            {
-                                name: "abi",
-                                value: abi,
-                                argSeq: 9
-                            },
-                            {
-                                name: "Instruction Set",
-                                value: instructionSet,
-                                argSeq: 10
-                            },
-                            {
-                                name: "Application Data Directory",
-                                value: appDataDir,
-                                argSeq: 11
-                            },
-                            {
-                                name: "Zygote Args",
-                                value: zygoteArgs.toString(),
-                                argSeq: 12
-                            }
-                        ]
-                    };
-
-                    sendHookEvent(send_data);
+                        process_class: processClass ? processClass.toString() : null,
+                        nice_name: niceName,
+                        uid: uid,
+                        gid: gid,
+                        gids: gids ? (Array.isArray(gids) ? gids : gids.toString()) : null,
+                        debug_flags: debugFlags,
+                        mount_external: mountExternal,
+                        target_sdk_version: targetSdkVersion,
+                        selinux_info: seInfo,
+                        abi: abi,
+                        instruction_set: instructionSet,
+                        app_data_dir: appDataDir,
+                        zygote_args: zygoteArgs ? zygoteArgs.toString() : null,
+                        stack_trace: Where(stack)
+                    });
 
                     return this.start.apply(this, arguments);
                 };
             }
+
+            // Hook additional process methods
+            if (Process.killProcess) {
+                Process.killProcess.implementation = function (pid: number) {
+                    createProcessEvent("process.kill", {
+                        library: 'android.os.Process',
+                        method: 'killProcess',
+                        target_pid: pid
+                    });
+
+                    return this.killProcess(pid);
+                };
+            }
+
+            if (Process.sendSignal) {
+                Process.sendSignal.implementation = function (pid: number, signal: number) {
+                    createProcessEvent("process.signal", {
+                        library: 'android.os.Process',
+                        method: 'sendSignal',
+                        target_pid: pid,
+                        signal: signal
+                    });
+
+                    return this.sendSignal(pid, signal);
+                };
+            }
+
         } catch (error) {
-            am_send(PROFILE_HOOKING_TYPE, `Error: ${(error as Error).toString()}`);
+            createProcessEvent("process.error", {
+                error_message: (error as Error).toString(),
+                error_type: "hook_java_process_creation"
+            });
         }
     });
 }
@@ -119,17 +91,81 @@ import { Java } from "../utils/javalib.js"
 
 
 function hook_native_process_creation(){
+    // Hook native process creation functions like fork, execve, system
+    
+    // Hook fork system call
+    const forkPtr = Process.getModuleByName("libc.so").getExportByName("fork");
+    if (forkPtr) {
+        Interceptor.attach(forkPtr, {
+            onEnter: function(args) {
+                createProcessEvent("process.fork.attempt", {
+                    native_function: "fork",
+                    caller_pid: Process.id
+                });
+            },
+            onLeave: function(retval) {
+                const pid = retval.toInt32();
+                createProcessEvent("process.fork.result", {
+                    native_function: "fork",
+                    caller_pid: Process.id,
+                    child_pid: pid,
+                    success: pid >= 0
+                });
+            }
+        });
+    }
 
+    // Hook execve system call
+    const execvePtr = Process.getModuleByName("libc.so").getExportByName("execve");
+    if (execvePtr) {
+        Interceptor.attach(execvePtr, {
+            onEnter: function(args) {
+                const pathname = args[0].readCString();
+                createProcessEvent("process.execve.attempt", {
+                    native_function: "execve",
+                    pathname: pathname,
+                    caller_pid: Process.id
+                });
+            },
+            onLeave: function(retval) {
+                const result = retval.toInt32();
+                createProcessEvent("process.execve.result", {
+                    native_function: "execve",
+                    return_value: result,
+                    success: result === 0
+                });
+            }
+        });
+    }
 
+    // Hook system function
+    const systemPtr = Process.getModuleByName("libc.so").getExportByName("system");
+    if (systemPtr) {
+        Interceptor.attach(systemPtr, {
+            onEnter: function(args) {
+                const command = args[0].readCString();
+                createProcessEvent("process.system.call", {
+                    native_function: "system",
+                    command: command,
+                    caller_pid: Process.id
+                });
+            },
+            onLeave: function(retval) {
+                const result = retval.toInt32();
+                createProcessEvent("process.system.result", {
+                    native_function: "system",
+                    return_value: result,
+                    success: result !== -1
+                });
+            }
+        });
+    }
 }
-
-
-
 
 export function install_process_hooks(){
     devlog("\n")
     devlog("install process hooks");
     hook_java_process_creation();
-
+    hook_native_process_creation();
 }
 

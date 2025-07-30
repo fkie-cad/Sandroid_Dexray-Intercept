@@ -1,8 +1,18 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
+import { Where } from "../utils/misc.js"
 
 const PROFILE_HOOKING_TYPE: string = "CLIPBOARD"
+
+function createClipboardEvent(eventType: string, data: any): void {
+    const event = {
+        event_type: eventType,
+        timestamp: Date.now(),
+        ...data
+    };
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
 /**
  * 
 /**
@@ -14,43 +24,75 @@ const PROFILE_HOOKING_TYPE: string = "CLIPBOARD"
 
 function hook_clipboard(){
     Java.perform(() => {
-        const Context = Java.use("android.content.Context");
-        const ClipboardManager = Java.use("android.content.ClipboardManager");
+        try {
+            const Context = Java.use("android.content.Context");
+            const ClipboardManager = Java.use("android.content.ClipboardManager");
+            const threadDef = Java.use('java.lang.Thread');
+            const threadInstance = threadDef.$new();
 
-        ClipboardManager.setPrimaryClip.implementation = function(clip: any) {
-            for (let i = 0; i < clip.getItemCount(); i++) {
-                let send_data: any = {
-                    event_type: 'Java::Clipboard',
-                    lib: 'android.content.ClipboardManager',
-                    method: 'setPrimaryClip',
-                    artifact: []
-                };
-                let data: any = { argSeq: 0 };
+            ClipboardManager.setPrimaryClip.implementation = function(clip: any) {
+                const stack = threadInstance.currentThread().getStackTrace();
+                
+                for (let i = 0; i < clip.getItemCount(); i++) {
+                    const item = clip.getItemAt(i);
+                    let contentType = "unknown";
+                    let content = null;
 
-                if (clip.getItemAt(i).getIntent()) {
-                    data.name = "Intent";
-                    data.value = clip.getItemAt(i).getIntent().toString();
-                } else if (clip.getItemAt(i).getHtmlText()) {
-                    data.name = "HTML Text";
-                    data.value = clip.getItemAt(i).getHtmlText().toString();
-                } else if (clip.getItemAt(i).getUri()) {
-                    data.name = "URI";
-                    data.value = clip.getItemAt(i).getUri().toString();
-                } else if (clip.getItemAt(i).getText()) {
-                    data.name = "Text";
-                    data.value = clip.getItemAt(i).getText().toString();
-                } else {
-                    data.name = "String";
-                    data.value = clip.getItemAt(i).toString();
+                    if (item.getIntent()) {
+                        contentType = "intent";
+                        content = item.getIntent().toString();
+                    } else if (item.getHtmlText()) {
+                        contentType = "html_text";
+                        content = item.getHtmlText().toString();
+                    } else if (item.getUri()) {
+                        contentType = "uri";
+                        content = item.getUri().toString();
+                    } else if (item.getText()) {
+                        contentType = "text";
+                        content = item.getText().toString();
+                    } else {
+                        contentType = "string";
+                        content = item.toString();
+                    }
+
+                    createClipboardEvent("clipboard.set_primary_clip", {
+                        library: 'android.content.ClipboardManager',
+                        method: 'setPrimaryClip',
+                        item_index: i,
+                        total_items: clip.getItemCount(),
+                        content_type: contentType,
+                        content: content,
+                        content_length: content ? content.length : 0,
+                        stack_trace: Where(stack)
+                    });
                 }
+                
+                return this.setPrimaryClip.apply(this, arguments);
+            };
 
-                send_data.artifact.push(data);
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(send_data));
-            }
-            return this.setPrimaryClip.apply(this, arguments);
-        };
+            // Hook getPrimaryClip to also track clipboard reads
+            ClipboardManager.getPrimaryClip.implementation = function() {
+                const stack = threadInstance.currentThread().getStackTrace();
+                const result = this.getPrimaryClip();
+                
+                createClipboardEvent("clipboard.get_primary_clip", {
+                    library: 'android.content.ClipboardManager',
+                    method: 'getPrimaryClip',
+                    has_clip: result !== null,
+                    item_count: result ? result.getItemCount() : 0,
+                    stack_trace: Where(stack)
+                });
+                
+                return result;
+            };
+
+        } catch (error) {
+            createClipboardEvent("clipboard.error", {
+                error_message: (error as Error).toString(),
+                error_type: "hook_clipboard"
+            });
+        }
     });
-
 }
 
 

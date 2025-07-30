@@ -8,7 +8,7 @@ from .resultManager import handle_output
 import json
 from datetime import datetime
 from colorama import Fore
-from .parser import parse_file_system_event, parse_native_lib_loading, parse_shared_pref, parse_aes, parse_binder, parse_intent, dex_loading_parser, parse_socket_infos, parse_web_infos, parse_telephony_infos, remove_empty_entries, get_event_type_infos, get_demangled_method_for_DEX_unpacking, parse_broadcast_infos, url_parser, parse_generic_infos, hexdump
+from .parser import parse_file_system_event, parse_native_lib_loading, parse_shared_pref, parse_aes, parse_binder, parse_intent, dex_loading_parser, parse_socket_infos, parse_web_infos, parse_telephony_infos, remove_empty_entries, get_event_type_infos, get_demangled_method_for_DEX_unpacking, parse_broadcast_infos, url_parser, parse_generic_infos, hexdump, parse_process_creation, parse_runtime_hooks, parse_service_hooks
 
 # Define a custom exception for handling frida based exceptions
 class FridaBasedException(Exception):
@@ -130,6 +130,15 @@ class AppProfiler:
                 self.output_data[category].append(parsed_data)
         elif category == "PROCESS_NATIVE_LIB":
             parsed_data = parse_native_lib_loading(data, timestamp)
+            self.output_data[category].append(parsed_data)
+        elif category == "PROCESS_CREATION":
+            parsed_data = parse_process_creation(data, timestamp)
+            self.output_data[category].append(parsed_data)
+        elif category == "RUNTIME_HOOKS":
+            parsed_data = parse_runtime_hooks(data, timestamp)
+            self.output_data[category].append(parsed_data)
+        elif category in ["BLUETOOTH", "TELEPHONY", "LOCATION_ACCESS", "CLIPBOARD", "CAMERA"]:
+            parsed_data = parse_service_hooks(data, timestamp)
             self.output_data[category].append(parsed_data)
         elif category == "IPC_SHARED-PREF":
             parsed_data = parse_shared_pref(data, timestamp)
@@ -416,6 +425,189 @@ class AppProfiler:
                             print(f"[*] Buffer Data: Available")
                     else:
                         print(f"[*] [Socket] {event_type}: {data}")
+                    
+                    print()
+            elif category == "PROCESS_CREATION":
+                parsed_data = parse_process_creation(data, timestamp)
+                if parsed_data:
+                    event_type = parsed_data.get('event_type', 'unknown')
+                    
+                    if event_type == 'process.creation':
+                        print(f"\n[*] [Process] New Process Creation:")
+                        if 'nice_name' in parsed_data:
+                            print(f"[*] Process Name: {parsed_data['nice_name']}")
+                        if 'uid' in parsed_data:
+                            print(f"[*] UID: {parsed_data['uid']}")
+                        if 'gid' in parsed_data:
+                            print(f"[*] GID: {parsed_data['gid']}")
+                        if 'target_sdk_version' in parsed_data:
+                            print(f"[*] Target SDK: {parsed_data['target_sdk_version']}")
+                        if 'abi' in parsed_data:
+                            print(f"[*] ABI: {parsed_data['abi']}")
+                    
+                    elif event_type in ['process.kill', 'process.signal']:
+                        action = 'Kill Process' if event_type == 'process.kill' else 'Send Signal'
+                        print(f"\n[*] [Process] {action}:")
+                        if 'target_pid' in parsed_data:
+                            print(f"[*] Target PID: {parsed_data['target_pid']}")
+                        if 'signal' in parsed_data:
+                            print(f"[*] Signal: {parsed_data['signal']}")
+                    
+                    elif event_type.startswith('process.fork'):
+                        print(f"\n[*] [Process] Fork Operation ({event_type}):")
+                        if 'caller_pid' in parsed_data:
+                            print(f"[*] Caller PID: {parsed_data['caller_pid']}")
+                        if 'child_pid' in parsed_data:
+                            print(f"[*] Child PID: {parsed_data['child_pid']}")
+                        if 'success' in parsed_data:
+                            print(f"[*] Success: {parsed_data['success']}")
+                    
+                    elif event_type.startswith('process.system'):
+                        print(f"\n[*] [Process] System Command ({event_type}):")
+                        if 'command' in parsed_data:
+                            print(f"[*] Command: {parsed_data['command']}")
+                        if 'return_value' in parsed_data:
+                            print(f"[*] Return Value: {parsed_data['return_value']}")
+                    
+                    else:
+                        print(f"[*] [Process] {event_type}: {data}")
+                    
+                    print()
+            elif category == "RUNTIME_HOOKS":
+                parsed_data = parse_runtime_hooks(data, timestamp)
+                if parsed_data:
+                    event_type = parsed_data.get('event_type', 'unknown')
+                    
+                    if event_type == 'runtime.exec':
+                        print(f"\n[*] [Runtime] Command Execution:")
+                        if 'command' in parsed_data:
+                            print(f"[*] Command: {parsed_data['command']}")
+                        if 'working_directory' in parsed_data:
+                            print(f"[*] Working Directory: {parsed_data['working_directory']}")
+                        if 'environment' in parsed_data:
+                            print(f"[*] Environment: {parsed_data['environment']}")
+                    
+                    elif event_type in ['runtime.load_library', 'runtime.load']:
+                        action = 'Load Library' if event_type == 'runtime.load_library' else 'Load'
+                        print(f"\n[*] [Runtime] {action}:")
+                        if 'library_name' in parsed_data:
+                            print(f"[*] Library: {parsed_data['library_name']}")
+                        if 'filename' in parsed_data:
+                            print(f"[*] Filename: {parsed_data['filename']}")
+                    
+                    elif event_type.startswith('reflection.'):
+                        if event_type in ['reflection.class_for_name', 'reflection.load_class']:
+                            action = 'Class.forName' if event_type == 'reflection.class_for_name' else 'ClassLoader.loadClass'
+                            print(f"\n[*] [Reflection] {action}:")
+                            if 'class_name' in parsed_data:
+                                print(f"[*] Class: {parsed_data['class_name']}")
+                            if 'initialize' in parsed_data:
+                                print(f"[*] Initialize: {parsed_data['initialize']}")
+                            if 'resolve' in parsed_data:
+                                print(f"[*] Resolve: {parsed_data['resolve']}")
+                        
+                        elif event_type in ['reflection.get_method', 'reflection.get_declared_method']:
+                            access = 'Public' if event_type == 'reflection.get_method' else 'Declared'
+                            print(f"\n[*] [Reflection] Get {access} Method:")
+                            if 'class_name' in parsed_data:
+                                print(f"[*] Class: {parsed_data['class_name']}")
+                            if 'method_name' in parsed_data:
+                                print(f"[*] Method: {parsed_data['method_name']}")
+                            if 'method_signature' in parsed_data:
+                                print(f"[*] Signature: {parsed_data['method_signature']}")
+                        
+                        elif event_type == 'reflection.method_invoke':
+                            print(f"\n[*] [Reflection] Method Invoke:")
+                            if 'method_name' in parsed_data:
+                                print(f"[*] Method: {parsed_data['method_name']}")
+                            if 'target_instance' in parsed_data:
+                                print(f"[*] Target: {parsed_data['target_instance']}")
+                            if 'arguments' in parsed_data and parsed_data['arguments']:
+                                print(f"[*] Arguments: {parsed_data['arguments']}")
+                            if 'result' in parsed_data and parsed_data['result']:
+                                result = parsed_data['result']
+                                if len(result) > 100:
+                                    result = result[:100] + "..."
+                                print(f"[*] Result: {result}")
+                        
+                        else:
+                            print(f"[*] [Reflection] {event_type}: {data}")
+                    
+                    else:
+                        print(f"[*] [Runtime] {event_type}: {data}")
+                    
+                    print()
+            elif category in ["BLUETOOTH", "TELEPHONY", "LOCATION_ACCESS", "CLIPBOARD", "CAMERA"]:
+                parsed_data = parse_service_hooks(data, timestamp)
+                if parsed_data:
+                    event_type = parsed_data.get('event_type', 'unknown')
+                    
+                    # Bluetooth events
+                    if event_type.startswith('bluetooth.'):
+                        print(f"\n[*] [Bluetooth] {parsed_data.get('event_description', event_type)}:")
+                        if 'characteristic_uuid' in parsed_data:
+                            print(f"[*] Characteristic UUID: {parsed_data['characteristic_uuid']}")
+                        if 'device_address' in parsed_data:
+                            print(f"[*] Device Address: {parsed_data['device_address']}")
+                        if 'device_name' in parsed_data:
+                            print(f"[*] Device Name: {parsed_data['device_name']}")
+                        if 'value_hex' in parsed_data:
+                            print(f"[*] Value (hex): {parsed_data['value_hex']}")
+                    
+                    # Telephony events
+                    elif event_type.startswith('telephony.'):
+                        print(f"\n[*] [Telephony] {parsed_data.get('event_description', event_type)}:")
+                        if 'destination_address' in parsed_data:
+                            print(f"[*] Destination: {parsed_data['destination_address']}")
+                        if 'message_text' in parsed_data:
+                            text = parsed_data['message_text']
+                            if len(text) > 100:
+                                text = text[:100] + "..."
+                            print(f"[*] Message: {text}")
+                        if 'phone_number' in parsed_data:
+                            print(f"[*] Phone Number: {parsed_data['phone_number']}")
+                        if 'imei' in parsed_data:
+                            print(f"[*] IMEI: {parsed_data['imei']}")
+                        if 'property_key' in parsed_data:
+                            print(f"[*] Property: {parsed_data['property_key']} = {parsed_data.get('property_value', 'N/A')}")
+                    
+                    # Location events
+                    elif event_type.startswith('location.'):
+                        print(f"\n[*] [Location] {parsed_data.get('event_description', event_type)}:")
+                        if 'provider' in parsed_data:
+                            print(f"[*] Provider: {parsed_data['provider']}")
+                        if 'latitude' in parsed_data and 'longitude' in parsed_data:
+                            print(f"[*] Coordinates: {parsed_data['latitude']}, {parsed_data['longitude']}")
+                        if 'accuracy' in parsed_data:
+                            print(f"[*] Accuracy: {parsed_data['accuracy']}m")
+                        if 'has_location' in parsed_data:
+                            print(f"[*] Has Location: {parsed_data['has_location']}")
+                    
+                    # Clipboard events
+                    elif event_type.startswith('clipboard.'):
+                        print(f"\n[*] [Clipboard] {parsed_data.get('event_description', event_type)}:")
+                        if 'content_type' in parsed_data:
+                            print(f"[*] Content Type: {parsed_data['content_type']}")
+                        if 'content' in parsed_data and parsed_data['content']:
+                            content = parsed_data['content']
+                            if len(content) > 100:
+                                content = content[:100] + "..."
+                            print(f"[*] Content: {content}")
+                        if 'item_count' in parsed_data:
+                            print(f"[*] Items: {parsed_data['item_count']}")
+                    
+                    # Camera events
+                    elif event_type.startswith('camera.'):
+                        print(f"\n[*] [Camera] {parsed_data.get('event_description', event_type)}:")
+                        if 'camera_id' in parsed_data:
+                            print(f"[*] Camera ID: {parsed_data['camera_id']}")
+                        if 'camera_count' in parsed_data:
+                            print(f"[*] Available Cameras: {parsed_data['camera_count']}")
+                        if 'success' in parsed_data:
+                            print(f"[*] Success: {parsed_data['success']}")
+                    
+                    else:
+                        print(f"[*] [Service] {event_type}: {data}")
                     
                     print()
             elif category == "TELEPHONY":

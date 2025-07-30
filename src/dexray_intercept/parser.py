@@ -251,6 +251,39 @@ def parse_file_system_event(raw_data, event_time):
 
 
 def parse_native_lib_loading(raw_data, event_time):
+    try:
+        # Direct JSON parsing - new format sends pure JSON
+        data = json.loads(raw_data)
+        
+        # Add load status description if present
+        if 'event_type' in data:
+            event_type = data['event_type']
+            if event_type == 'native.library.load':
+                data['event_description'] = 'Native library loading attempt'
+            elif event_type == 'native.library.loaded':
+                data['event_description'] = 'Native library loaded successfully'
+            elif event_type == 'native.library.load_failed':
+                data['event_description'] = 'Native library loading failed'
+        
+        # Ensure timestamp is set
+        if 'timestamp' not in data:
+            data["timestamp"] = event_time
+            
+        return data
+        
+    except json.JSONDecodeError:
+        # Fallback for legacy format with string parsing
+        return parse_native_lib_loading_legacy(raw_data, event_time)
+    except Exception as e:
+        return {
+            "event_type": "parse_error",
+            "payload": raw_data,
+            "error": str(e),
+            "timestamp": event_time
+        }
+
+def parse_native_lib_loading_legacy(raw_data, event_time):
+    """Fallback parser for old native library hook format"""
     parts = raw_data.split("]")
     event_type = parts[0].strip("[]")
     try:
@@ -267,6 +300,244 @@ def parse_native_lib_loading(raw_data, event_time):
             "event_type": event_type,
             "payload": raw_data,
             "exception": exception_info,
+            "timestamp": event_time
+        }
+
+def parse_process_creation(raw_data, event_time):
+    try:
+        # Direct JSON parsing - new format sends pure JSON
+        data = json.loads(raw_data)
+        
+        # Add process action description if present
+        if 'event_type' in data:
+            event_type = data['event_type']
+            if event_type == 'process.creation':
+                data['event_description'] = 'New process creation'
+            elif event_type == 'process.kill':
+                data['event_description'] = 'Process termination'
+            elif event_type == 'process.signal':
+                data['event_description'] = 'Process signal sent'
+            elif event_type.startswith('process.fork'):
+                data['event_description'] = 'Process fork operation'
+            elif event_type.startswith('process.execve'):
+                data['event_description'] = 'Process exec operation'
+            elif event_type.startswith('process.system'):
+                data['event_description'] = 'System command execution'
+        
+        # Ensure timestamp is set
+        if 'timestamp' not in data:
+            data["timestamp"] = event_time
+            
+        return data
+        
+    except json.JSONDecodeError:
+        # Fallback for legacy format with string parsing
+        return parse_process_creation_legacy(raw_data, event_time)
+    except Exception as e:
+        return {
+            "event_type": "parse_error",
+            "payload": raw_data,
+            "error": str(e),
+            "timestamp": event_time
+        }
+
+def parse_process_creation_legacy(raw_data, event_time):
+    """Fallback parser for old process creation hook format"""
+    try:
+        # Try to parse as generic JSON first (old format may have used this)
+        data = json.loads(raw_data)
+        if 'timestamp' not in data:
+            data["timestamp"] = event_time
+        return data
+    except json.JSONDecodeError:
+        # If not JSON, treat as raw string
+        return {
+            "event_type": "process.legacy",
+            "payload": raw_data,
+            "timestamp": event_time
+        }
+    except Exception as e:
+        return {
+            "event_type": "legacy_parse_error",
+            "payload": raw_data,
+            "error": str(e),
+            "timestamp": event_time
+        }
+
+def parse_runtime_hooks(raw_data, event_time):
+    try:
+        # Direct JSON parsing - new format sends pure JSON
+        data = json.loads(raw_data)
+        
+        # Add runtime operation description if present
+        if 'event_type' in data:
+            event_type = data['event_type']
+            if event_type == 'runtime.exec':
+                data['event_description'] = 'Runtime command execution'
+            elif event_type == 'runtime.load_library':
+                data['event_description'] = 'Runtime library loading (loadLibrary)'
+            elif event_type == 'runtime.load':
+                data['event_description'] = 'Runtime library loading (load)'
+            elif event_type.startswith('reflection.'):
+                if event_type == 'reflection.class_for_name':
+                    data['event_description'] = 'Reflection class loading (forName)'
+                elif event_type == 'reflection.load_class':
+                    data['event_description'] = 'Reflection class loading (loadClass)'
+                elif event_type == 'reflection.get_method':
+                    data['event_description'] = 'Reflection method retrieval (getMethod)'
+                elif event_type == 'reflection.get_declared_method':
+                    data['event_description'] = 'Reflection method retrieval (getDeclaredMethod)'
+                elif event_type == 'reflection.method_invoke':
+                    data['event_description'] = 'Reflection method invocation'
+        
+        # Ensure timestamp is set
+        if 'timestamp' not in data:
+            data["timestamp"] = event_time
+            
+        return data
+        
+    except json.JSONDecodeError:
+        # Fallback for legacy format with string parsing
+        return parse_runtime_hooks_legacy(raw_data, event_time)
+    except Exception as e:
+        return {
+            "event_type": "parse_error",
+            "payload": raw_data,
+            "error": str(e),
+            "timestamp": event_time
+        }
+
+def parse_runtime_hooks_legacy(raw_data, event_time):
+    """Fallback parser for old runtime/reflection hook format"""
+    try:
+        # Try to parse as generic JSON first (old format may have used this)
+        data = json.loads(raw_data)
+        if 'timestamp' not in data:
+            data["timestamp"] = event_time
+        return data
+    except json.JSONDecodeError:
+        # If not JSON, treat as raw string (old reflection format)
+        if raw_data.startswith("[Reflection::"):
+            return {
+                "event_type": "reflection.legacy",
+                "message": raw_data,
+                "timestamp": event_time
+            }
+        else:
+            return {
+                "event_type": "runtime.legacy",
+                "payload": raw_data,
+                "timestamp": event_time
+            }
+    except Exception as e:
+        return {
+            "event_type": "legacy_parse_error",
+            "payload": raw_data,
+            "error": str(e),
+            "timestamp": event_time
+        }
+
+def parse_service_hooks(raw_data, event_time):
+    try:
+        # Direct JSON parsing - new format sends pure JSON
+        data = json.loads(raw_data)
+        
+        # Add service operation description if present
+        if 'event_type' in data:
+            event_type = data['event_type']
+            
+            # Bluetooth events
+            if event_type.startswith('bluetooth.'):
+                if event_type == 'bluetooth.gatt.read_characteristic':
+                    data['event_description'] = 'Bluetooth GATT characteristic read'
+                elif event_type == 'bluetooth.gatt.set_characteristic_value':
+                    data['event_description'] = 'Bluetooth GATT characteristic write'
+                elif event_type == 'bluetooth.adapter.get_default':
+                    data['event_description'] = 'Bluetooth adapter access'
+                elif event_type == 'bluetooth.adapter.enable':
+                    data['event_description'] = 'Bluetooth adapter enable'
+                elif event_type == 'bluetooth.device.create_bond':
+                    data['event_description'] = 'Bluetooth device pairing'
+            
+            # Telephony events
+            elif event_type.startswith('telephony.'):
+                if event_type == 'telephony.sms.send_text':
+                    data['event_description'] = 'SMS text message sent'
+                elif event_type == 'telephony.sms.send_multipart':
+                    data['event_description'] = 'SMS multipart message sent'
+                elif event_type == 'telephony.manager.get_phone_number':
+                    data['event_description'] = 'Phone number access'
+                elif event_type == 'telephony.manager.get_imei':
+                    data['event_description'] = 'Device IMEI access'
+                elif event_type == 'telephony.manager.get_imsi':
+                    data['event_description'] = 'SIM IMSI access'
+                elif event_type == 'telephony.system_properties.get':
+                    data['event_description'] = 'System property access'
+            
+            # Location events
+            elif event_type.startswith('location.'):
+                if event_type == 'location.last_known_location':
+                    data['event_description'] = 'Last known location access'
+                elif event_type == 'location.request_updates':
+                    data['event_description'] = 'Location updates requested'
+                elif event_type == 'location.get_latitude':
+                    data['event_description'] = 'Latitude coordinate access'
+                elif event_type == 'location.get_longitude':
+                    data['event_description'] = 'Longitude coordinate access'
+            
+            # Clipboard events
+            elif event_type.startswith('clipboard.'):
+                if event_type == 'clipboard.set_primary_clip':
+                    data['event_description'] = 'Clipboard data written'
+                elif event_type == 'clipboard.get_primary_clip':
+                    data['event_description'] = 'Clipboard data read'
+            
+            # Camera events
+            elif event_type.startswith('camera.'):
+                if event_type == 'camera.legacy.open':
+                    data['event_description'] = 'Camera opened (legacy API)'
+                elif event_type == 'camera.camera2.open':
+                    data['event_description'] = 'Camera opened (Camera2 API)'
+                elif event_type == 'camera.camera2.get_camera_list':
+                    data['event_description'] = 'Camera list enumeration'
+        
+        # Ensure timestamp is set
+        if 'timestamp' not in data:
+            data["timestamp"] = event_time
+            
+        return data
+        
+    except json.JSONDecodeError:
+        # Fallback for legacy format with string parsing
+        return parse_service_hooks_legacy(raw_data, event_time)
+    except Exception as e:
+        return {
+            "event_type": "parse_error",
+            "payload": raw_data,
+            "error": str(e),
+            "timestamp": event_time
+        }
+
+def parse_service_hooks_legacy(raw_data, event_time):
+    """Fallback parser for old service hook formats"""
+    try:
+        # Try to parse as generic JSON first (old format may have used this)
+        data = json.loads(raw_data)
+        if 'timestamp' not in data:
+            data["timestamp"] = event_time
+        return data
+    except json.JSONDecodeError:
+        # If not JSON, treat as raw string
+        return {
+            "event_type": "service.legacy",
+            "payload": raw_data,
+            "timestamp": event_time
+        }
+    except Exception as e:
+        return {
+            "event_type": "legacy_parse_error",
+            "payload": raw_data,
+            "error": str(e),
             "timestamp": event_time
         }
 
