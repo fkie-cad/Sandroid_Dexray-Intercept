@@ -723,7 +723,7 @@ class AppProfiler:
         except frida.ProcessNotFoundError:
             raise FridaBasedException("Unable to find target process")
         except frida.InvalidOperationError:
-            raise FridaBasedException("Invalid operation! Please run AM³ in debug mode in order to understand the source of this error and report it.")
+            raise FridaBasedException("Invalid operation! Please run Dexray Intercept in debug mode in order to understand the source of this error and report it.")
         except frida.TransportError:
             raise FridaBasedException("Timeout error due to some internal frida error's. Try to restart frida-server again.")
         except frida.ProtocolError:

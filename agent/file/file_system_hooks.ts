@@ -91,6 +91,15 @@ function prettyPrint(path, buffer, offset?, length?) {
     return CONFIG.colors.warning + "[dump skipped by verbose level]" + CONFIG.colors.reset;
 }
 
+function createFileSystemEvent(eventType: string, data: any): void {
+    const event = {
+        event_type: eventType,
+        timestamp: Date.now(),
+        ...data
+    };
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
 function hook_filesystem_accesses() {
     var createdFiles: Set<string> = new Set();
     var createdFileStreams: Set<string> = new Set();
@@ -325,30 +334,22 @@ function hook_filesystem_accesses() {
     });
 }
 
-function hook_filesystem_delets() {
+
+function hook_filesystem_deletes(): void {
     var printedPaths: Set<string> = new Set();
 
-    Java.perform(function () {
-        var f = Java.use("java.io.File")
-        f.delete.implementation = function (a) {
-            var s = this.getAbsolutePath();
-            if (s.includes("jar") || s.endsWith("dex")) {
-                var path = this.getAbsolutePath();
-                printedPaths.add(path);
-
-                am_send(PROFILE_HOOKING_TYPE,
-                    CONFIG.colors.warning + "Deletion Type:" + CONFIG.colors.reset + " Java API\n" +
-                    CONFIG.colors.operation + "Function used:" + CONFIG.colors.reset + " java.io.File.delete\n" +
-                    CONFIG.colors.path + "Delete caught:" + CONFIG.colors.reset + " " + path + "\n" +
-                    CONFIG.colors.operation + "[Java::java.io.File.delete]" + CONFIG.colors.reset + " " +
-                    CONFIG.colors.path + path + CONFIG.colors.reset + "\n"
-                );
+    Java.perform(() => {
+        const File = Java.use("java.io.File");
+        File.delete.implementation = function () {
+            const path = this.getAbsolutePath();
+            if (path.includes("jar") || path.endsWith("dex")) {
+                createFileSystemEvent("file.delete.java", { file_path: path });
+                printedPaths.add(path); // ensures that we don't print the same path multiple times
             }
             return true;
-        }
+        };
     });
 
-    // Find unlink across all modules
     var unlinkPtr: NativePointer | null = null;
     for (const module of Process.enumerateModules()) {
         try {
@@ -359,27 +360,24 @@ function hook_filesystem_delets() {
         }
     }
 
-    Interceptor.attach(unlinkPtr,
-        {
-            onEnter: function (args: any) {
+    if (unlinkPtr) {
+        Interceptor.attach(unlinkPtr, {
+            onEnter(args: any) {
                 var ptr_to_file = ptr(args[0]);
                 this.file_path = ptr_to_file.readUtf8String()
             },
-            onLeave: function (retval: any) {
+            onLeave() {
                 if (!this.file_path.endsWith("flock")) {
                     if (!printedPaths.has(this.file_path)) {
-                        am_send(PROFILE_HOOKING_TYPE,
-                            CONFIG.colors.warning + "Deletion Type:" + CONFIG.colors.reset + " Native API\n" +
-                            CONFIG.colors.operation + "Function used:" + CONFIG.colors.reset + " libc unlink()\n" +
-                            CONFIG.colors.path + "Delete caught:" + CONFIG.colors.reset + " " + this.file_path + "\n" +
-                            CONFIG.colors.operation + "[Libc::unlink]" + CONFIG.colors.reset + " Deleting: " +
-                            CONFIG.colors.path + this.file_path + CONFIG.colors.reset + "\n"
-                        );
+                        createFileSystemEvent("file.delete.native", {
+                                        file_path: this.file_path
+                                    });
                     }
                 }
+                
             }
-        }
-    );
+        });
+    }
 
     if (deactivate_unlink) {
         var unlink = new NativeFunction(unlinkPtr, 'int', []);
@@ -394,5 +392,5 @@ export function install_file_system_hooks() {
     devlog("\n")
     devlog("install filesystem hooks");
     hook_filesystem_accesses();
-    hook_filesystem_delets();
+    hook_filesystem_deletes();
 }
