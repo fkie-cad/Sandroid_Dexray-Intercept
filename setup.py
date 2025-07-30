@@ -22,13 +22,23 @@ README_MD = open(join(dirname(abspath(__file__)), "README.md")).read()
 with open(os.path.join(here, 'requirements.txt'), 'r') as f:
     requirements = f.readlines()
 
+def get_version():
+    about = {}
+    with open(init_py_path) as f:
+        exec(f.read(), about)
+    return about["__version__"]
 
+def get_author():
+    author = {}
+    with open(init_py_path) as f:
+        exec(f.read(), author)
+    return author["__author__"]
 
 
 setup(
     # pip install dexray-intercept
     name="dexray-intercept",
-    version=__version__,
+    version=get_version(),
 
     # The description that will be shown on PyPI.
     description="This project is part of the dynamic Sandbox Sandroid. Its purpose is to create runtime profiles to track the behavior of an Android application. This is done utilizing frida.",
@@ -43,7 +53,7 @@ setup(
 
     url="https://github.com/fkie-cad/Sandroid_Dexray-Intercept",
 
-    author=__author__,
+    author=get_author(),
     author_email="daniel.baier@fkie.fraunhofer.de",
     license='GPL v3',
 
