@@ -183,7 +183,7 @@ def url_parser(json_string, time):
         else:
             data["timestamp"] = time
             return data
-    except:
+    except Exception:
         return {"event_type": "url.parse_error", "payload": json_string, "timestamp": time}
 
 

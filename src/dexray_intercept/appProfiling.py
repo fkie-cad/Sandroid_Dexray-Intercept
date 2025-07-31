@@ -3,7 +3,6 @@
 
 import frida
 from typing import Optional, List, Dict, Any
-from datetime import datetime
 
 from .services.instrumentation import InstrumentationService, FridaBasedException, setup_frida_device
 from .services.profile_collector import ProfileCollector

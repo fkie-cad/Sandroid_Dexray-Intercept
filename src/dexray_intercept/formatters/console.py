@@ -45,7 +45,7 @@ class ConsoleFormatter(BaseFormatter):
         lines = []
         
         if event.event_type == 'file.create':
-            lines.append(f"\n[*] [File] File Creation:")
+            lines.append("\n[*] [File] File Creation:")
             lines.append(f"[*] Operation: {event.operation or 'Unknown'}")
             lines.append(f"[*] File Path: {event.file_path or 'Unknown'}")
             if event.parent_path:
@@ -53,13 +53,13 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Child: {event.child_path}")
         
         elif event.event_type == 'file.stream.create':
-            lines.append(f"\n[*] [File] Stream Creation:")
+            lines.append("\n[*] [File] Stream Creation:")
             lines.append(f"[*] Operation: {event.operation or 'Unknown'}")
             lines.append(f"[*] Stream Type: {event.stream_type or 'Unknown'}")
             lines.append(f"[*] File Path: {event.file_path or 'Unknown'}")
         
         elif event.event_type == 'file.read':
-            lines.append(f"\n[*] [File] Read Operation:")
+            lines.append("\n[*] [File] Read Operation:")
             lines.append(f"[*] Operation: {event.operation or 'Unknown'}")
             lines.append(f"[*] File Path: {event.file_path or 'Unknown'}")
             lines.append(f"[*] Buffer Size: {event.buffer_size or 0} bytes")
@@ -70,7 +70,7 @@ class ConsoleFormatter(BaseFormatter):
             
             # Display data if available
             if event.hexdump_display:
-                lines.append(f"[*] Data:")
+                lines.append("[*] Data:")
                 for line in event.hexdump_display.split('\n'):
                     lines.append(f"    {line}")
             elif event.plaintext:
@@ -78,7 +78,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Content: {plaintext}")
         
         elif event.event_type == 'file.write':
-            lines.append(f"\n[*] [File] Write Operation:")
+            lines.append("\n[*] [File] Write Operation:")
             lines.append(f"[*] Operation: {event.operation or 'Unknown'}")
             lines.append(f"[*] File Path: {event.file_path or 'Unknown'}")
             lines.append(f"[*] Buffer Size: {event.buffer_size or 0} bytes")
@@ -92,11 +92,11 @@ class ConsoleFormatter(BaseFormatter):
                 plaintext = truncate_string(event.plaintext, 200)
                 lines.append(f"[*] XML Content: {plaintext}")
             elif event.file_type == 'binary' and event.hexdump_display:
-                lines.append(f"[*] Binary Data:")
+                lines.append("[*] Binary Data:")
                 for line in event.hexdump_display.split('\n'):
                     lines.append(f"    {line}")
             elif event.hexdump_display:
-                lines.append(f"[*] Data:")
+                lines.append("[*] Data:")
                 for line in event.hexdump_display.split('\n'):
                     lines.append(f"    {line}")
             elif event.plaintext:
@@ -144,21 +144,21 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"    Plaintext: {plaintext}")
         
         elif event.event_type == 'crypto.key.creation':
-            lines.append(f"[*] AES Key Created:")
+            lines.append("[*] AES Key Created:")
             lines.append(f"    Algorithm: {event.algorithm or 'N/A'}")
             lines.append(f"    Key Length: {event.key_length or 0} bytes")
             if event.key_hex:
-                lines.append(f"    Key:")
+                lines.append("    Key:")
                 key_dump = hexdump(event.key_hex, header=True, ansi=True)
                 if key_dump:
                     for line in key_dump.split('\n'):
                         lines.append(f"      {line}")
         
         elif event.event_type == 'crypto.iv.creation':
-            lines.append(f"[*] AES IV Created:")
+            lines.append("[*] AES IV Created:")
             lines.append(f"    IV Length: {event.iv_length or 0} bytes")
             if event.iv_hex:
-                lines.append(f"    IV:")
+                lines.append("    IV:")
                 iv_dump = hexdump(event.iv_hex, header=True, ansi=True)
                 if iv_dump:
                     for line in iv_dump.split('\n'):
@@ -226,7 +226,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Data Length: {event.data_length} bytes")
                 
             if event.has_buffer:
-                lines.append(f"[*] Buffer Data: Available")
+                lines.append("[*] Buffer Data: Available")
         
         else:
             lines.append(f"[*] [Network] {event.event_type}: {getattr(event, 'url', '') or getattr(event, 'uri', '') or 'Unknown'}")
@@ -239,7 +239,7 @@ class ConsoleFormatter(BaseFormatter):
         lines = []
         
         if event.event_type == 'process.creation':
-            lines.append(f"\n[*] [Process] New Process Creation:")
+            lines.append("\n[*] [Process] New Process Creation:")
             if event.nice_name:
                 lines.append(f"[*] Process Name: {event.nice_name}")
             if event.uid is not None:
@@ -276,7 +276,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Return Value: {event.return_value}")
         
         elif event.event_type == 'runtime.exec':
-            lines.append(f"\n[*] [Runtime] Command Execution:")
+            lines.append("\n[*] [Runtime] Command Execution:")
             if event.command:
                 lines.append(f"[*] Command: {event.command}")
             if event.working_directory:
@@ -326,7 +326,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Signature: {event.metadata['method_signature']}")
         
         elif event.event_type == 'reflection.method_invoke':
-            lines.append(f"\n[*] [Reflection] Method Invoke:")
+            lines.append("\n[*] [Reflection] Method Invoke:")
             if 'method_name' in event.metadata:
                 lines.append(f"[*] Method: {event.metadata['method_name']}")
             if 'target_instance' in event.metadata:
@@ -388,7 +388,7 @@ class ConsoleFormatter(BaseFormatter):
                 if intent_info.get('mime_type'):
                     lines.append(f"[*] MIME Type: {intent_info['mime_type']}")
             if event.extras_formatted:
-                lines.append(f"[*] Extras:")
+                lines.append("[*] Extras:")
                 for extra in event.extras_formatted:
                     lines.append(f"    {extra}")
         

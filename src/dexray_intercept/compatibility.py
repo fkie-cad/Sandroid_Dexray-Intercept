@@ -7,7 +7,6 @@ This module allows gradual migration by providing feature flags and adapters.
 """
 
 import os
-from typing import Union
 
 # Feature flag to force old architecture (new architecture is now default)
 FORCE_OLD_ARCHITECTURE = os.getenv('DEXRAY_FORCE_OLD_ARCH', 'false').lower() == 'true'
@@ -71,7 +70,7 @@ class AppProfilerAdapter:
         return self._profiler.write_profiling_log(filename)
 
 
-def create_app_profiler(*args, **kwargs) -> Union['AppProfiler', AppProfilerAdapter]:
+def create_app_profiler(*args, **kwargs) -> AppProfilerAdapter:
     """
     Factory function to create the appropriate AppProfiler instance.
     

@@ -5,9 +5,9 @@ from typing import Optional
 from .base import BaseParser
 from .filesystem import FileSystemParser
 from .crypto import CryptoParser
-from .network import NetworkParser, WebParser, SocketParser
+from .network import WebParser, SocketParser
 from .process import ProcessParser, RuntimeParser, NativeLibParser
-from .ipc import IPCParser, SharedPrefsParser, BinderParser, IntentParser, BroadcastParser
+from .ipc import SharedPrefsParser, BinderParser, IntentParser, BroadcastParser
 from .services import ServiceParser, TelephonyParser
 from .dex import DEXParser
 

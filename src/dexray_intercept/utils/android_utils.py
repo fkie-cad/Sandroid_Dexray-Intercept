@@ -4,7 +4,6 @@
 import re
 import subprocess
 import os
-import shutil
 import hashlib
 
 

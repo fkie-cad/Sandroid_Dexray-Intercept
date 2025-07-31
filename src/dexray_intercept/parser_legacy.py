@@ -815,7 +815,7 @@ def parse_socket_infos(raw_data, event_time):
                 data = json.loads(json_str)
                 data["timestamp"] = event_time
                 return data
-        except:
+        except Exception:
             pass
         
         return {

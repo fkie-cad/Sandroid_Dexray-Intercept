@@ -6,7 +6,7 @@ import re
 from typing import Optional
 from .base import BaseParser
 from ..models.events import CryptoEvent
-from ..utils.crypto_utils import MODE_MAPPING, get_mode_description
+from ..utils.crypto_utils import MODE_MAPPING
 from ..utils.hexdump import hex_to_string_safe
 
 

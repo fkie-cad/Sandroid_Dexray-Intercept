@@ -8,7 +8,7 @@ from .resultManager import handle_output
 import json
 from datetime import datetime
 from colorama import Fore
-from .parser_legacy import parse_file_system_event, parse_native_lib_loading, parse_shared_pref, parse_aes, parse_binder, parse_intent, dex_loading_parser, parse_socket_infos, parse_web_infos, parse_telephony_infos, remove_empty_entries, get_event_type_infos, get_demangled_method_for_DEX_unpacking, parse_broadcast_infos, url_parser, parse_generic_infos, hexdump, parse_process_creation, parse_runtime_hooks, parse_service_hooks
+from .parser_legacy import parse_file_system_event, parse_native_lib_loading, parse_shared_pref, parse_aes, parse_binder, parse_intent, dex_loading_parser, parse_socket_infos, parse_web_infos, parse_telephony_infos, remove_empty_entries, get_event_type_infos, get_demangled_method_for_DEX_unpacking, parse_broadcast_infos, parse_generic_infos, hexdump, parse_process_creation, parse_runtime_hooks, parse_service_hooks
 
 # Define a custom exception for handling frida based exceptions
 class FridaBasedException(Exception):
@@ -184,7 +184,7 @@ class AppProfiler:
                         event_type = parsed_data.get('event_type', 'unknown')
                         
                         if event_type == 'file.create':
-                            print(f"\n[*] [File] File Creation:")
+                            print("\n[*] [File] File Creation:")
                             print(f"[*] Operation: {parsed_data.get('operation', 'Unknown')}")
                             print(f"[*] File Path: {parsed_data.get('file_path', 'Unknown')}")
                             if 'parent_path' in parsed_data:
@@ -192,13 +192,13 @@ class AppProfiler:
                                 print(f"[*] Child: {parsed_data['child_path']}")
                         
                         elif event_type == 'file.stream.create':
-                            print(f"\n[*] [File] Stream Creation:")
+                            print("\n[*] [File] Stream Creation:")
                             print(f"[*] Operation: {parsed_data.get('operation', 'Unknown')}")
                             print(f"[*] Stream Type: {parsed_data.get('stream_type', 'Unknown')}")
                             print(f"[*] File Path: {parsed_data.get('file_path', 'Unknown')}")
                         
                         elif event_type == 'file.read':
-                            print(f"\n[*] [File] Read Operation:")
+                            print("\n[*] [File] Read Operation:")
                             print(f"[*] Operation: {parsed_data.get('operation', 'Unknown')}")
                             print(f"[*] File Path: {parsed_data.get('file_path', 'Unknown')}")
                             print(f"[*] Buffer Size: {parsed_data.get('buffer_size', 0)} bytes")
@@ -209,7 +209,7 @@ class AppProfiler:
                             
                             # Display data if available
                             if 'hexdump_display' in parsed_data and parsed_data['hexdump_display']:
-                                print(f"[*] Data:")
+                                print("[*] Data:")
                                 for line in parsed_data['hexdump_display'].split('\n'):
                                     print(f"    {line}")
                             elif 'plaintext' in parsed_data and parsed_data['plaintext']:
@@ -219,7 +219,7 @@ class AppProfiler:
                                 print(f"[*] Content: {plaintext}")
                         
                         elif event_type == 'file.write':
-                            print(f"\n[*] [File] Write Operation:")
+                            print("\n[*] [File] Write Operation:")
                             print(f"[*] Operation: {parsed_data.get('operation', 'Unknown')}")
                             print(f"[*] File Path: {parsed_data.get('file_path', 'Unknown')}")
                             print(f"[*] Buffer Size: {parsed_data.get('buffer_size', 0)} bytes")
@@ -236,11 +236,11 @@ class AppProfiler:
                                     plaintext = plaintext[:200] + "..."
                                 print(f"[*] XML Content: {plaintext}")
                             elif file_type == 'binary' and 'hexdump_display' in parsed_data:
-                                print(f"[*] Binary Data:")
+                                print("[*] Binary Data:")
                                 for line in parsed_data['hexdump_display'].split('\n'):
                                     print(f"    {line}")
                             elif 'hexdump_display' in parsed_data and parsed_data['hexdump_display']:
-                                print(f"[*] Data:")
+                                print("[*] Data:")
                                 for line in parsed_data['hexdump_display'].split('\n'):
                                     print(f"    {line}")
                             elif 'plaintext' in parsed_data and parsed_data['plaintext']:
@@ -381,7 +381,7 @@ class AppProfiler:
                             if intent_info.get('mime_type'):
                                 print(f"[*] MIME Type: {intent_info['mime_type']}")
                         if 'extras_formatted' in parsed_data and parsed_data['extras_formatted']:
-                            print(f"[*] Extras:")
+                            print("[*] Extras:")
                             for extra in parsed_data['extras_formatted']:
                                 print(f"    {extra}")
                     else:
@@ -453,21 +453,21 @@ class AppProfiler:
                         
                         print()
                     elif event_type == 'crypto.key.creation':
-                        print(f"[*] AES Key Created:")
+                        print("[*] AES Key Created:")
                         print(f"    Algorithm: {parsed_data.get('algorithm', 'N/A')}")
                         print(f"    Key Length: {parsed_data.get('key_length', 0)} bytes")
                         if 'key_hex' in parsed_data and parsed_data['key_hex']:
-                            print(f"    Key:")
+                            print("    Key:")
                             key_dump = hexdump(parsed_data['key_hex'], header=True, ansi=True)
                             if key_dump:
                                 for line in key_dump.split('\n'):
                                     print(f"      {line}")
                         print()
                     elif event_type == 'crypto.iv.creation':
-                        print(f"[*] AES IV Created:")
+                        print("[*] AES IV Created:")
                         print(f"    IV Length: {parsed_data.get('iv_length', 0)} bytes")
                         if 'iv_hex' in parsed_data and parsed_data['iv_hex']:
-                            print(f"    IV:")
+                            print("    IV:")
                             iv_dump = hexdump(parsed_data['iv_hex'], header=True, ansi=True)
                             if iv_dump:
                                 for line in iv_dump.split('\n'):
@@ -503,7 +503,7 @@ class AppProfiler:
                             print(f"[*] Data Length: {parsed_data['data_length']} bytes")
                             
                         if 'has_buffer' in parsed_data and parsed_data['has_buffer']:
-                            print(f"[*] Buffer Data: Available")
+                            print("[*] Buffer Data: Available")
                     else:
                         print(f"[*] [Socket] {event_type}: {data}")
                     
@@ -514,7 +514,7 @@ class AppProfiler:
                     event_type = parsed_data.get('event_type', 'unknown')
                     
                     if event_type == 'process.creation':
-                        print(f"\n[*] [Process] New Process Creation:")
+                        print("\n[*] [Process] New Process Creation:")
                         if 'nice_name' in parsed_data:
                             print(f"[*] Process Name: {parsed_data['nice_name']}")
                         if 'uid' in parsed_data:
@@ -560,7 +560,7 @@ class AppProfiler:
                     event_type = parsed_data.get('event_type', 'unknown')
                     
                     if event_type == 'runtime.exec':
-                        print(f"\n[*] [Runtime] Command Execution:")
+                        print("\n[*] [Runtime] Command Execution:")
                         if 'command' in parsed_data:
                             print(f"[*] Command: {parsed_data['command']}")
                         if 'working_directory' in parsed_data:
@@ -598,7 +598,7 @@ class AppProfiler:
                                 print(f"[*] Signature: {parsed_data['method_signature']}")
                         
                         elif event_type == 'reflection.method_invoke':
-                            print(f"\n[*] [Reflection] Method Invoke:")
+                            print("\n[*] [Reflection] Method Invoke:")
                             if 'method_name' in parsed_data:
                                 print(f"[*] Method: {parsed_data['method_name']}")
                             if 'target_instance' in parsed_data:
