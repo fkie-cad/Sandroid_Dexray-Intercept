@@ -3,8 +3,8 @@
     <p></p><strong>Android Binary API Tracer</strong>
 </div>
 
-# SanDroid - Dexray Intercept
-![version](https://img.shields.io/badge/version-0.2.7.6-blue) [![PyPI version](https://d25lcipzij17d.cloudfront.net/badge.png?id=py&r=r&ts=1683906897&type=6e&v=0.2.7.6&x2=0)](https://badge.fury.io/py/dexray-intercept) [![CI](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml)
+# Sandroid - Dexray Intercept
+![version](https://img.shields.io/badge/version-0.2.9.0-blue) [![PyPI version](https://d25lcipzij17d.cloudfront.net/badge.png?id=py&r=r&ts=1683906897&type=6e&v=0.2.9.0&x2=0)](https://badge.fury.io/py/dexray-intercept) [![CI](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml)
 [![Ruff](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/lint.yml)
 [![Publish status](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/publish.yml)
 
@@ -22,11 +22,42 @@ Further it will provide a package `dexray_intercept`. More on how to use the pac
 
 ## Run
 
-Ensure that your Android device is rooted. The `frida-server` will be installed to the latest version automaticly. Than you can use Dexray Intercept by just invoking the following command:
+Ensure that your Android device is rooted. The `frida-server` will be installed to the latest version automatically. Then you can use Dexray Intercept by just invoking the following command:
 
 ```bash
 ammm <target app>
 ```
+
+### Hook Selection (New Feature)
+
+All hooks are **disabled by default** for optimal performance. Enable hooks based on your analysis needs:
+
+```bash
+# Enable specific hooks
+ammm --enable-aes <app_name>                    # Enable AES crypto hooks
+ammm --enable-web <app_name>                    # Enable web/HTTP hooks
+ammm --enable-aes --enable-web <app_name>       # Enable multiple hooks
+
+# Enable hook groups
+ammm --hooks-crypto <app_name>                  # Enable all crypto hooks
+ammm --hooks-network <app_name>                 # Enable all network hooks  
+ammm --hooks-filesystem <app_name>              # Enable all file system hooks
+
+# Enable all hooks (performance impact)
+ammm --hooks-all <app_name>                     # Enable all available hooks
+
+# Use package identifier instead of app name
+ammm -s com.example.package --hooks-crypto
+```
+
+### Available Hook Categories
+
+- **Crypto**: `--hooks-crypto` (AES, encodings, keystore, certificates)
+- **Network**: `--hooks-network` (HTTP, sockets, SSL/TLS)
+- **File System**: `--hooks-filesystem` (file operations, databases, shared preferences)
+- **IPC**: `--hooks-ipc` (intents, broadcasts, binder, shared preferences)
+- **Process**: `--hooks-process` (DEX unpacking, native libraries, runtime)
+- **Services**: `--hooks-services` (camera, location, telephony, bluetooth)
 
 Here an example on monitoring the chrome app on our AVD:
 ```bash
@@ -38,7 +69,7 @@ ammm Chrome
 ⠀⠀⠀⠀⣼⣿⣿⣉⣹⣿⣿⣿⣿⣏⣉⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⠁⣴⣿⣿⣿⣿⣿⣿⣿⣿⣆⠉⠻⣧⠘⣷⠀⠀
 ⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⡇⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠈⠀⢹⡇⠀
 ⣠⣄⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⣠⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡇⢸⣿⠛⣿⣿⣿⣿⣿⣿⡿⠃⠀⠀⠀⠀⢸⡇⠀
-⣿⣿⡇⢸⣿⣿⣿SanDroid⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣷⠀⢿⡆⠈⠛⠻⠟⠛⠉⠀⠀⠀⠀⠀⠀⣾⠃⠀
+⣿⣿⡇⢸⣿⣿⣿Sandroid⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣷⠀⢿⡆⠈⠛⠻⠟⠛⠉⠀⠀⠀⠀⠀⠀⣾⠃⠀
 ⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣧⡀⠻⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣼⠃⠀⠀
 ⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢼⠿⣦⣄⠀⠀⠀⠀⠀⠀⠀⣀⣴⠟⠁⠀⠀⠀
 ⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣦⠀⠀⠈⠉⠛⠓⠲⠶⠖⠚⠋⠉⠀⠀⠀⠀⠀⠀
@@ -61,22 +92,101 @@ ammm Chrome
 
 ## Run as package 
 
-In order to use this project just install Dexray Intercept as a package and use 
+### New API (Recommended)
+
+Install Dexray Intercept as a package and use the new modular architecture:
 
 ```python
-from dexray_intercept import AppProfiler 
- ...
-profiler = AppProfiler(process_session, parsed.verbose, output_format="CMD", base_path=None, deactivate_unlink=False)
-profiler.start_profiling()
-...
-profiler.finish_app_profiling()
+from dexray_intercept import AppProfiler, setup_frida_device
+from dexray_intercept.services.hook_manager import HookManager
 
+# Connect to device and get process
+device = setup_frida_device()
+process = device.attach("com.example.app")
+
+# Configure hooks (all disabled by default for performance)
+hook_config = {
+    'aes_hooks': True,
+    'web_hooks': True, 
+    'file_system_hooks': True,
+    'keystore_hooks': True
+}
+
+# Create profiler with new architecture
+profiler = AppProfiler(
+    process, 
+    verbose_mode=True,
+    output_format="JSON",
+    hook_config=hook_config,
+    enable_stacktrace=True
+)
+
+# Start profiling
+script = profiler.start_profiling()
+
+# ... let app run and collect data ...
+
+# Get results
+profile_data = profiler.get_profile_data()
+json_output = profiler.get_profiling_log_as_json()
+
+# Runtime hook management
+profiler.enable_hook('socket_hooks', True)  # Enable more hooks at runtime
+enabled_hooks = profiler.get_enabled_hooks()  # Check what's enabled
+
+# Stop profiling
+profiler.stop_profiling()
 ```
-Ensure that you provide this function with a frida process handle.
 
-### SanDroid usage
+### Hook Categories
 
-In order to run it as a package in SanDroid ensure that you also installed the `JobManager` from [AndroidFridaManager](https://github.com/fkie-cad/AndroidFridaManager). This allows running multpitle frida sessions in different threads.
+Enable specific hook groups based on your analysis needs:
+
+```python
+# Crypto hooks
+hook_config = {
+    'aes_hooks': True,
+    'encodings_hooks': True, 
+    'keystore_hooks': True
+}
+
+# Network hooks  
+hook_config = {
+    'web_hooks': True,
+    'socket_hooks': True
+}
+
+# File system hooks
+hook_config = {
+    'file_system_hooks': True,
+    'database_hooks': True
+}
+
+# Enable all hooks (performance impact)
+profiler.enable_all_hooks()
+
+# Enable hook groups
+profiler.enable_hook_group('crypto')  # Enable all crypto-related hooks
+```
+
+### Legacy API (Backward Compatibility)
+
+The old API is still available for backward compatibility:
+
+```python
+from dexray_intercept import AppProfilerLegacy
+# OR use environment variable: DEXRAY_FORCE_OLD_ARCH=true
+
+profiler = AppProfilerLegacy(process_session, verbose=True, output_format="CMD", 
+                           base_path=None, deactivate_unlink=False)
+profiler.instrument()  # Old method name
+# ... 
+profiler.finish_app_profiling()  # Old method name
+```
+
+### Sandroid usage
+
+In order to run it as a package in Sandroid ensure that you also installed the `JobManager` from [AndroidFridaManager](https://github.com/fkie-cad/AndroidFridaManager). This allows running multpitle frida sessions in different threads.
 All you have to do is running the following code:
 ```python
 from AndroidFridaManager import JobManager
@@ -155,7 +265,7 @@ npm install --save-dev @types/frida-gum@latest
 
 ### Deep Unpacking
 
-When unpacking, applications may load DexCode—previously pointed to distinct memory blocks—into a DexFile, which represents the code being executed. For instance, some applications may restore instructions immediately before execution. In such cases, SanDroid is unable to revert the instructions back into the DexFile. Further research is necessary to resolve this issue
+When unpacking, applications may load DexCode—previously pointed to distinct memory blocks—into a DexFile, which represents the code being executed. For instance, some applications may restore instructions immediately before execution. In such cases, Sandroid is unable to revert the instructions back into the DexFile. Further research is necessary to resolve this issue
 
 ## Samples
 
@@ -207,7 +317,7 @@ $ ammm Sara
 ⠀⠀⠀⠀⣼⣿⣿⣉⣹⣿⣿⣿⣿⣏⣉⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⠁⣴⣿⣿⣿⣿⣿⣿⣿⣿⣆⠉⠻⣧⠘⣷⠀⠀
 ⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⡇⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠈⠀⢹⡇⠀
 ⣠⣄⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⣠⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡇⢸⣿⠛⣿⣿⣿⣿⣿⣿⡿⠃⠀⠀⠀⠀⢸⡇⠀
-⣿⣿⡇⢸⣿⣿⣿SanDroid⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣷⠀⢿⡆⠈⠛⠻⠟⠛⠉⠀⠀⠀⠀⠀⠀⣾⠃⠀
+⣿⣿⡇⢸⣿⣿⣿Sandroid⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣷⠀⢿⡆⠈⠛⠻⠟⠛⠉⠀⠀⠀⠀⠀⠀⣾⠃⠀
 ⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣧⡀⠻⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣼⠃⠀⠀
 ⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢼⠿⣦⣄⠀⠀⠀⠀⠀⠀⠀⣀⣴⠟⠁⠀⠀⠀
 ⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣦⠀⠀⠈⠉⠛⠓⠲⠶⠖⠚⠋⠉⠀⠀⠀⠀⠀⠀
@@ -275,7 +385,7 @@ $ ammm -s upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq
 ⠀⠀⠀⠀⣼⣿⣿⣉⣹⣿⣿⣿⣿⣏⣉⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⠁⣴⣿⣿⣿⣿⣿⣿⣿⣿⣆⠉⠻⣧⠘⣷⠀⠀
 ⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⡇⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠈⠀⢹⡇⠀
 ⣠⣄⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⣠⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡇⢸⣿⠛⣿⣿⣿⣿⣿⣿⡿⠃⠀⠀⠀⠀⢸⡇⠀
-⣿⣿⡇⢸⣿⣿⣿SanDroid⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣷⠀⢿⡆⠈⠛⠻⠟⠛⠉⠀⠀⠀⠀⠀⠀⣾⠃⠀
+⣿⣿⡇⢸⣿⣿⣿Sandroid⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣷⠀⢿⡆⠈⠛⠻⠟⠛⠉⠀⠀⠀⠀⠀⠀⣾⠃⠀
 ⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣧⡀⠻⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣼⠃⠀⠀
 ⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢼⠿⣦⣄⠀⠀⠀⠀⠀⠀⠀⣀⣴⠟⠁⠀⠀⠀
 ⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣦⠀⠀⠈⠉⠛⠓⠲⠶⠖⠚⠋⠉⠀⠀⠀⠀⠀⠀
@@ -313,6 +423,6 @@ $ ammm -s upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq
 - [ x ] Create templates for the different hookings we want to install in order to get a runtime profile
 - [ ] Create a test application which is using all the different features which we want to hook (we need some sort of ground truth in order to test our hooks)
 - [ ] Implement the actual hooks 
-- [ ] The format to print the monitored information
+- [ x ] The format to print the monitored information
 - [ ] https://attack.mitre.org/matrices/mobile/ add this as a final result so we can say what kind of Attacks the Application is using
 - [ ] We want to track also things like "this are privacy issues", "this might lead to bugs" ...

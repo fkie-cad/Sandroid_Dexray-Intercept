@@ -59,8 +59,14 @@ setup(
 
      # include other files
     package_data={
-        '': [ os.path.join(here, 'src/dexray_intercept/profiling.js') # the frida agent to do the profiling
-         ],  
+        'dexray_intercept': [
+            'profiling.js',  # the frida agent to do the profiling
+            'services/*.py',
+            'models/*.py', 
+            'parsers/*.py',
+            'formatters/*.py',
+            'utils/*.py'
+        ],  
     },
 
 
