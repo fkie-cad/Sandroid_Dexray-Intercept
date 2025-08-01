@@ -4,6 +4,37 @@ import { Java } from "../utils/javalib.js"
 
 const PROFILE_HOOKING_TYPE: string = "DEX_LOADING"
 
+interface DEXInfo {
+    magicString: string;
+    version: string;
+    ext: string;
+    size: number;
+    sizeOffset?: number;
+    found?: boolean;
+    wrongMagic?: any;
+}
+
+interface UnpackingEvent {
+    event_type: string;
+    dex_path?: string;
+    file_path?: string;
+    magic?: string;
+    size?: number;
+    version?: string;
+    location?: string;
+    hooked_function?: string;
+    class_loader_type?: string;
+}
+
+function createDEXEvent(eventType: string, data: any): void {
+    const event = {
+        event_type: eventType,
+        timestamp: Date.now(),
+        ...data
+    };
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
 /**
  * TODO Future: 
  *
@@ -138,7 +169,7 @@ function getg_processName() : string {
 
 
 
-function checkMagic(dataAddr) { // Throws access violation errors, not handled at all.
+function checkMagic(dataAddr: NativePointer) { // Throws access violation errors, not handled at all.
     let dexMagic : string = 'dex\n'; // [0x64, 0x65, 0x78, 0x0a]
     let dexVersions = ['035', '037', '038', '039', '040']; // Same as above (hex -> ascii)
     let odexVersions = ['036'];
@@ -148,7 +179,7 @@ function checkMagic(dataAddr) { // Throws access violation errors, not handled a
 
     let readData
     try {
-        readData = ptr(dataAddr).readByteArray(8)
+        readData = dataAddr.readByteArray(8)
     } catch (e) {
         devlog('Error reading memory at address' + dataAddr);
         return {found: false, wrongMagic: 0xDEADBEEF};
@@ -173,31 +204,44 @@ function checkMagic(dataAddr) { // Throws access violation errors, not handled a
     }
 }
 
-function dumpDexToFile(begin, dexInfo, processName, location, hooked_fct) {
-    let dexSize = ptr(begin).add(dexInfo.sizeOffset).readInt();
+function dumpDexToFile(begin: NativePointer, dexInfo: any, processName: string, location: string, hooked_fct: string): void {
+    const dexSize = begin.add(dexInfo.sizeOffset).readInt();
     let dexPath = "/data/data/" + processName + "/" + dexSize + "." + dexInfo.ext;
-    var dexFile;
+    let dexFile: File;
+    
     try {
-      dexFile = new File(dexPath, "wb");
-    }catch(e){
-      var g_package_name = get_package_name();
-      dexPath = "/data/data/" +  g_package_name + "/" + dexSize + "." + dexInfo.ext;
-       // uncommend this for debugging purposes
-       if(g_package_name.length > 4){
-        am_send(PROFILE_HOOKING_TYPE, "Trying to create the following file: "+ dexPath);
-      } 
-      dexFile = new File(dexPath, "wb");
+        dexFile = new File(dexPath, "wb");
+    } catch(e) {
+        const g_package_name = get_package_name();
+        dexPath = "/data/data/" + g_package_name + "/" + dexSize + "." + dexInfo.ext;
+        
+        // Log file creation attempt
+        if(g_package_name.length > 4) {
+            createDEXEvent("dex.unpacking.file_creation", {
+                attempted_path: dexPath,
+                package_name: g_package_name
+            });
+        }
+        dexFile = new File(dexPath, "wb");
     }
 
-    dexFile.write(ptr(begin).readByteArray(dexSize));
+    const dexBuffer = begin.readByteArray(dexSize);
+    if (dexBuffer) {
+        dexFile.write(dexBuffer);
+    }
     dexFile.flush();
     dexFile.close();
 
-    am_send(PROFILE_HOOKING_TYPE, "even_type        : " + hooked_fct);
-    am_send(PROFILE_HOOKING_TYPE, "magic        : " + dexInfo.magicString);
-    am_send(PROFILE_HOOKING_TYPE, "size         : " + dexSize);
-    am_send(PROFILE_HOOKING_TYPE, "orig location: " + location);
-    am_send(PROFILE_HOOKING_TYPE, "dumped " + dexInfo.ext + " @ " + dexPath + "\n");
+    // Send structured unpacking event
+    createDEXEvent("dex.unpacking.detected", {
+        hooked_function: hooked_fct,
+        magic: dexInfo.magicString,
+        version: dexInfo.version,
+        size: dexSize,
+        original_location: location,
+        dumped_path: dexPath,
+        file_type: dexInfo.ext
+    });
 }
 
 function dumpDex(moduleFuncName, g_processName, g_AndroidOSVersion){
@@ -265,117 +309,164 @@ function dumpDex(moduleFuncName, g_processName, g_AndroidOSVersion){
 
 
 
-function dex_unpacking(){
-    // Main code
+function install_dex_memory_hooks(): void {
+    devlog("Installing DEX memory-based unpacking hooks");
+    
     const g_AndroidOSVersion: number = getAndroidVersion();
     const g_moduleFunctionName: string = getFunctionName(g_AndroidOSVersion);
     const g_processName: string = getg_processName();
 
     if (g_moduleFunctionName !== "" && g_processName !== "") {
         dumpDex(g_moduleFunctionName, g_processName, g_AndroidOSVersion);
-        dex_api_unpacking(g_processName)
+        dex_api_unpacking(g_processName);
+    }
+}
 
+function install_dex_classloader_hooks(): void {
+    devlog("Installing DEX class loader hooks");
+    
+    const g_processName: string = getg_processName();
+    if (g_processName !== "") {
+        dex_api_unpacking(g_processName);
     }
 }
 
 
-function dump(file_path,dst_path){
-    var location = removeLeadingColon(file_path);
-    am_send(PROFILE_HOOKING_TYPE, "orig location: " +  location);
+function dump(file_path: string, dst_path: string): void {
+    const location = removeLeadingColon(file_path);
+    
+    createDEXEvent("dex.file_copy", {
+        original_location: location,
+        destination_path: dst_path
+    });
 
-    copy_file(PROFILE_HOOKING_TYPE,location,dst_path);
+    copy_file(PROFILE_HOOKING_TYPE, location, dst_path);
 }
 
-function dex_api_unpacking(g_processName){
-    Java.perform(function(){
+function dex_api_unpacking(g_processName: string): void {
+    Java.perform(() => {
         const filename = "/data/data/" + g_processName + "/dump.dex";
         const dst_path = "/data/data/" + g_processName;
         
-        let dexclassLoader = Java.use("dalvik.system.DexClassLoader");
-        dexclassLoader.$init.implementation = function(filepath,b,c,d){
-            am_send(PROFILE_HOOKING_TYPE,"DexClassLoader $init called");
-            dump(filepath,dst_path)
-                        
-            this.$init(filepath,b,c,d)
-        }
+        // Hook DexClassLoader
+        const dexclassLoader = Java.use("dalvik.system.DexClassLoader");
+        dexclassLoader.$init.implementation = function(filepath: string, b: any, c: any, d: any) {
+            createDEXEvent("dex.classloader.creation", {
+                class_loader_type: "DexClassLoader",
+                file_path: filepath,
+                method: "$init(String, String, String, ClassLoader)"
+            });
+            dump(filepath, dst_path);
+            return this.$init(filepath, b, c, d);
+        };
 
-        let pathLoader = Java.use('dalvik.system.PathClassLoader');    
-        pathLoader.$init.overload('java.lang.String', 'java.lang.ClassLoader').implementation = function(file_path, parent) {
-            am_send(PROFILE_HOOKING_TYPE,'PathClassLoader(f,p) called: '+file_path);
-            dump(file_path,dst_path)
+        // Hook PathClassLoader
+        const pathLoader = Java.use('dalvik.system.PathClassLoader');    
+        pathLoader.$init.overload('java.lang.String', 'java.lang.ClassLoader').implementation = function(file_path: string, parent: any) {
+            createDEXEvent("dex.classloader.creation", {
+                class_loader_type: "PathClassLoader",
+                file_path: file_path,
+                method: "$init(String, ClassLoader)"
+            });
+            dump(file_path, dst_path);
             return this.$init(file_path, parent);
-        }
+        };
     
-        pathLoader.$init.overload('java.lang.String', 'java.lang.String', 'java.lang.ClassLoader').implementation = function(file_path, librarySearchPath, parent) {
-            am_send(PROFILE_HOOKING_TYPE,'PathClassLoader(f,l,p) called: '+file_path);
-            dump(file_path,dst_path)
+        pathLoader.$init.overload('java.lang.String', 'java.lang.String', 'java.lang.ClassLoader').implementation = function(file_path: string, librarySearchPath: string, parent: any) {
+            createDEXEvent("dex.classloader.creation", {
+                class_loader_type: "PathClassLoader",
+                file_path: file_path,
+                library_search_path: librarySearchPath,
+                method: "$init(String, String, ClassLoader)"
+            });
+            dump(file_path, dst_path);
             return this.$init(file_path, librarySearchPath, parent);
-        }
+        };
 
-        
+        // Hook DelegateLastClassLoader
         const delegateLoader = Java.use('dalvik.system.DelegateLastClassLoader');
-        delegateLoader.$init.overload('java.lang.String', 'java.lang.ClassLoader').implementation = function(file_path, parent) {
-            am_send(PROFILE_HOOKING_TYPE,'DelegateLastClassLoader(f,p) called: '+file_path);
-            dump(file_path,dst_path)
+        delegateLoader.$init.overload('java.lang.String', 'java.lang.ClassLoader').implementation = function(file_path: string, parent: any) {
+            createDEXEvent("dex.classloader.creation", {
+                class_loader_type: "DelegateLastClassLoader",
+                file_path: file_path,
+                method: "$init(String, ClassLoader)"
+            });
+            dump(file_path, dst_path);
             return this.$init(file_path, parent);
-        }
+        };
     
-        delegateLoader.$init.overload('java.lang.String', 'java.lang.String', 'java.lang.ClassLoader').implementation = function(file_path, librarySearchPath, parent) {
-            am_send(PROFILE_HOOKING_TYPE,'DelegateLastClassLoader(f,l,p) called: '+file_path);
-            dump(file_path,dst_path)
+        delegateLoader.$init.overload('java.lang.String', 'java.lang.String', 'java.lang.ClassLoader').implementation = function(file_path: string, librarySearchPath: string, parent: any) {
+            createDEXEvent("dex.classloader.creation", {
+                class_loader_type: "DelegateLastClassLoader",
+                file_path: file_path,
+                library_search_path: librarySearchPath,
+                method: "$init(String, String, ClassLoader)"
+            });
+            dump(file_path, dst_path);
             return this.$init(file_path, librarySearchPath, parent);
-        }
+        };
     
         if (Java.use('android.os.Build$VERSION').SDK_INT.value > 28) {
-            delegateLoader.$init.overload('java.lang.String', 'java.lang.String', 'java.lang.ClassLoader', 'boolean').implementation = function(file_path, librarySearchPath, parent, resourceLoading) {
-                am_send(PROFILE_HOOKING_TYPE,'DelegateLastClassLoader(f,l,p,b) called: '+file_path);
-                dump(file_path,dst_path)
+            delegateLoader.$init.overload('java.lang.String', 'java.lang.String', 'java.lang.ClassLoader', 'boolean').implementation = function(file_path: string, librarySearchPath: string, parent: any, resourceLoading: boolean) {
+                createDEXEvent("dex.classloader.creation", {
+                    class_loader_type: "DelegateLastClassLoader",
+                    file_path: file_path,
+                    library_search_path: librarySearchPath,
+                    resource_loading: resourceLoading,
+                    method: "$init(String, String, ClassLoader, boolean)"
+                });
+                dump(file_path, dst_path);
                 return this.$init(file_path, librarySearchPath, parent, resourceLoading);
+            };
+        }
+
+
+        // Hook InMemoryDexClassLoader
+        const memoryclassLoader = Java.use("dalvik.system.InMemoryDexClassLoader");
+        memoryclassLoader.$init.overload('java.nio.ByteBuffer', 'java.lang.ClassLoader').implementation = function(dexbuffer: any, loader: any) {
+            const remaining = dexbuffer.remaining();
+            
+            createDEXEvent("dex.in_memory_loader", {
+                class_loader_type: "InMemoryDexClassLoader",
+                buffer_size: remaining,
+                method: "$init(ByteBuffer, ClassLoader)"
+            });
+
+            const object = this.$init(dexbuffer, loader);
+
+            // Dump the ByteBuffer contents to file
+            createDEXEvent("dex.memory_dump", {
+                file_name: filename,
+                bytes_to_write: remaining
+            });
+
+            const f = new File(filename, 'wb');
+            const buf = new Uint8Array(remaining);
+            for (let i = 0; i < remaining; i++) {
+                buf[i] = dexbuffer.get();
             }
-        }
+            
+            const numberArray = Array.from(buf);
+            f.write(numberArray);
+            f.close();
 
+            // Check if dump was successful
+            const remainingAfter = dexbuffer.remaining();
+            if (remainingAfter > 0) {
+                createDEXEvent("dex.dump_error", {
+                    remaining_bytes: remainingAfter,
+                    file_name: filename
+                });
+            } else {
+                createDEXEvent("dex.dump_success", {
+                    file_name: filename,
+                    bytes_written: remaining
+                });
+            }
 
-        var memoryclassLoader = Java.use("dalvik.system.InMemoryDexClassLoader");
-        memoryclassLoader.$init.overload('java.nio.ByteBuffer', 'java.lang.ClassLoader').implementation = function(dexbuffer, loader) {
-        am_send(PROFILE_HOOKING_TYPE,"Hooking InMemoryDexClassLoader");
-        var object = this.$init(dexbuffer, loader);
-
-        /* dexbuffer is a Java ByteBuffer 
-           you cannot dump to /sdcard unless the app has rights to
-         */
-        var remaining = dexbuffer.remaining();
-        //const filename = '/data/data/YOUR-PACKAGE-NAME/dump.dex';
-        
-
-        am_send(PROFILE_HOOKING_TYPE," Opening file name=" + filename + " to write " + remaining + " bytes");
-        const f = new File(filename, 'wb');
-        var buf = new Uint8Array(remaining);
-        for (var i = 0; i < remaining; i++) {
-            buf[i] = dexbuffer.get();
-            //debug: console.log("buf["+i+"]="+buf[i]);
-        }
-        //console.log("[*] Writing " + remaining + " bytes...");
-        am_send(PROFILE_HOOKING_TYPE," Writing " + remaining + " bytes...");
-        // Convert Uint8Array to number[]
-        const numberArray = Array.from(buf);
-        f.write(numberArray);
-
-        //f.write(buf);
-        f.close();
-
-        // checking
-        remaining = dexbuffer.remaining();
-        if (remaining > 0) {
-            console.log("[-] Error: There are " + remaining + " remaining bytes!");
-        } else {
-            am_send(PROFILE_HOOKING_TYPE,"dumped successfully @ " + filename+"\n");
-        }
-
-        return object;
-    }
-
+            return object;
+        };
     });
-
 }
 
 
@@ -391,9 +482,11 @@ function advanced_unpacking_procedure(){
 
 
 
-export function install_dex_unpacking_hooks(){
-    devlog("install DEX unpacking hooks");
-    dex_unpacking();
+export function install_dex_unpacking_hooks(): void {
+    devlog("\n");
+    devlog("Installing DEX unpacking hooks");
+    
+    install_dex_memory_hooks();
+    install_dex_classloader_hooks();
     advanced_unpacking_procedure();
-
 }

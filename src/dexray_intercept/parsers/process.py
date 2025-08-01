@@ -159,20 +159,40 @@ class NativeLibParser(BaseParser):
         event = ProcessEvent(event_type, timestamp)
         
         # Map specific fields for native library events
-        if 'library_name' in data:
-            event.library_name = data['library_name']
-        if 'filename' in data:
-            event.filename = data['filename']
-        if 'loaded_library' in data:  # Legacy field
-            event.library_name = data['loaded_library']
+        field_mapping = {
+            'library_name': 'library_name',
+            'library_path': 'library_path',
+            'filename': 'filename',
+            'loaded_library': 'library_name',  # Legacy field
+            'method': 'method',
+            'loader_type': 'loader_type'
+        }
         
-        # Add load status description
-        if event_type == 'native.library.load':
+        for json_field, event_field in field_mapping.items():
+            if json_field in data:
+                setattr(event, event_field, data[json_field])
+        
+        # Handle new structured library events
+        if event_type.startswith('library.system.'):
+            event.event_description = f'System.{data.get("method", "unknown")} called'
+            event.loader_type = 'System'
+        elif event_type.startswith('library.runtime.'):
+            event.event_description = f'Runtime.{data.get("method", "unknown")} called'
+            event.loader_type = 'Runtime'
+        elif event_type == 'library.hook_error':
+            event.event_description = 'Library hook installation error'
+        # Legacy event types
+        elif event_type == 'native.library.load':
             event.event_description = 'Native library loading attempt'
         elif event_type == 'native.library.loaded':
             event.event_description = 'Native library loaded successfully'
         elif event_type == 'native.library.load_failed':
             event.event_description = 'Native library loading failed'
+        
+        # Add any remaining metadata
+        for key, value in data.items():
+            if key not in ['event_type', 'timestamp'] and not hasattr(event, key):
+                event.add_metadata(key, value)
         
         return event
     

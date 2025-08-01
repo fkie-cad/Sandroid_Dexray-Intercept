@@ -4,12 +4,37 @@ import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
 
 /**
- * 
  * Some parts are taken from https://codeshare.frida.re/@ninjadiary/sqlite-database/
  * and https://ackcent.com/recovering-sqlcipher-encrypted-data-with-frida/
  * and https://github.com/dpnishant/appmon/blob/master/scripts/Android/Database/DB.js
  */
- const PROFILE_HOOKING_TYPE: string = "DATABASE"
+
+const PROFILE_HOOKING_TYPE: string = "DATABASE"
+
+interface DatabaseEvent {
+    event_type: string;
+    database_path?: string;
+    sql?: string;
+    table?: string;
+    method?: string;
+    bind_args?: any[];
+    content_values?: any;
+    where_clause?: string;
+    where_args?: string[];
+    flags?: number;
+    password?: string;
+    result_code?: number;
+    rows_affected?: number;
+}
+
+function createDatabaseEvent(eventType: string, data: any): void {
+    const event = {
+        event_type: eventType,
+        timestamp: Date.now(),
+        ...data
+    };
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
 
 // New variables for filtering:
 let PATH_FILTERS: string[] = [];
@@ -72,9 +97,6 @@ function hook_java_sql(){
     
             // execSQL(String sql)
             sqliteDatabase.execSQL.overload('java.lang.String').implementation = function(var0) {
-                var type = "\x1b[1;35mevent_type: SQLiteExecSQL\x1b[0m";
-                var methodVal = "SQLiteDatabase.execSQL";
-                
                 // Get database path
                 var dbPath = "unknown";
                 try {
@@ -85,10 +107,11 @@ function hook_java_sql(){
                 
                 // Only proceed if the database path should be logged
                 if (shouldLogDatabasePath(dbPath)) {
-                    var logVal = "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                                 "\nExecuting SQL: " + '\x1b[36m' + var0 + '\x1b[0m' + "\n";
-                    
-                    am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                    createDatabaseEvent("database.sqlite.exec", {
+                        method: "SQLiteDatabase.execSQL(String)",
+                        database_path: dbPath,
+                        sql: var0
+                    });
                 }
                 
                 var execSQLRes = this.execSQL(var0);
@@ -97,9 +120,6 @@ function hook_java_sql(){
             
             // execSQL(String sql, Object[] bindArgs)
             sqliteDatabase.execSQL.overload('java.lang.String', '[Ljava.lang.Object;').implementation = function(var0, var1) {
-                var type = "\x1b[1;35mevent_type: SQLiteExecSQL\x1b[0m";
-                var methodVal = "SQLiteDatabase.execSQL";
-                
                 // Get database path
                 var dbPath = "unknown";
                 try {
@@ -110,19 +130,20 @@ function hook_java_sql(){
                 
                 // Only proceed if the database path should be logged
                 if (shouldLogDatabasePath(dbPath)) {
-                    // Format bind arguments properly
-                    var argsStr = "";
+                    // Convert bind arguments to array
+                    var bindArgs = [];
                     if (var1 && var1.length > 0) {
                         for (var i = 0; i < var1.length; i++) {
-                            argsStr += "\n    - [" + i + "] " + var1[i];
+                            bindArgs.push(var1[i]);
                         }
                     }
                     
-                    var logVal = "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                                 "\nExecuting SQL: " + '\x1b[36m' + var0 + '\x1b[0m' + 
-                                 "\nBind arguments:" + (argsStr ? '\x1b[33m' + argsStr + '\x1b[0m' : " none") + "\n";
-                    
-                    am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                    createDatabaseEvent("database.sqlite.exec", {
+                        method: "SQLiteDatabase.execSQL(String, Object[])",
+                        database_path: dbPath,
+                        sql: var0,
+                        bind_args: bindArgs
+                    });
                 }
                 
                 var execSQLRes = this.execSQL(var0, var1);
@@ -141,9 +162,32 @@ function hook_java_sql(){
     
               // query(String table, String[] columns, String selection, String[] selectionArgs, String groupBy, String having, String orderBy, String limit)
               sqliteDatabase.query.overload('java.lang.String', '[Ljava.lang.String;', 'java.lang.String', '[Ljava.lang.String;', 'java.lang.String', 'java.lang.String', 'java.lang.String', 'java.lang.String').implementation = function(var0, var1, var2, var3, var4, var5, var6, var7) {
-                var methodVal = "SQLiteDatabase.query called.";
-                var logVal = "Table: " + var0 + ", selection value: " + var2 + ", selectionArgs: " + var3;
-                am_send(PROFILE_HOOKING_TYPE,methodVal + " " + logVal + "\n");
+                var dbPath = "unknown";
+                try {
+                    dbPath = this.getPath();
+                } catch (e) {
+                    dbPath = "Error getting path: " + e;
+                }
+                
+                if (shouldLogDatabasePath(dbPath)) {
+                    // Convert columns and selectionArgs to arrays
+                    var columns = var1 ? Array.prototype.slice.call(var1) : [];
+                    var selectionArgs = var3 ? Array.prototype.slice.call(var3) : [];
+                    
+                    createDatabaseEvent("database.sqlite.query", {
+                        method: "SQLiteDatabase.query(String, String[], String, String[], String, String, String, String)",
+                        database_path: dbPath,
+                        table: var0,
+                        columns: columns,
+                        where_clause: var2,
+                        where_args: selectionArgs,
+                        group_by: var4,
+                        having: var5,
+                        order_by: var6,
+                        limit: var7
+                    });
+                }
+                
                 var queryRes = this.query(var0, var1, var2, var3, var4, var5, var6, var7);
                 return queryRes;
             };
@@ -186,9 +230,6 @@ function hook_java_sql(){
     
             // rawQuery(String sql, String[] selectionArgs) 
             sqliteDatabase.rawQuery.overload('java.lang.String', '[Ljava.lang.String;').implementation = function(var0, var1) {
-                var type = "\x1b[1;34mevent_type: SQLiteRawQuery\x1b[0m";
-                var methodVal = "SQLiteDatabase.rawQuery";
-                
                 // Get database path
                 var dbPath = "unknown";
                 try {
@@ -199,19 +240,20 @@ function hook_java_sql(){
                 
                 // Only proceed if the database path should be logged
                 if (shouldLogDatabasePath(dbPath)) {
-                    // Format selection args properly
-                    var argsStr = "";
+                    // Convert selection args to array
+                    var selectionArgs = [];
                     if (var1 && var1.length > 0) {
                         for (var i = 0; i < var1.length; i++) {
-                            argsStr += "\n    - [" + i + "] " + var1[i];
+                            selectionArgs.push(var1[i]);
                         }
                     }
                     
-                    var logVal = "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                                 "\nSQL Query: " + '\x1b[36m' + var0 + '\x1b[0m' + 
-                                 "\nSelection args:" + (argsStr ? '\x1b[33m' + argsStr + '\x1b[0m' : " none") + "\n";
-                    
-                    am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                    createDatabaseEvent("database.sqlite.query", {
+                        method: "SQLiteDatabase.rawQuery(String, String[])",
+                        database_path: dbPath,
+                        sql: var0,
+                        where_args: selectionArgs
+                    });
                 }
                 
                 var rawQueryRes = this.rawQuery(var0, var1);
@@ -220,9 +262,6 @@ function hook_java_sql(){
     
             // rawQuery(String sql, String[] selectionArgs, CancellationSignal cancellationSignal)
             sqliteDatabase.rawQuery.overload('java.lang.String', '[Ljava.lang.String;', 'android.os.CancellationSignal').implementation = function(var0, var1, var2) {
-                var type = "\x1b[1;34mevent_type: SQLiteRawQuery\x1b[0m";
-                var methodVal = "SQLiteDatabase.rawQuery";
-                
                 // Get database path
                 var dbPath = "unknown";
                 try {
@@ -233,20 +272,21 @@ function hook_java_sql(){
                 
                 // Only proceed if the database path should be logged
                 if (shouldLogDatabasePath(dbPath)) {
-                    // Format selection args properly
-                    var argsStr = "";
+                    // Convert selection args to array
+                    var selectionArgs = [];
                     if (var1 && var1.length > 0) {
                         for (var i = 0; i < var1.length; i++) {
-                            argsStr += "\n    - [" + i + "] " + var1[i];
+                            selectionArgs.push(var1[i]);
                         }
                     }
                     
-                    var logVal = "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                                 "\nSQL Query: " + '\x1b[36m' + var0 + '\x1b[0m' + 
-                                 "\nSelection args:" + (argsStr ? '\x1b[33m' + argsStr + '\x1b[0m' : " none") +
-                                 "\nWith cancellation signal: " + '\x1b[90m' + "true" + '\x1b[0m' + "\n";
-                    
-                    am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                    createDatabaseEvent("database.sqlite.query", {
+                        method: "SQLiteDatabase.rawQuery(String, String[], CancellationSignal)",
+                        database_path: dbPath,
+                        sql: var0,
+                        where_args: selectionArgs,
+                        cancellation_signal: true
+                    });
                 }
                 
                 var rawQueryRes = this.rawQuery(var0, var1, var2);
@@ -328,9 +368,6 @@ function hook_java_sql(){
     
             // insert(String table, String nullColumnHack, ContentValues values)
             sqliteDatabase.insert.overload('java.lang.String', 'java.lang.String', 'android.content.ContentValues').implementation = function(var0, var1, var2) {
-                var type = "\x1b[1;33mevent_type: SQLiteInsert\x1b[0m";
-                var methodVal = "SQLiteDatabase.insert";
-                
                 // Get database path
                 var dbPath = "unknown";
                 try {
@@ -341,24 +378,25 @@ function hook_java_sql(){
                 
                 // Only proceed if the database path should be logged
                 if (shouldLogDatabasePath(dbPath)) {
-                    // Format ContentValues properly
-                    var valuesStr = "";
+                    // Convert ContentValues to object
+                    var contentValues = {};
                     if (var2) {
                         var keyset = var2.keySet();
                         var iter = keyset.iterator();
                         while(iter.hasNext()) {
                             var key = iter.next();
                             var value = var2.get(key);
-                            valuesStr += "\n    - " + key + " = " + value;
+                            contentValues[key] = value;
                         }
                     }
                     
-                    var logVal = "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                                "\nInsert into table: " + '\x1b[36m' + var0 + '\x1b[0m' + 
-                                "\nNull column hack: " + '\x1b[35m' + (var1 ? var1 : "null") + '\x1b[0m' + 
-                                "\nValues to insert:" + (valuesStr ? '\x1b[32m' + valuesStr + '\x1b[0m' : " none") + "\n";
-                    
-                    am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                    createDatabaseEvent("database.sqlite.insert", {
+                        method: "SQLiteDatabase.insert(String, String, ContentValues)",
+                        database_path: dbPath,
+                        table: var0,
+                        null_column_hack: var1,
+                        content_values: contentValues
+                    });
                 }
                 var insertValueRes = this.insert(var0, var1, var2);
                 return insertValueRes;
@@ -366,9 +404,6 @@ function hook_java_sql(){
 
             // insertOrThrow(String table, String nullColumnHack, ContentValues values)
             sqliteDatabase.insertOrThrow.overload('java.lang.String', 'java.lang.String', 'android.content.ContentValues').implementation = function(var0, var1, var2) {
-                var type = "\x1b[1;33mevent_type: SQLiteInsert\x1b[0m";
-                var methodVal = "SQLiteDatabase.insertOrThrow";
-                
                 // Get database path
                 var dbPath = "unknown";
                 try {
@@ -379,24 +414,26 @@ function hook_java_sql(){
                 
                 // Only proceed if the database path should be logged
                 if (shouldLogDatabasePath(dbPath)) {
-                    // Format ContentValues properly
-                    var valuesStr = "";
+                    // Convert ContentValues to object
+                    var contentValues = {};
                     if (var2) {
                         var keyset = var2.keySet();
                         var iter = keyset.iterator();
                         while(iter.hasNext()) {
                             var key = iter.next();
                             var value = var2.get(key);
-                            valuesStr += "\n    - " + key + " = " + value;
+                            contentValues[key] = value;
                         }
                     }
                     
-                    var logVal = "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                                "\nInsert (with throw) into table: " + '\x1b[36m' + var0 + '\x1b[0m' + 
-                                "\nNull column hack: " + '\x1b[35m' + (var1 ? var1 : "null") + '\x1b[0m' + 
-                                "\nValues to insert:" + (valuesStr ? '\x1b[32m' + valuesStr + '\x1b[0m' : " none") + "\n";
-                    
-                    am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                    createDatabaseEvent("database.sqlite.insert", {
+                        method: "SQLiteDatabase.insertOrThrow(String, String, ContentValues)",
+                        database_path: dbPath,
+                        table: var0,
+                        null_column_hack: var1,
+                        content_values: contentValues,
+                        throw_on_error: true
+                    });
                 }
                 
                 var insertValueRes = this.insertOrThrow(var0, var1, var2);
@@ -471,19 +508,18 @@ function hook_java_sql(){
 
             // openDatabase(String path, SQLiteDatabase.CursorFactory factory, int flags)
             sqliteDatabase.openDatabase.overload('java.lang.String', 'android.database.sqlite.SQLiteDatabase$CursorFactory', 'int').implementation = function(path, factory, flags) {
-                var type = "\x1b[1;36mevent_type: SQLiteOpenDatabase\x1b[0m";
-                var methodVal = "SQLiteDatabase.openDatabase";
-                
                 // Only proceed if the database path should be logged
                 if (shouldLogDatabasePath(path)) {
                     // Interpret the flags
                     var flagsDescription = interpretDatabaseFlags(flags);
                     
-                    var logVal = "\nOpening database: " + '\x1b[36m' + path + '\x1b[0m' + 
-                                    "\nFlags: " + '\x1b[33m' + flags + " (" + flagsDescription + ")" + '\x1b[0m' + 
-                                    "\nFactory: " + (factory ? '\x1b[32m' + "Custom factory provided" + '\x1b[0m' : '\x1b[90m' + "null" + '\x1b[0m') + "\n";
-                    
-                    am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                    createDatabaseEvent("database.sqlite.open", {
+                        method: "SQLiteDatabase.openDatabase(String, CursorFactory, int)",
+                        database_path: path,
+                        flags: flags,
+                        flags_description: flagsDescription,
+                        has_factory: factory !== null
+                    });
                 }
                 
                 var dbResult = this.openDatabase(path, factory, flags);
@@ -514,15 +550,14 @@ function hook_java_sql(){
 
             // openOrCreateDatabase method hooks
             sqliteDatabase.openOrCreateDatabase.overload('java.lang.String', 'android.database.sqlite.SQLiteDatabase$CursorFactory').implementation = function(path, factory) {
-                var type = "\x1b[1;36mevent_type: SQLiteOpenDatabase\x1b[0m";
-                var methodVal = "SQLiteDatabase.openOrCreateDatabase";
-                
                 // Only proceed if the database path should be logged
                 if (shouldLogDatabasePath(path)) {
-                    var logVal = "\nOpening or creating database: " + '\x1b[36m' + path + '\x1b[0m' + 
-                                    "\nFactory: " + (factory ? '\x1b[32m' + "Custom factory provided" + '\x1b[0m' : '\x1b[90m' + "null" + '\x1b[0m') + "\n";
-                    
-                    am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                    createDatabaseEvent("database.sqlite.open", {
+                        method: "SQLiteDatabase.openOrCreateDatabase(String, CursorFactory)",
+                        database_path: path,
+                        has_factory: factory !== null,
+                        create_if_necessary: true
+                    });
                 }
                 
                 var dbResult = this.openOrCreateDatabase(path, factory);
@@ -549,9 +584,6 @@ function hook_java_sql(){
 
             // update(String table, ContentValues values, String whereClause, String[] whereArgs)
             sqliteDatabase.update.overload('java.lang.String', 'android.content.ContentValues', 'java.lang.String', '[Ljava.lang.String;').implementation = function(var0, var1, var2, var3) {
-                var type = "\x1b[1;32mevent_type: SQLiteUpdate\x1b[0m";
-                var methodVal = "SQLiteDatabase.update";
-                
                 // Get database path
                 var dbPath = "unknown";
                 try {
@@ -562,33 +594,34 @@ function hook_java_sql(){
                 
                 // Only proceed if the database path should be logged
                 if (shouldLogDatabasePath(dbPath)) {
-                    // Format ContentValues properly
-                    var valuesStr = "";
+                    // Convert ContentValues to object
+                    var contentValues = {};
                     if (var1) {
                         var keyset = var1.keySet();
                         var iter = keyset.iterator();
                         while(iter.hasNext()) {
                             var key = iter.next();
                             var value = var1.get(key);
-                            valuesStr += "\n    - " + key + " = " + value;
+                            contentValues[key] = value;
                         }
                     }
                     
-                    // Format whereArgs properly
-                    var whereArgsStr = "";
+                    // Convert whereArgs to array
+                    var whereArgs = [];
                     if (var3 && var3.length > 0) {
                         for (var i = 0; i < var3.length; i++) {
-                            whereArgsStr += "\n    - [" + i + "] " + var3[i];
+                            whereArgs.push(var3[i]);
                         }
                     }
                     
-                    var logVal = "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                                "\nUpdate table: " + '\x1b[36m' + var0 + '\x1b[0m' + 
-                                "\nWhere clause: " + '\x1b[35m' + var2 + '\x1b[0m' + 
-                                "\nWhere args:" + (whereArgsStr ? '\x1b[33m' + whereArgsStr + '\x1b[0m' : " none") + 
-                                "\nValues to update:" + (valuesStr ? '\x1b[32m' + valuesStr + '\x1b[0m' : " none") + "\n";
-                    
-                    am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                    createDatabaseEvent("database.sqlite.update", {
+                        method: "SQLiteDatabase.update(String, ContentValues, String, String[])",
+                        database_path: dbPath,
+                        table: var0,
+                        content_values: contentValues,
+                        where_clause: var2,
+                        where_args: whereArgs
+                    });
                 }
                 
                 var updateRes = this.update(var0, var1, var2, var3);
@@ -646,9 +679,6 @@ function hook_java_sql(){
 
             // delete(String table, String whereClause, String[] whereArgs)
             sqliteDatabase.delete.overload('java.lang.String', 'java.lang.String', '[Ljava.lang.String;').implementation = function(var0, var1, var2) {
-                var type = "\x1b[1;31mevent_type: SQLiteDelete\x1b[0m";
-                var methodVal = "SQLiteDatabase.delete";
-                
                 // Get database path
                 var dbPath = "unknown";
                 try {
@@ -659,28 +689,33 @@ function hook_java_sql(){
                 
                 // Only proceed if the database path should be logged
                 if (shouldLogDatabasePath(dbPath)) {
-                    // Format whereArgs properly
-                    var whereArgsStr = "";
+                    // Convert whereArgs to array
+                    var whereArgs = [];
                     if (var2 && var2.length > 0) {
                         for (var i = 0; i < var2.length; i++) {
-                            whereArgsStr += "\n    - [" + i + "] " + var2[i];
+                            whereArgs.push(var2[i]);
                         }
                     }
                     
-                    var logVal = "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                                "\nDelete from table: " + '\x1b[36m' + var0 + '\x1b[0m' + 
-                                "\nWhere clause: " + '\x1b[35m' + (var1 ? var1 : "null (delete all rows)") + '\x1b[0m' + 
-                                "\nWhere args:" + (whereArgsStr ? '\x1b[33m' + whereArgsStr + '\x1b[0m' : " none") + "\n";
-                    
-                    am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                    createDatabaseEvent("database.sqlite.delete", {
+                        method: "SQLiteDatabase.delete(String, String, String[])",
+                        database_path: dbPath,
+                        table: var0,
+                        where_clause: var1,
+                        where_args: whereArgs
+                    });
                 }
                 
                 var deleteRes = this.delete(var0, var1, var2);
                 
-                // If row count is being logged, you could add it here
+                // Log rows affected as a separate event
                 if (shouldLogDatabasePath(dbPath)) {
-                    var rowCountMsg = "Rows affected: " + '\x1b[32m' + deleteRes + '\x1b[0m';
-                    am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + " " + rowCountMsg);
+                    createDatabaseEvent("database.sqlite.delete_result", {
+                        method: "SQLiteDatabase.delete(String, String, String[])",
+                        database_path: dbPath,
+                        table: var0,
+                        rows_affected: deleteRes
+                    });
                 }
                 
                 return deleteRes;
@@ -698,11 +733,12 @@ function hook_SQLCipher() {
             
             var SQLiteOpenHelper = Java.use('net.sqlcipher.database.SQLiteOpenHelper');
             SQLiteOpenHelper.getWritableDatabase.overload('java.lang.String').implementation = function (password) {
-                var type = "event_type: SQLCipher.database.SQLiteOpenHelper, ";
-                var methodVal = "getWritableDatabase, ";
-                var logVal = "Accessing SQLCipherDatabase with password: "+password+"\n";
-                am_send(PROFILE_HOOKING_TYPE,type +methodVal+  logVal);
-                //console.log("[+] password = " + password);
+                createDatabaseEvent("database.sqlcipher.open", {
+                    method: "SQLiteOpenHelper.getWritableDatabase(String)",
+                    password: password,
+                    database_type: "SQLCipher",
+                    access_type: "writable"
+                });
 
                 return this.getWritableDatabase.overload('java.lang.String').apply(this, arguments);
             }
@@ -713,13 +749,13 @@ function hook_SQLCipher() {
                 "java.io.File",
                 "java.lang.String"
             ).implementation = function (file, password) {
-                //console.log("Intercepted openOrCreateDatabase with password:");
-                //console.log("Database file: " + file.getAbsolutePath());
-                //console.log("Password: " + password);
-                var type = "event_type: sqlcipher.database.SQLiteDatabase, ";
-                var methodVal = "openOrCreateDatabase, ";
-                var logVal = "Intercepted openOrCreateDatabase with password:: "+password+"\n";
-                am_send(PROFILE_HOOKING_TYPE,type +methodVal+  logVal);
+                createDatabaseEvent("database.sqlcipher.open", {
+                    method: "SQLiteDatabase.openOrCreateDatabase(File, String)",
+                    database_path: file.getAbsolutePath(),
+                    password: password,
+                    database_type: "SQLCipher",
+                    create_if_necessary: true
+                });
 
                 // Call the original method
                 const result = this.openOrCreateDatabase(file, password);
@@ -774,34 +810,33 @@ function hook_SQLCipher() {
 
             // Hook SQLiteDatabase.execSQL(String)
             SQLiteDatabase.execSQL.overload("java.lang.String").implementation = function (sql) {
-                const method = "execSQL(String)";
-                sendLog(
-                "SQLCipher.database.SQLiteDatabase",
-                method,
-                `Executing SQL: ${sql}`
-                );
+                createDatabaseEvent("database.sqlcipher.exec", {
+                    method: "SQLiteDatabase.execSQL(String)",
+                    sql: sql,
+                    database_type: "SQLCipher"
+                });
                 return this.execSQL(sql);
             };
 
             // Hook SQLiteDatabase.getWritableDatabase(String)
             SQLiteDatabase.getWritableDatabase.overload("java.lang.String").implementation = function (password) {
-                const method = "getWritableDatabase(String)";
-                sendLog(
-                "SQLCipher.database.SQLiteDatabase",
-                method,
-                `Opening writable database with password: ${password}`
-                );
+                createDatabaseEvent("database.sqlcipher.open", {
+                    method: "SQLiteDatabase.getWritableDatabase(String)",
+                    password: password,
+                    database_type: "SQLCipher",
+                    access_type: "writable"
+                });
                 return this.getWritableDatabase(password);
             };
 
             // Hook SQLiteDatabase.getReadableDatabase(String)
             SQLiteDatabase.getReadableDatabase.overload("java.lang.String").implementation = function (password) {
-                const method = "getReadableDatabase(String)";
-                sendLog(
-                "SQLCipher.database.SQLiteDatabase",
-                method,
-                `Opening readable database with password: ${password}`
-                );
+                createDatabaseEvent("database.sqlcipher.open", {
+                    method: "SQLiteDatabase.getReadableDatabase(String)",
+                    password: password,
+                    database_type: "SQLCipher",
+                    access_type: "readable"
+                });
                 return this.getReadableDatabase(password);
             };
 
@@ -818,23 +853,21 @@ function hook_SQLCipher() {
 
             // Hook SQLiteDatabase.beginTransaction()
             SQLiteDatabase.beginTransaction.implementation = function () {
-                const method = "beginTransaction()";
-                sendLog(
-                "SQLCipher.database.SQLiteDatabase",
-                method,
-                "Starting a transaction"
-                );
+                createDatabaseEvent("database.sqlcipher.transaction", {
+                    method: "SQLiteDatabase.beginTransaction()",
+                    database_type: "SQLCipher",
+                    transaction_action: "begin"
+                });
                 return this.beginTransaction();
             };
 
             // Hook SQLiteDatabase.endTransaction()
             SQLiteDatabase.endTransaction.implementation = function () {
-                const method = "endTransaction()";
-                sendLog(
-                "SQLCipher.database.SQLiteDatabase",
-                method,
-                "Ending a transaction"
-                );
+                createDatabaseEvent("database.sqlcipher.transaction", {
+                    method: "SQLiteDatabase.endTransaction()",
+                    database_type: "SQLCipher",
+                    transaction_action: "end"
+                });
                 return this.endTransaction();
             };
 
@@ -861,12 +894,14 @@ function hook_room_library(){
             // Hook the Room.databaseBuilder method
             const Room = Java.use("androidx.room.Room");
             Room.databaseBuilder.overload("android.content.Context", "java.lang.Class", "java.lang.String").implementation = function (context, klass, dbName) {
-                const methodVal = "Room.databaseBuilder, ";
-                const logVal = `Initializing Room database with name: ${dbName}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Library, ${methodVal}${logVal}`);
+                createDatabaseEvent("database.room.builder", {
+                    method: "Room.databaseBuilder(Context, Class, String)",
+                    database_name: dbName,
+                    database_class: klass.toString(),
+                    database_type: "Room"
+                });
 
                 const result = this.databaseBuilder(context, klass, dbName);
-
                 return result;
             };
 
@@ -893,29 +928,35 @@ function hook_room_library(){
             const SupportSQLiteOpenHelper_Callback = Java.use("androidx.sqlite.db.SupportSQLiteOpenHelper$Callback");
 
             SupportSQLiteOpenHelper_Callback.onCreate.implementation = function (db) {
-                const methodVal = "SupportSQLiteOpenHelper.Callback.onCreate, ";
-                const logVal = `Database created with object: ${db.toString()}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteOpenHelper, ${methodVal}${logVal}`);
-                //console.log(logVal);
+                createDatabaseEvent("database.room.callback", {
+                    method: "SupportSQLiteOpenHelper.Callback.onCreate(SupportSQLiteDatabase)",
+                    database_object: db.toString(),
+                    callback_type: "onCreate",
+                    database_type: "Room"
+                });
                 return this.onCreate(db);
             };
 
             // Hook SupportSQLiteOpenHelper.Callback onOpen
             SupportSQLiteOpenHelper_Callback.onOpen.implementation = function (db) {
-                const methodVal = "SupportSQLiteOpenHelper.Callback.onOpen, ";
-                const logVal = `Database opened with object: ${db.toString()}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteOpenHelper, ${methodVal}${logVal}`);
-                //console.log(logVal);
+                createDatabaseEvent("database.room.callback", {
+                    method: "SupportSQLiteOpenHelper.Callback.onOpen(SupportSQLiteDatabase)",
+                    database_object: db.toString(),
+                    callback_type: "onOpen",
+                    database_type: "Room"
+                });
                 return this.onOpen(db);
             };
 
             // Hook PRAGMA key setting for SQLCipher
             SQLiteDatabase.execSQL.overload("java.lang.String").implementation = function (sql) {
                 if (sql.toLowerCase().includes("pragma key")) {
-                    const methodVal = "SQLiteDatabase.execSQL(PRAGMA key), ";
-                    const logVal = `Intercepted PRAGMA key statement: ${sql}`;
-                    am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
-                    //console.log(logVal);
+                    createDatabaseEvent("database.sqlcipher.pragma", {
+                        method: "SQLiteDatabase.execSQL(String)",
+                        sql: sql,
+                        pragma_type: "key",
+                        database_type: "SQLCipher"
+                    });
                 }
                 return this.execSQL(sql);
             };
@@ -924,23 +965,32 @@ function hook_room_library(){
             // Hook DAO methods (insert, update, delete)
             const Dao = Java.use("androidx.room.RoomDatabase");
             Dao.insert.overload("java.lang.Object").implementation = function (entity) {
-                const methodVal = "RoomDatabase.insert, ";
-                const logVal = `Inserting entity: ${entity.toString()}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: Room.DAO, ${methodVal}${logVal}`);
+                createDatabaseEvent("database.room.dao", {
+                    method: "RoomDatabase.insert(Object)",
+                    entity: entity.toString(),
+                    dao_operation: "insert",
+                    database_type: "Room"
+                });
                 return this.insert(entity);
             };
 
             Dao.update.overload("java.lang.Object").implementation = function (entity) {
-                const methodVal = "RoomDatabase.update, ";
-                const logVal = `Updating entity: ${entity.toString()}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: Room.DAO, ${methodVal}${logVal}`);
+                createDatabaseEvent("database.room.dao", {
+                    method: "RoomDatabase.update(Object)",
+                    entity: entity.toString(),
+                    dao_operation: "update",
+                    database_type: "Room"
+                });
                 return this.update(entity);
             };
 
             Dao.delete.overload("java.lang.Object").implementation = function (entity) {
-                const methodVal = "RoomDatabase.delete, ";
-                const logVal = `Deleting entity: ${entity.toString()}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: Room.DAO, ${methodVal}${logVal}`);
+                createDatabaseEvent("database.room.dao", {
+                    method: "RoomDatabase.delete(Object)",
+                    entity: entity.toString(),
+                    dao_operation: "delete",
+                    database_type: "Room"
+                });
                 return this.delete(entity);
             };
 
@@ -1034,9 +1084,13 @@ function hook_native_sqlite() {
                         const resultCode = retval.toInt32();
                         const status = resultCode === 0 ? "success" : `error code ${resultCode}`;
                         
-                        am_send(PROFILE_HOOKING_TYPE, `event_type: NativeSQLite, method: ${funcName}, 
-                        path: ${this.dbPath}, 
-                        status: ${status}`);
+                        createDatabaseEvent("database.native.open", {
+                            method: funcName,
+                            database_path: this.dbPath,
+                            result_code: resultCode,
+                            status: status,
+                            database_type: "Native SQLite"
+                        });
                     }
                 });
             });
@@ -1049,8 +1103,11 @@ function hook_native_sqlite() {
                     const dbHandle = args[0];
                     const sql = args[1].readUtf8String();
                     
-                    am_send(PROFILE_HOOKING_TYPE, `event_type: NativeSQLite, method: sqlite3_exec,
-                    sql: ${sql}`);
+                    createDatabaseEvent("database.native.exec", {
+                        method: "sqlite3_exec",
+                        sql: sql,
+                        database_type: "Native SQLite"
+                    });
                 }
             });
         });

@@ -10,6 +10,7 @@ from .process import ProcessParser, RuntimeParser, NativeLibParser
 from .ipc import SharedPrefsParser, BinderParser, IntentParser, BroadcastParser
 from .services import ServiceParser, TelephonyParser
 from .dex import DEXParser
+from .database import DatabaseParser
 
 
 class ParserFactory:
@@ -55,7 +56,7 @@ class ParserFactory:
         self._parsers["DEX_LOADING"] = DEXParser()
         
         # Database
-        self._parsers["DATABASE"] = FileSystemParser()  # Reuse filesystem parser
+        self._parsers["DATABASE"] = DatabaseParser()
         
         # Dynamic library loading
         self._parsers["DYNAMIC_LIB_LOADING"] = NativeLibParser()

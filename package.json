@@ -1,6 +1,6 @@
 {
     "name": "Dexray Intercept",
-    "version": "0.2.9.3",
+    "version": "0.2.9.7",
     "description": "Dexray Intercept is a frida agent for creating runtime profiles to track the behavior of an application as part of the SanDroid project",
     "private": true,
     "main": "agent/hooking_profile_loader.ts",

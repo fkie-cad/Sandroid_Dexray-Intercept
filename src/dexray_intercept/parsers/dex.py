@@ -17,17 +17,57 @@ class DEXParser(BaseParser):
         
         event = DEXEvent(event_type, timestamp)
         
-        # Map JSON fields to event attributes
-        field_mapping = {
+        # Map JSON fields to event attributes for legacy compatibility
+        legacy_field_mapping = {
             'unpacking': 'unpacking',
             'dumped': 'dumped',
             'orig_location': 'orig_location',
-            'even_type': 'even_type'  # Keep original field name for compatibility
+            'even_type': 'even_type'
         }
         
-        for json_field, event_field in field_mapping.items():
+        # Map new structured event fields
+        new_field_mapping = {
+            'hooked_function': 'hooked_function',
+            'magic': 'magic',
+            'version': 'version',
+            'size': 'size',
+            'original_location': 'original_location',
+            'dumped_path': 'dumped_path',
+            'file_type': 'file_type',
+            'class_loader_type': 'class_loader_type',
+            'file_path': 'file_path',
+            'library_path': 'library_path',
+            'library_name': 'library_name',
+            'method': 'method',
+            'loader_type': 'loader_type'
+        }
+        
+        # Apply legacy mapping
+        for json_field, event_field in legacy_field_mapping.items():
             if json_field in data:
                 setattr(event, event_field, data[json_field])
+        
+        # Apply new structured mapping
+        for json_field, event_field in new_field_mapping.items():
+            if json_field in data:
+                setattr(event, event_field, data[json_field])
+        
+        # Handle specific event types
+        if event_type.startswith('dex.unpacking.'):
+            # DEX unpacking events
+            if 'hooked_function' in data:
+                event.even_type = get_demangled_method_for_dex_unpacking(data['hooked_function'])
+        elif event_type.startswith('dex.classloader.'):
+            # ClassLoader events
+            event.add_metadata('class_loader_operation', True)
+        elif event_type.startswith('library.'):
+            # Library loading events
+            event.add_metadata('library_operation', True)
+        
+        # Add any remaining metadata
+        for key, value in data.items():
+            if key not in ['event_type', 'timestamp'] and not hasattr(event, key):
+                event.add_metadata(key, value)
         
         return event
     

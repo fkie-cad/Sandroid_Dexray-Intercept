@@ -4,7 +4,7 @@
 </div>
 
 # Sandroid - Dexray Intercept
-![version](https://img.shields.io/badge/version-0.2.9.3-blue) [![PyPI version](https://d25lcipzij17d.cloudfront.net/badge.png?id=py&r=r&ts=1683906897&type=6e&v=0.2.9.3&x2=0)](https://badge.fury.io/py/dexray-intercept) [![CI](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml)
+![version](https://img.shields.io/badge/version-0.2.9.7-blue) [![PyPI version](https://d25lcipzij17d.cloudfront.net/badge.png?id=py&r=r&ts=1683906897&type=6e&v=0.2.9.7&x2=0)](https://badge.fury.io/py/dexray-intercept) [![CI](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml)
 [![Ruff](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/lint.yml)
 [![Publish status](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/publish.yml)
 
@@ -267,156 +267,30 @@ npm install --save-dev @types/frida-gum@latest
 
 When unpacking, applications may load DexCode—previously pointed to distinct memory blocks—into a DexFile, which represents the code being executed. For instance, some applications may restore instructions immediately before execution. In such cases, Sandroid is unable to revert the instructions back into the DexFile. Further research is necessary to resolve this issue
 
-## Samples
+## Acknowledgments
 
-The password for unzipping the samples is `androidtrainingpassword`
+Dexray Intercept builds upon the excellent work of various open-source projects and researchers in the Android security and dynamic analysis community. We would like to acknowledge the following projects that have inspired or contributed to our implementation:
 
-### Example case Sara
+### Core Frida Framework
+- **[Frida](https://frida.re/)** - The dynamic instrumentation toolkit that powers our runtime analysis capabilities
+- **[frida-java-bridge](https://github.com/frida/frida-java-bridge)** - Essential for Java/Android runtime instrumentation
 
-First we extract and install the sample:
-```bash
-$ cd samples
-$ unzip -P androidtrainingpassword Sara_androidtrainingpassword.zip 
-$ cd ..
-$ adb install samples/Sara.apk
-```
+### Hook Implementations & Techniques
+- **[AppMon](https://github.com/dpnishant/appmon)** by @dpnishant - Provided foundational hooks for runtime analysis, IPC monitoring, clipboard access, and database operations
+- **[Android-Malware-Sandbox](https://github.com/Areizen/Android-Malware-Sandbox)** by @Areizen - Base64 encoding hooks and socket monitoring techniques  
+- **[RMS-Runtime-Mobile-Security](https://github.com/m0bilesecurity/RMS-Runtime-Mobile-Security)** by @m0bilesecurity - Keystore analysis and certificate pinning detection
+- **[Medusa](https://github.com/Ch0pin/medusa)** by @Ch0pin - Runtime analysis patterns and DEX unpacking techniques
+- **[frida-android-libbinder](https://github.com/Hamz-a/frida-android-libbinder)** by @Hamz-a - Android Binder IPC analysis
+- **[frida-snippets](https://github.com/iddoeldor/frida-snippets)** by @iddoeldor - Location spoofing and utility functions
 
-Next we have identify the bundle identifier of the intalled app:
-```bash
-$ frida-ps -Uai
-  PID  Name           Identifier
------  -------------  ---------------------------------------
- 1836  Google         com.google.android.googlequicksearchbox
- 1836  Google         com.google.android.googlequicksearchbox
- 1677  Messages       com.google.android.apps.messaging
-  927  SIM Toolkit    com.android.stk
-12185  Settings       com.android.settings
-    -  Calendar       com.google.android.calendar
-    -  Camera         com.android.camera2
-    -  Chrome         com.android.chrome
-    -  Clock          com.google.android.deskclock
-    -  Contacts       com.google.android.contacts
-    -  Drive          com.google.android.apps.docs
-    -  Files          com.google.android.documentsui
-    -  Gmail          com.google.android.gm
-    -  Maps           com.google.android.apps.maps
-    -  Phone          com.google.android.dialer
-    -  Photos         com.google.android.apps.photos
-    -  Sara           com.termuxhackers.id
-    -  YouTube        com.google.android.youtube
-```
+### Android Security Research
+- **[BlackDex](https://github.com/CodingGay/BlackDex)** by @CodingGay - DEX unpacking and anti-analysis bypass techniques
+- **[Frida-Python-Binding](https://github.com/Mind0xP/Frida-Python-Binding)** by @Mind0xP - Python integration patterns for Frida
 
-In our case it is `com.termuxhackers.id`. So we can spawn this malware sample with the following command line (keep in mind to create a snapshot for your device):
-```bash
-$ adb shell adb shell am start -n "com.termuxhackers.id/com.MainAcitivy" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER
-$ ammm Sara
-        Dexray Intercept
-⠀⠀⠀⠀⢀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣀⣀⣀⡀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠙⢷⣤⣤⣴⣶⣶⣦⣤⣤⡾⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⠾⠛⢉⣉⣉⣉⡉⠛⠷⣦⣄⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⠋⣠⣴⣿⣿⣿⣿⣿⡿⣿⣶⣌⠹⣷⡀⠀⠀
-⠀⠀⠀⠀⣼⣿⣿⣉⣹⣿⣿⣿⣿⣏⣉⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⠁⣴⣿⣿⣿⣿⣿⣿⣿⣿⣆⠉⠻⣧⠘⣷⠀⠀
-⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⡇⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠈⠀⢹⡇⠀
-⣠⣄⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⣠⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡇⢸⣿⠛⣿⣿⣿⣿⣿⣿⡿⠃⠀⠀⠀⠀⢸⡇⠀
-⣿⣿⡇⢸⣿⣿⣿Sandroid⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣷⠀⢿⡆⠈⠛⠻⠟⠛⠉⠀⠀⠀⠀⠀⠀⣾⠃⠀
-⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣧⡀⠻⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣼⠃⠀⠀
-⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢼⠿⣦⣄⠀⠀⠀⠀⠀⠀⠀⣀⣴⠟⠁⠀⠀⠀
-⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣦⠀⠀⠈⠉⠛⠓⠲⠶⠖⠚⠋⠉⠀⠀⠀⠀⠀⠀
-⠻⠟⠁⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠈⠻⠟⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠉⠉⣿⣿⣿⡏⠉⠉⢹⣿⣿⣿⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⣿⣿⣿⡇⠀⠀⢸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⣿⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⣿⣿⣿⡇⠀⠀⢸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⢀⣄⠈⠛⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠈⠉⠉⠀⠀⠀⠀⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-[*] attaching to app: Sara
-[*] starting app profiling
-[*] press Ctrl+C to stop the profiling ...
+### SQLite & Database Analysis
+- **[SQLite Database Hook](https://codeshare.frida.re/@ninjadiary/sqlite-database/)** by @ninjadiary - Database monitoring techniques
 
-[*] Filesystem profiling informations:
-[*] [Libc::open] Open file '/data/misc/profiles/cur/0/com.termuxhackers.id/primary.prof' (fd: 97)
-```
-
-### Example case koler.apk
-
-Again at first we have to extract the sample and install it to the device
-
-```bash
-$ unzip -P infected 18a82a21158f23148fbb58f39f597d482c186c8d2905540e750533a0df363705.zip
-Archive:  18a82a21158f23148fbb58f39f597d482c186c8d2905540e750533a0df363705.zip
-  inflating: 18a82a21158f23148fbb58f39f597d482c186c8d2905540e750533a0df363705
-$ mv 18a82a21158f23148fbb58f39f597d482c186c8d2905540e750533a0df363705 koler.apk
-$ adb install koler.apk
-Performing Streamed Install
-Success
-```
-Now we have to identify the name of the app so we can later attach to it:
-
-```bash
-frida-ps -Uai
-  PID  Name           Identifier
------  -------------  -------------------------------------------
-12095  Chrome         com.android.chrome
- 1836  Google         com.google.android.googlequicksearchbox
- 1836  Google         com.google.android.googlequicksearchbox
- 1677  Messages       com.google.android.apps.messaging
-  927  SIM Toolkit    com.android.stk
-12185  Settings       com.android.settings
-    -  Calendar       com.google.android.calendar
-    -  Camera         com.android.camera2
-    -  Clock          com.google.android.deskclock
-    -  Contacts       com.google.android.contacts
-    -  Drive          com.google.android.apps.docs
-    -  Files          com.google.android.documentsui
-    -  Gmail          com.google.android.gm
-    -  Maps           com.google.android.apps.maps
-    -  Phone          com.google.android.dialer
-    -  Photos         com.google.android.apps.photos
-    -  Pornhub        upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq
-```
-
-This sample actually is unpacking itself and normaly we could see this in `Dexray Intercept` if we able to spawn the app. Unfortunately there is a bug with frida itself that the latest frida version (since version 16.0.4) is unable to spawn the target app without getting a timeout error. Currently we identify that this frida bug is related whenever an app is requesting runtime permissions (more [infos](https://github.com/frida/frida/issues/2005)). It seems that this bug is fixed in the latest frida version.
-
-So we now just spawn this malware using `Dexray Intercept` and see some interesting output:
-
-```bash
-$ ammm -s upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq 
-        Dexray Intercept
-⠀⠀⠀⠀⢀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣀⣀⣀⡀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠙⢷⣤⣤⣴⣶⣶⣦⣤⣤⡾⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⠾⠛⢉⣉⣉⣉⡉⠛⠷⣦⣄⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⠋⣠⣴⣿⣿⣿⣿⣿⡿⣿⣶⣌⠹⣷⡀⠀⠀
-⠀⠀⠀⠀⣼⣿⣿⣉⣹⣿⣿⣿⣿⣏⣉⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⠁⣴⣿⣿⣿⣿⣿⣿⣿⣿⣆⠉⠻⣧⠘⣷⠀⠀
-⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⡇⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠈⠀⢹⡇⠀
-⣠⣄⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⣠⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡇⢸⣿⠛⣿⣿⣿⣿⣿⣿⡿⠃⠀⠀⠀⠀⢸⡇⠀
-⣿⣿⡇⢸⣿⣿⣿Sandroid⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣷⠀⢿⡆⠈⠛⠻⠟⠛⠉⠀⠀⠀⠀⠀⠀⣾⠃⠀
-⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣧⡀⠻⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣼⠃⠀⠀
-⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢼⠿⣦⣄⠀⠀⠀⠀⠀⠀⠀⣀⣴⠟⠁⠀⠀⠀
-⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣦⠀⠀⠈⠉⠛⠓⠲⠶⠖⠚⠋⠉⠀⠀⠀⠀⠀⠀
-⠻⠟⠁⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠈⠻⠟⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠉⠉⣿⣿⣿⡏⠉⠉⢹⣿⣿⣿⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⣿⣿⣿⡇⠀⠀⢸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⣿⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⣿⣿⣿⡇⠀⠀⢸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⢀⣄⠈⠛⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠈⠉⠉⠀⠀⠀⠀⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-[*] attaching to app: Pornhub
-[*] starting app profiling
-[*] press Ctrl+C to stop the profiling ...
-
-[*] Filesystem profiling informations:
-[*] [Libc::open] Open file '/data/user/0/upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq/cache/WebView/Default/HTTP Cache/Cache_Data/510c1bd5457bae66_0' (fd: 187)
-[*] Filesystem profiling informations:
-[*] [+] Unlink : /data/user/0/upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq/cache/WebView/Default/HTTP Cache/Cache_Data/todelete_510c1bd5457bae66_0_1
-[*] Filesystem profiling informations:
-[*] [Libc::open] Open file '/data/user/0/upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq/app_webview/Default/Session Storage/LOG' (fd: 5)
-[*] Filesystem profiling informations:
-[*] [Libc::open] Open file '/data/user/0/upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq/app_webview/Default/Session Storage/LOCK' (fd: -1)
-[*] Filesystem profiling informations:
-[*] [Libc::open] Open file '/data/user/0/upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq/app_webview/Default/Session Storage/LOCK' (fd: 68)
-[*] Filesystem profiling informations:
-[*] [Libc::write] Write FD (/data/user/0/upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq/app_webview/Default/Session Storage/LOG,0x77d9937d10,156)
-
-[*] Filesystem profiling informations:
-[*] [Libc::open] Open file '/data/user/0/upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq/app_webview/Default/Session Storage/MANIFEST-000001' (fd: 70)
-[*] Filesystem profiling informations:
-[*] [Libc::write] Write FD (/data/user/0/upehfmf.xrppcuzqolwhmwxnfyes.xctrbzkvipjazq/app_webview/Default/Session Storage/MANIFEST-000001,0x77d9938010,7
-...
-```
+We extend our gratitude to these projects and their maintainers for advancing the state of Android security analysis and making their work available to the community.
 
 ## Roadmap
 
