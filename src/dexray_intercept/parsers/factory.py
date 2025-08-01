@@ -26,6 +26,8 @@ class ParserFactory:
         
         # Crypto
         self._parsers["CRYPTO_AES"] = CryptoParser()
+        self._parsers["CRYPTO_KEYSTORE"] = CryptoParser()
+        self._parsers["CRYPTO_ENCODING"] = CryptoParser()
         
         # Network
         self._parsers["WEB"] = WebParser()

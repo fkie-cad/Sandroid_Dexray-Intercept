@@ -207,7 +207,7 @@ export function install_aes_info() {
     });
 }
 
-export function install_aes_hooks() {
+export function install_aes_hooks(): void {
     devlog("\n")
     devlog("install aes hooks");
     

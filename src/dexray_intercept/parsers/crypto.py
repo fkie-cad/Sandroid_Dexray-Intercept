@@ -20,7 +20,7 @@ class CryptoParser(BaseParser):
         
         event = CryptoEvent(event_type, algorithm, timestamp)
         
-        # Map JSON fields to event attributes
+        # Common field mapping for all crypto events
         field_mapping = {
             'operation_mode': 'operation_mode',
             'input_hex': 'input_hex',
@@ -37,7 +37,7 @@ class CryptoParser(BaseParser):
             if json_field in data:
                 setattr(event, event_field, data[json_field])
         
-        # Handle operation mode mapping if present
+        # Handle AES-specific operation mode mapping
         if 'operation_mode' in data:
             mode_num = data['operation_mode']
             mode_name = MODE_MAPPING.get(mode_num, f"UNKNOWN_MODE_{mode_num}")
@@ -48,6 +48,34 @@ class CryptoParser(BaseParser):
                 event.plaintext = hex_to_string_safe(data['input_hex'])
             elif mode_name == "DECRYPT_MODE" and 'output_hex' in data:
                 event.plaintext = hex_to_string_safe(data['output_hex'])
+        
+        # Handle Base64 encoding/decoding events
+        if event_type.startswith('crypto.base64.'):
+            if 'input_string' in data:
+                event.add_metadata('input_string', data['input_string'])
+            if 'output_string' in data:
+                event.add_metadata('output_string', data['output_string'])
+            if 'decoded_content' in data:
+                event.plaintext = data['decoded_content']
+            if 'input_content' in data:
+                event.plaintext = data['input_content']
+            if 'flags' in data:
+                event.add_metadata('flags', data['flags'])
+            if 'method' in data:
+                event.add_metadata('method', data['method'])
+        
+        # Handle Keystore events
+        if event_type.startswith('crypto.keystore.'):
+            keystore_fields = ['alias', 'password', 'type', 'provider', 'keystore_type', 
+                             'method', 'aliases', 'parameter', 'input_stream']
+            for field in keystore_fields:
+                if field in data:
+                    event.add_metadata(field, data[field])
+        
+        # Add any remaining metadata
+        for key, value in data.items():
+            if key not in ['event_type', 'timestamp'] and not hasattr(event, key):
+                event.add_metadata(key, value)
         
         return event
     
