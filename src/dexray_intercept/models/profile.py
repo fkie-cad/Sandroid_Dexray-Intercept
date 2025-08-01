@@ -71,9 +71,12 @@ class ProfileData:
             
             # Ensure filename is safe
             base_filename = filename.replace(" ", "_")  # Replace spaces with underscores
-            if not base_filename.endswith('.json'):
-                base_filename += '.json'
-            safe_filename = f"profile_{base_filename}_{timestamp}"
+            
+            # Remove .json extension if present, we'll add it back at the end
+            if base_filename.endswith('.json'):
+                base_filename = base_filename[:-5]  # Remove '.json'
+            
+            safe_filename = f"profile_{base_filename}_{timestamp}.json"
             
             with open(safe_filename, "w") as file:
                 file.write(self.to_json())
