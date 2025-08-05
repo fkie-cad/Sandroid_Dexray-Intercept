@@ -131,9 +131,45 @@ class WebParser(NetworkParser):
         event = super().parse_json_data(data, timestamp)
         
         # Web-specific processing
-        if event and event.event_type.startswith(('url.', 'uri.', 'http.', 'https.', 'okhttp.', 'webview.')):
-            # Already handled by parent class
-            pass
+        if event and event.event_type.startswith(('url.', 'uri.', 'http.', 'https.', 'okhttp.', 'webview.', 'retrofit.', 'volley.', 'websocket.', 'customtabs.', 'x5webview.')):
+            # Add web-specific metadata for enhanced context
+            if event.event_type.startswith('retrofit.'):
+                event.add_metadata('library', 'Retrofit')
+                event.add_metadata('type', 'REST API Framework')
+            elif event.event_type.startswith('volley.'):
+                event.add_metadata('library', 'Volley')
+                event.add_metadata('type', 'Google HTTP Library')
+            elif event.event_type.startswith('websocket.'):
+                event.add_metadata('library', 'WebSocket')
+                event.add_metadata('type', 'Real-time Communication')
+            elif event.event_type.startswith('okhttp.'):
+                event.add_metadata('library', 'OkHttp')
+                event.add_metadata('type', 'HTTP Client')
+            elif event.event_type.startswith('webview.'):
+                event.add_metadata('library', 'WebView')
+                event.add_metadata('type', 'Embedded Browser')
+            elif event.event_type.startswith('customtabs.'):
+                event.add_metadata('library', 'Chrome Custom Tabs')
+                event.add_metadata('type', 'External Browser Integration')
+            elif event.event_type.startswith('x5webview.'):
+                event.add_metadata('library', 'X5WebView (Tencent)')
+                event.add_metadata('type', 'Embedded Browser (Chinese)')
+            
+            # Add operation context based on event type
+            if 'request' in event.event_type:
+                event.operation = 'HTTP Request'
+            elif 'response' in event.event_type:
+                event.operation = 'HTTP Response'
+            elif 'connect' in event.event_type:
+                event.operation = 'Connection'
+            elif 'send' in event.event_type:
+                event.operation = 'Send Data'
+            elif 'receive' in event.event_type or 'message' in event.event_type:
+                event.operation = 'Receive Data'
+            elif 'load' in event.event_type:
+                event.operation = 'Load Content'
+            elif 'page' in event.event_type:
+                event.operation = 'Page Navigation'
         
         return event
 
