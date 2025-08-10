@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="assets/logo.png" alt="Dexray Intercept Logo" width="400"/>
+    <img src="https://github.com/fkie-cad/Sandroid_Dexray-Intercept/blob/main/assets/logo.png" alt="Dexray Intercept Logo" width="400"/>
     <p></p><strong>Android Binary API Tracer</strong>
 </div>
 
@@ -25,6 +25,8 @@ Further it will provide a package `dexray_intercept`. More on how to use the pac
 Ensure that your Android device is rooted. The `frida-server` will be installed to the latest version automatically. Then you can use Dexray Intercept by just invoking the following command:
 
 ```bash
+dexray-intercept <target app>
+# or using its old name:
 ammm <target app>
 ```
 
@@ -34,20 +36,20 @@ All hooks are **disabled by default** for optimal performance. Enable hooks base
 
 ```bash
 # Enable specific hooks
-ammm --enable-aes <app_name>                    # Enable AES crypto hooks
-ammm --enable-web <app_name>                    # Enable web/HTTP hooks
-ammm --enable-aes --enable-web <app_name>       # Enable multiple hooks
+dexray-intercept --enable-aes <app_name>                    # Enable AES crypto hooks
+dexray-intercept --enable-web <app_name>                    # Enable web/HTTP hooks
+dexray-intercept --enable-aes --enable-web <app_name>       # Enable multiple hooks
 
 # Enable hook groups
-ammm --hooks-crypto <app_name>                  # Enable all crypto hooks
-ammm --hooks-network <app_name>                 # Enable all network hooks  
-ammm --hooks-filesystem <app_name>              # Enable all file system hooks
+dexray-intercept --hooks-crypto <app_name>                  # Enable all crypto hooks
+dexray-intercept --hooks-network <app_name>                 # Enable all network hooks  
+dexray-intercept --hooks-filesystem <app_name>              # Enable all file system hooks
 
 # Enable all hooks (performance impact)
-ammm --hooks-all <app_name>                     # Enable all available hooks
+dexray-intercept --hooks-all <app_name>                     # Enable all available hooks
 
 # Use package identifier instead of app name
-ammm -s com.example.package --hooks-crypto
+dexray-intercept -s com.example.package --hooks-crypto
 ```
 
 ### Available Hook Categories
@@ -61,7 +63,7 @@ ammm -s com.example.package --hooks-crypto
 
 Here an example on monitoring the chrome app on our AVD:
 ```bash
-ammm Chrome
+dexray-intercept Chrome
         Dexray Intercept
 ⠀⠀⠀⠀⢀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣀⣀⣀⡀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠙⢷⣤⣤⣴⣶⣶⣦⣤⣤⡾⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⠾⠛⢉⣉⣉⣉⡉⠛⠷⣦⣄⠀⠀⠀⠀
@@ -213,19 +215,17 @@ In order to test this you can try the following sample: [catelites_2018_01_19.ap
 
 ## Compile and Development
  
-In order to compile this project ensure that `npm` and `frida-compile` running on your system and installed into your path.
+In order to compile this project ensure that `npm` and `frida-compile` running on your system and installed into your path. Since frida version 17.0 `frida-compile` gets installed via `pip install frida-tools`.
 Than just invoke the following command in to get the latest frida agent compiled:
 ```bash
 $ cd <AppProfiling-Project>
-$ npm install .
-> Dexray Intercept@0.0.1.5 prepare
-> npm run build
-
-
 > Dexray Intercept@0.0.1.5 build
 > frida-compile agent/hooking_profile_loader.ts -o src/dexray_intercept/profiling.js
 
-
+$ npm install frida-java-bridge@latest --save
+$ npm install --save-dev @types/frida-gum@latest
+> Dexray Intercept@0.0.1.5 prepare
+> npm run build
 up to date, audited 75 packages in 6s
 
 19 packages are looking for funding
@@ -234,9 +234,9 @@ up to date, audited 75 packages in 6s
 found 0 vulnerabilities
 ```
 
-This ensures that the latest frida scripts/hooks are used in `ammm`.
+This ensures that the latest frida scripts/hooks are used in `dexray-intercept`.
 
-In order to do adjustments in the python code it is recommend to install `ammm` with pip utilizing the editable mode:
+In order to do adjustments in the python code it is recommend to install `dexray-intercept` with pip utilizing the editable mode:
 ```bash
 python3 -m pip install -e . 
 ```
@@ -245,7 +245,7 @@ This way local changed in the python code gets reflected without creating a new 
 
 ## Requirements
 
-By just invoking the following command in this directory the `setup.py` should be used to install `ammm` as a local python package to your system:
+By just invoking the following command in this directory the `setup.py` should be used to install `dexray-intercept` as a local python package to your system:
 ```bash
 python3 -m pip install .
 ``` 

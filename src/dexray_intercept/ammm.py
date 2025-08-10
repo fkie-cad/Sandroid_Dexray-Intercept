@@ -155,6 +155,8 @@ Examples:
   %(prog)s <App-Name/PID> 
   %(prog)s -s com.example.app
   %(prog)s --enable_spawn_gating -v <App-Name/PID>
+  %(prog)s --enable-fritap --enable-aes com.example.app
+  %(prog)s --enable-fritap --fritap-output-dir ./logs --hooks-all com.example.app
 """)
 
     args = parser.add_argument_group("Arguments")
@@ -175,6 +177,10 @@ Examples:
                       help="Show verbose output. This could very noisy.")
     args.add_argument("-st", "--enable-full-stacktrace", required=False, action="store_const", const=True, default=False,
                       help="Enable full stack traces for hook invocations (shows call origin in binary)")
+    args.add_argument("--enable-fritap", required=False, action="store_const", const=True, default=False,
+                      help="Enable fritap for TLS key extraction and traffic capture")
+    args.add_argument("--fritap-output-dir", metavar="<directory>", required=False, default="./fritap_output",
+                      help="Directory for fritap output files (default: ./fritap_output)")
     
     # Hook selection arguments
     hooks = parser.add_argument_group("Hook Selection (all disabled by default)")
@@ -254,9 +260,12 @@ Examples:
             else:
                 print("[*] no hooks enabled - use --help to see hook options")
             
+            if parsed.enable_fritap:
+                print(f"[*] fritap enabled - output directory: {parsed.fritap_output_dir}")
+            
             # Assuming 'process' is a valid frida.Process object
-            profiler = AppProfiler(process_session, parsed.verbose, output_format="CMD", base_path=None, deactivate_unlink=False, hook_config=hook_config, enable_stacktrace=parsed.enable_full_stacktrace)
-            profiler.start_profiling()
+            profiler = AppProfiler(process_session, parsed.verbose, output_format="CMD", base_path=None, deactivate_unlink=False, hook_config=hook_config, enable_stacktrace=parsed.enable_full_stacktrace, enable_fritap=parsed.enable_fritap, fritap_output_dir=parsed.fritap_output_dir)
+            profiler.start_profiling(target_process)
 
 
             #handle_instrumentation(process_session, parsed.verbose)
@@ -284,6 +293,7 @@ Examples:
         exit(2)
     except KeyboardInterrupt:
         if isinstance(profiler, AppProfiler):
+            profiler.stop_profiling()
             profiler.write_profiling_log(target_process)
         pass
 

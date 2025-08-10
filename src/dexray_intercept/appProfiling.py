@@ -2,6 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import frida
+import subprocess
+import os
+import signal
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 from .services.instrumentation import InstrumentationService, FridaBasedException, setup_frida_device
@@ -23,7 +27,8 @@ class AppProfiler:
     def __init__(self, process, verbose_mode: bool = False, output_format: str = "CMD", 
                  base_path: Optional[str] = None, deactivate_unlink: bool = False, 
                  path_filters: Optional[List[str]] = None, hook_config: Optional[Dict[str, bool]] = None, 
-                 enable_stacktrace: bool = False):
+                 enable_stacktrace: bool = False, enable_fritap: bool = False, 
+                 fritap_output_dir: str = "./fritap_output"):
         """
         Initialize the AppProfiler.
         
@@ -36,12 +41,21 @@ class AppProfiler:
             path_filters: Path filters for file system events
             hook_config: Hook configuration dictionary
             enable_stacktrace: Enable stack traces
+            enable_fritap: Enable fritap for TLS key extraction
+            fritap_output_dir: Directory for fritap output files
         """
         self.process = process
         self.verbose_mode = verbose_mode
         self.output_format = output_format
         self.deactivate_unlink = deactivate_unlink
         self.enable_stacktrace = enable_stacktrace
+        
+        # Fritap configuration
+        self.enable_fritap = enable_fritap
+        self.fritap_output_dir = fritap_output_dir
+        self.fritap_process = None
+        self.fritap_keylog_file = None
+        self.fritap_pcap_file = None
         
         # Initialize services
         self.instrumentation = InstrumentationService(process)
@@ -62,16 +76,105 @@ class AppProfiler:
         self.startup_unlink = True
         self.path_filters_sent = False
     
-    def start_profiling(self) -> frida.core.Script:
+    def _generate_fritap_filenames(self, app_name: str) -> tuple:
+        """Generate fritap output filenames with correct signatures"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        keylog_file = f"dexray_tlskeys_{app_name}_{timestamp}.log"
+        pcap_file = f"dexray_unfiltered_traffic_{app_name}_{timestamp}.pcap"
+        return keylog_file, pcap_file
+    
+    def _start_fritap(self, app_name: str):
+        """Start fritap subprocess for TLS key extraction"""
+        if not self.enable_fritap:
+            return
+        
+        try:
+            # Create output directory if it doesn't exist
+            os.makedirs(self.fritap_output_dir, exist_ok=True)
+            
+            # Generate filenames
+            keylog_filename, pcap_filename = self._generate_fritap_filenames(app_name)
+            self.fritap_keylog_file = os.path.join(self.fritap_output_dir, keylog_filename)
+            self.fritap_pcap_file = os.path.join(self.fritap_output_dir, pcap_filename)
+            
+            # Start fritap process
+            fritap_cmd = [
+                'fritap',
+                '-k', self.fritap_keylog_file,
+                '-p', self.fritap_pcap_file,
+                '-f'
+            ]
+            
+            if self.verbose_mode:
+                print(f"[*] starting fritap: {' '.join(fritap_cmd)}")
+                print(f"[*] keylog file: {self.fritap_keylog_file}")
+                print(f"[*] pcap file: {self.fritap_pcap_file}")
+            
+            self.fritap_process = subprocess.Popen(
+                fritap_cmd,
+                stdout=subprocess.DEVNULL if not self.verbose_mode else None,
+                stderr=subprocess.DEVNULL if not self.verbose_mode else None,
+                preexec_fn=os.setsid  # Create new process group for clean termination
+            )
+            
+            if self.verbose_mode:
+                print(f"[*] fritap started with PID: {self.fritap_process.pid}")
+                
+        except FileNotFoundError:
+            print("[-] fritap not found. Please install fritap first.")
+            self.enable_fritap = False
+        except Exception as e:
+            print(f"[-] failed to start fritap: {e}")
+            self.enable_fritap = False
+    
+    def _stop_fritap(self):
+        """Stop fritap subprocess"""
+        if self.fritap_process and self.fritap_process.poll() is None:
+            try:
+                # Terminate the process group
+                os.killpg(os.getpgid(self.fritap_process.pid), signal.SIGTERM)
+                self.fritap_process.wait(timeout=5)
+                if self.verbose_mode:
+                    print("[*] fritap stopped")
+            except subprocess.TimeoutExpired:
+                # Force kill if graceful termination fails
+                os.killpg(os.getpgid(self.fritap_process.pid), signal.SIGKILL)
+                if self.verbose_mode:
+                    print("[*] fritap force stopped")
+            except Exception as e:
+                if self.verbose_mode:
+                    print(f"[-] error stopping fritap: {e}")
+    
+    def start_profiling(self, app_name: str = None) -> frida.core.Script:
         """Start the profiling process"""
         try:
+            # Get app name from process if not provided
+            if app_name is None:
+                try:
+                    app_info = self.process.enumerate_applications()
+                    app_name = getattr(self.process, 'name', 'unknown_app')
+                except:
+                    app_name = 'unknown_app'
+            
+            # Start fritap if enabled
+            if self.enable_fritap:
+                self._start_fritap(app_name)
+            
             script = self.instrumentation.load_script()
             return script
         except Exception as e:
+            # Clean up fritap if script loading fails
+            if self.enable_fritap:
+                self._stop_fritap()
             raise FridaBasedException(f"Failed to start profiling: {str(e)}")
     
     def stop_profiling(self):
         """Stop the profiling process"""
+        # Stop fritap first
+        if self.enable_fritap:
+            self._stop_fritap()
+        
+        # Stop Frida instrumentation
         self.instrumentation.unload_script()
     
     def _message_handler(self, message: Dict[str, Any], data: Any = None):
