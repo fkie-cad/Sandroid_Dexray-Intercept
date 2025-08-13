@@ -7,11 +7,16 @@
 
 # ignore apk files beside the samples folder
 *.apk
+
+# misc testing files
 src/dexray_intercept.egg-info
 !samples/**/*.apk
-
+*.pcap
 # misc
 *.txt
+logs_.*
+logs*
+
 samples/unpacking/apktool_out/
 profile_*.json
 *.egg-info

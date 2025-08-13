@@ -236,11 +236,20 @@ Examples:
         if len(sys.argv) > 1 or parsed.foreground:
             target_process = parsed.exec
             device = setup_frida_handler(parsed.host, parsed.enable_spawn_gating)
-            if parsed.spawn:
+            # Handle spawn/attach coordination with fritap
+            if parsed.spawn and parsed.enable_fritap:
+                # When fritap is enabled in spawn mode, fritap handles spawning
+                # dexray-intercept just attaches to the target by name after fritap spawns it
+                print(f"[*] fritap spawn mode - fritap will spawn '{target_process}', dexray-intercept will attach")
+                process_session = None  # Will be set after fritap initializes
+                pid = None  # No PID management needed when fritap spawns
+            elif parsed.spawn:
+                # Normal spawn mode without fritap
                 print("[*] spawning app: "+ target_process)
                 pid = device.spawn(target_process)
                 process_session = device.attach(pid)
             else:
+                # Attach mode (works the same whether fritap is enabled or not)
                 if parsed.foreground:
                     target_process = device.get_frontmost_application()
                     if target_process is None or len(target_process.identifier) < 2:
@@ -250,6 +259,7 @@ Examples:
 
                 print("[*] attaching to app: "+ target_process)
                 process_session = device.attach(int(target_process) if target_process.isnumeric() else target_process)
+                pid = None  # No PID in attach mode
             print("[*] starting app profiling")
             
             # Parse hook configuration from CLI arguments
@@ -263,9 +273,50 @@ Examples:
             if parsed.enable_fritap:
                 print(f"[*] fritap enabled - output directory: {parsed.fritap_output_dir}")
             
-            # Assuming 'process' is a valid frida.Process object
-            profiler = AppProfiler(process_session, parsed.verbose, output_format="CMD", base_path=None, deactivate_unlink=False, hook_config=hook_config, enable_stacktrace=parsed.enable_full_stacktrace, enable_fritap=parsed.enable_fritap, fritap_output_dir=parsed.fritap_output_dir)
-            profiler.start_profiling(target_process)
+            # Create AppProfiler with target and spawn mode information
+            profiler = AppProfiler(
+                process_session, 
+                parsed.verbose, 
+                output_format="CMD", 
+                base_path=None, 
+                deactivate_unlink=False, 
+                hook_config=hook_config, 
+                enable_stacktrace=parsed.enable_full_stacktrace, 
+                enable_fritap=parsed.enable_fritap, 
+                fritap_output_dir=parsed.fritap_output_dir,
+                target_name=target_process,
+                spawn_mode=parsed.spawn
+            )
+            
+            # Handle fritap spawn mode - attach to target after fritap initializes
+            if parsed.spawn and parsed.enable_fritap:
+                # Start fritap first (without dexray-intercept hooks)
+                print("[*] starting fritap first")
+                profiler._start_fritap(target_process)
+                
+                # Wait for fritap to spawn and initialize the target
+                import time
+                print("[*] waiting for fritap to spawn target...")
+                time.sleep(5)
+                
+                # Now attach dexray-intercept to the fritap-spawned target
+                print(f"[*] attaching dexray-intercept to fritap-spawned target: {target_process}")
+                try:
+                    process_session = device.attach(target_process)
+                    profiler.set_process_session(process_session)
+                    print("[*] successfully attached to fritap-spawned target")
+                except Exception as e:
+                    print(f"[-] failed to attach to fritap-spawned target: {e}")
+                    print("[-] make sure fritap successfully spawned the target")
+                    profiler._stop_fritap()  # Clean up fritap on failure
+                    raise
+                
+                # Now start dexray-intercept hooks (fritap is already running)
+                print("[*] starting dexray-intercept hooks")
+                profiler.start_profiling(target_process)
+            else:
+                # Normal profiling start (or fritap attach mode)
+                profiler.start_profiling(target_process)
 
 
             #handle_instrumentation(process_session, parsed.verbose)
@@ -275,10 +326,20 @@ Examples:
             print(f"[-] Invoke it with the target process to hook:\n    {script_name} <excutable/app name/pid>")
             exit(2)
         
-        if parsed.spawn:
+        # Only resume if we spawned the process ourselves (not fritap)
+        if parsed.spawn and not parsed.enable_fritap and pid is not None:
             device.resume(pid)
             time.sleep(1) # without it Java.perform silently fails
-        sys.stdin.read()
+        
+        # Wait for user input with enhanced handling for fritap coordination
+        try:
+            if parsed.enable_fritap:
+                print("[*] fritap is running - press Ctrl+C to send interrupt to fritap and stop profiling")
+                print("[*] fritap will finish writing its capture files before exiting")
+            sys.stdin.read()
+        except KeyboardInterrupt:
+            # This will be handled in the outer KeyboardInterrupt handler
+            raise
     except frida.TransportError as fe:
         print(f"[-] Problems while attaching to frida-server: {fe}")
         exit(2)
@@ -292,7 +353,21 @@ Examples:
         print(f"[-] ProcessNotFoundError: {pe}")
         exit(2)
     except KeyboardInterrupt:
+        print("\\n[*] interrupt received - stopping profiling")
         if isinstance(profiler, AppProfiler):
+            # Enhanced shutdown with fritap coordination
+            if parsed.enable_fritap:
+                print("[*] sending interrupt to fritap and waiting for it to finish")
+                profiler.send_interrupt_to_fritap()
+                
+                # Wait a bit for fritap to receive and process the interrupt
+                print("[*] waiting for fritap to complete capture...")
+                if not profiler.wait_for_fritap(timeout=15):
+                    print("[-] fritap did not finish within timeout, forcing shutdown")
+                else:
+                    print("[*] fritap finished successfully")
+            
+            # Stop dexray-intercept profiling
             profiler.stop_profiling()
             profiler.write_profiling_log(target_process)
         pass
