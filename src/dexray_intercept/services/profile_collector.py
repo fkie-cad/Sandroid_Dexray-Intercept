@@ -71,6 +71,10 @@ class ProfileCollector:
                 self._handle_console_message(profile_content, profile_type)
                 return True
             
+            # Handle custom script messages
+            if profile_type == "CUSTOM_SCRIPT":
+                return self._handle_custom_script_message(profile_content, timestamp)
+            
             # Handle DEX loading specially
             if profile_type == "DEX_LOADING":
                 return self._handle_dex_loading(profile_content, timestamp)
@@ -102,6 +106,49 @@ class ProfileCollector:
         elif message_type == "console":
             if content != "Unknown":
                 print(f"[***] {content}")
+    
+    def _handle_custom_script_message(self, content, timestamp: str) -> bool:
+        """Handle custom script messages"""
+        try:
+            # Extract script name and message content
+            script_name = content.get('script_name', 'unknown_script') if isinstance(content, dict) else 'unknown_script'
+            message_content = content.get('message', content) if isinstance(content, dict) else content
+            
+            # Create custom script event
+            event = self._create_custom_script_event(script_name, message_content, timestamp)
+            
+            # Add to profile data
+            self.profile_data.add_event("CUSTOM_SCRIPT", event)
+            
+            # Display for CMD output with special formatting
+            if self.output_format == "CMD":
+                print(f"[CUSTOM] {script_name}: {message_content}")
+            
+            return True
+            
+        except Exception as e:
+            if self.verbose_mode:
+                print(f"[-] Error handling custom script message: {e}")
+            return False
+    
+    def _create_custom_script_event(self, script_name: str, message_content, timestamp: str):
+        """Create a custom script event"""
+        from ..models.events import Event
+        
+        class CustomScriptEvent(Event):
+            def __init__(self, script_name: str, message_content, timestamp: str):
+                super().__init__("custom_script.message", timestamp)
+                self.script_name = script_name
+                self.message_content = message_content
+            
+            def get_event_data(self):
+                return {
+                    "script_name": self.script_name,
+                    "message": self.message_content,
+                    "event_type": self.event_type
+                }
+        
+        return CustomScriptEvent(script_name, message_content, timestamp)
     
     def _handle_dex_loading(self, content: str, timestamp: str) -> bool:
         """Handle DEX loading events"""

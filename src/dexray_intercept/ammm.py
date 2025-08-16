@@ -181,6 +181,8 @@ Examples:
                       help="Enable fritap for TLS key extraction and traffic capture")
     args.add_argument("--fritap-output-dir", metavar="<directory>", required=False, default="./fritap_output",
                       help="Directory for fritap output files (default: ./fritap_output)")
+    args.add_argument("--custom-script", metavar="<path>", action="append", required=False,
+                      help="Load custom Frida script file(s) alongside dexray-intercept hooks (can be used multiple times)")
     
     # Hook selection arguments
     hooks = parser.add_argument_group("Hook Selection (all disabled by default)")
@@ -273,6 +275,9 @@ Examples:
             if parsed.enable_fritap:
                 print(f"[*] fritap enabled - output directory: {parsed.fritap_output_dir}")
             
+            if parsed.custom_script:
+                print(f"[*] custom scripts enabled: {', '.join(parsed.custom_script)}")
+            
             # Create AppProfiler with target and spawn mode information
             profiler = AppProfiler(
                 process_session, 
@@ -285,7 +290,8 @@ Examples:
                 enable_fritap=parsed.enable_fritap, 
                 fritap_output_dir=parsed.fritap_output_dir,
                 target_name=target_process,
-                spawn_mode=parsed.spawn
+                spawn_mode=parsed.spawn,
+                custom_scripts=parsed.custom_script
             )
             
             # Handle fritap spawn mode - attach to target after fritap initializes

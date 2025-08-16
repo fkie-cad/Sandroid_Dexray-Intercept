@@ -32,7 +32,7 @@ class AppProfiler:
                  path_filters: Optional[List[str]] = None, hook_config: Optional[Dict[str, bool]] = None, 
                  enable_stacktrace: bool = False, enable_fritap: bool = False, 
                  fritap_output_dir: str = "./fritap_output", target_name: Optional[str] = None, 
-                 spawn_mode: bool = False):
+                 spawn_mode: bool = False, custom_scripts: Optional[List[str]] = None):
         """
         Initialize the AppProfiler.
         
@@ -49,6 +49,7 @@ class AppProfiler:
             fritap_output_dir: Directory for fritap output files
             target_name: Target application name or package identifier
             spawn_mode: Whether the target was spawned (True) or attached to (False)
+            custom_scripts: List of paths to custom Frida scripts to load
         """
         self.process = process
         
@@ -64,6 +65,10 @@ class AppProfiler:
         # Target and mode information
         self.target_name = target_name
         self.spawn_mode = spawn_mode
+        
+        # Custom scripts configuration
+        self.custom_scripts = custom_scripts or []
+        self.custom_script_instances = []
         
         # Fritap configuration
         self.enable_fritap = enable_fritap
@@ -83,7 +88,7 @@ class AppProfiler:
                 self.enable_fritap = False
         
         # Initialize services
-        self.instrumentation = InstrumentationService(process) if process else None
+        self.instrumentation = InstrumentationService(process, custom_scripts=self.custom_scripts) if process else None
         self.profile_collector = ProfileCollector(
             output_format=output_format,
             verbose_mode=verbose_mode,
@@ -110,7 +115,7 @@ class AppProfiler:
         """Update the process session after fritap spawns the target"""
         self.process = process_session
         if self.instrumentation is None:
-            self.instrumentation = InstrumentationService(process_session)
+            self.instrumentation = InstrumentationService(process_session, custom_scripts=self.custom_scripts)
             self.instrumentation.set_message_handler(self._message_handler)
         else:
             self.instrumentation.process = process_session
@@ -187,7 +192,7 @@ class AppProfiler:
                 import time
                 time.sleep(3)  # Give fritap time to spawn and attach
                 if self.verbose_mode:
-                    print(f"[*] fritap spawn mode - waiting for target to be ready")
+                    print("[*] fritap spawn mode - waiting for target to be ready")
             
             # Start monitoring fritap process in a separate thread
             if self.fritap_process:
@@ -315,9 +320,8 @@ class AppProfiler:
             # Get app name from process if not provided
             if app_name is None:
                 try:
-                    app_info = self.process.enumerate_applications()
                     app_name = getattr(self.process, 'name', 'unknown_app')
-                except:
+                except Exception:
                     app_name = 'unknown_app'
             
             # Start fritap FIRST if enabled (fritap-first initialization)

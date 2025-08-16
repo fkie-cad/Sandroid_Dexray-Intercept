@@ -3,7 +3,8 @@
 
 import frida
 import os
-from typing import Optional, Callable
+from typing import Optional, Callable, List
+from datetime import datetime
 
 
 class FridaBasedException(Exception):
@@ -14,11 +15,13 @@ class FridaBasedException(Exception):
 class InstrumentationService:
     """Service for managing Frida instrumentation"""
     
-    def __init__(self, process, frida_agent_script: str = "profiling.js"):
+    def __init__(self, process, frida_agent_script: str = "profiling.js", custom_scripts: Optional[List[str]] = None):
         self.process = process
         self.frida_agent_script = frida_agent_script
         self.script: Optional[frida.core.Script] = None
         self.message_handler: Optional[Callable] = None
+        self.custom_scripts = custom_scripts or []
+        self.custom_script_instances: List[frida.core.Script] = []
     
     def load_script(self) -> frida.core.Script:
         """Load and create the Frida script"""
@@ -34,6 +37,10 @@ class InstrumentationService:
                 self.script.on("message", self.message_handler)
             
             self.script.load()
+            
+            # Load custom scripts
+            self._load_custom_scripts()
+            
             return self.script
             
         except frida.ProcessNotFoundError:
@@ -49,6 +56,64 @@ class InstrumentationService:
         except Exception as e:
             raise FridaBasedException(f"Failed to load Frida script: {str(e)}")
     
+    def _load_custom_scripts(self):
+        """Load custom Frida scripts"""
+        for script_path in self.custom_scripts:
+            try:
+                if not os.path.exists(script_path):
+                    print(f"[-] Custom script not found: {script_path}")
+                    continue
+                
+                with open(script_path, 'r', encoding='utf-8') as f:
+                    script_content = f.read()
+                
+                # Create custom message handler that adds script identification
+                script_name = os.path.basename(script_path)
+                custom_handler = self._create_custom_script_handler(script_name)
+                
+                # Create and load the custom script
+                custom_script = self.process.create_script(script_content, runtime="qjs")
+                custom_script.on("message", custom_handler)
+                custom_script.load()
+                
+                self.custom_script_instances.append(custom_script)
+                print(f"[*] Loaded custom script: {script_name}")
+                
+            except Exception as e:
+                print(f"[-] Failed to load custom script {script_path}: {e}")
+    
+    def _create_custom_script_handler(self, script_name: str):
+        """Create a message handler for custom scripts that adds identification"""
+        def custom_handler(message, data):
+            # Modify the message to identify it as coming from a custom script
+            if message.get('type') == 'send' and 'payload' in message:
+                payload = message['payload']
+                
+                # Check if it's already structured as a profile message
+                if isinstance(payload, dict) and 'profileType' in payload:
+                    # It's already structured - mark as custom
+                    payload['profileType'] = 'CUSTOM_SCRIPT'
+                    if 'profileContent' not in payload:
+                        payload['profileContent'] = {}
+                    if isinstance(payload['profileContent'], dict):
+                        payload['profileContent']['script_name'] = script_name
+                else:
+                    # Wrap unstructured messages
+                    message['payload'] = {
+                        'profileType': 'CUSTOM_SCRIPT',
+                        'profileContent': {
+                            'script_name': script_name,
+                            'message': payload
+                        },
+                        'timestamp': datetime.now().isoformat()
+                    }
+            
+            # Forward to main message handler
+            if self.message_handler:
+                self.message_handler(message, data)
+        
+        return custom_handler
+    
     def set_message_handler(self, handler: Callable):
         """Set the message handler for script communication"""
         self.message_handler = handler
@@ -63,7 +128,17 @@ class InstrumentationService:
             raise FridaBasedException("Script not loaded. Call load_script() first.")
     
     def unload_script(self):
-        """Unload the Frida script"""
+        """Unload the Frida script and all custom scripts"""
+        # Unload custom scripts
+        for custom_script in self.custom_script_instances:
+            try:
+                custom_script.unload()
+            except Exception:
+                # Ignore errors during unload
+                pass
+        self.custom_script_instances.clear()
+        
+        # Unload main script
         if self.script:
             try:
                 self.script.unload()

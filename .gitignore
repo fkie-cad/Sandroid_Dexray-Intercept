@@ -10,6 +10,7 @@
 
 # misc testing files
 src/dexray_intercept.egg-info
+samples/*
 !samples/**/*.apk
 *.pcap
 # misc
