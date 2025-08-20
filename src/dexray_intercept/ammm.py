@@ -56,7 +56,7 @@ def parse_hook_config(parsed_args):
             'binder_hooks', 'intent_hooks', 'broadcast_hooks', 'aes_hooks',
             'encodings_hooks', 'keystore_hooks', 'web_hooks', 'socket_hooks',
             'process_hooks', 'runtime_hooks', 'bluetooth_hooks', 'camera_hooks',
-            'clipboard_hooks', 'location_hooks', 'telephony_hooks'
+            'clipboard_hooks', 'location_hooks', 'telephony_hooks', 'bypass_hooks'
         ]}
     
     if parsed_args.hooks_crypto:
@@ -104,6 +104,11 @@ def parse_hook_config(parsed_args):
             'telephony_hooks': True
         })
     
+    if parsed_args.hooks_bypass:
+        hook_config.update({
+            'bypass_hooks': True
+        })
+    
     # Handle individual hook selections
     individual_hooks = {
         'enable_aes': 'aes_hooks',
@@ -126,7 +131,8 @@ def parse_hook_config(parsed_args):
         'enable_camera': 'camera_hooks',
         'enable_clipboard': 'clipboard_hooks',
         'enable_location': 'location_hooks',
-        'enable_telephony': 'telephony_hooks'
+        'enable_telephony': 'telephony_hooks',
+        'enable_bypass': 'bypass_hooks'
     }
     
     for arg_name, hook_name in individual_hooks.items():
@@ -200,6 +206,8 @@ Examples:
                        help="Enable process hooks (native libs, runtime, DEX unpacking)")
     hooks.add_argument("--hooks-services", required=False, action="store_const", const=True, default=False,
                        help="Enable service hooks (bluetooth, camera, clipboard, location, telephony)")
+    hooks.add_argument("--hooks-bypass", required=False, action="store_const", const=True, default=False,
+                       help="Enable anti-analysis bypass hooks (root, frida, debugger, emulator detection)")
     
     # Individual hook arguments
     hooks.add_argument("--enable-aes", action="store_true", help="Enable AES hooks")
@@ -223,6 +231,7 @@ Examples:
     hooks.add_argument("--enable-clipboard", action="store_true", help="Enable clipboard hooks")
     hooks.add_argument("--enable-location", action="store_true", help="Enable location hooks")
     hooks.add_argument("--enable-telephony", action="store_true", help="Enable telephony hooks")
+    hooks.add_argument("--enable-bypass", action="store_true", help="Enable anti-analysis bypass hooks")
     
     parsed = parser.parse_args()
     script_name = sys.argv[0]

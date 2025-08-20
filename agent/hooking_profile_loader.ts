@@ -19,6 +19,7 @@ import { install_camera_hooks } from "./services/camera.js"
 import { install_clipboard_hooks } from "./services/clipboard.js"
 import { install_location_hooks } from "./services/location.js"
 import { install_telephony_manager_hooks } from "./services/telephony.js"
+import { install_bypass_hooks } from "./security/bypass.js"
 import { am_send, log, devlog } from "./utils/logging.js"
 
 
@@ -66,6 +67,9 @@ export let hook_config: HookConfig = {
     'clipboard_hooks': false,
     'location_hooks': false,
     'telephony_hooks': false,
+    
+    // Bypass hooks
+    'bypass_hooks': false,
 };
 
 /* TODO
@@ -171,6 +175,9 @@ function load_profile_hooks(){
     install_hook_conditionally('camera_hooks', install_camera_hooks);
     install_hook_conditionally('clipboard_hooks', install_clipboard_hooks);
     install_hook_conditionally('location_hooks', install_location_hooks);
+    
+    // Bypass hooks
+    install_hook_conditionally('bypass_hooks', install_bypass_hooks);
     
     const enabled_hooks = Object.entries(hook_config).filter(([_, enabled]) => enabled).map(([name, _]) => name);
     log(`[HOOK] Active hooks: ${enabled_hooks.join(', ') || 'none'}`);

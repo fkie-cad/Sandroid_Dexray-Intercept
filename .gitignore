@@ -13,6 +13,8 @@ src/dexray_intercept.egg-info
 samples/*
 !samples/**/*.apk
 *.pcap
+*.log
+*.js
 # misc
 *.txt
 logs_.*

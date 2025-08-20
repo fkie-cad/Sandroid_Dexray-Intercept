@@ -11,6 +11,7 @@ from .ipc import SharedPrefsParser, BinderParser, IntentParser, BroadcastParser
 from .services import ServiceParser, TelephonyParser
 from .dex import DEXParser
 from .database import DatabaseParser
+from .bypass import BypassParser
 
 
 class ParserFactory:
@@ -60,6 +61,9 @@ class ParserFactory:
         
         # Dynamic library loading
         self._parsers["DYNAMIC_LIB_LOADING"] = NativeLibParser()
+        
+        # Bypass hooks
+        self._parsers["BYPASS_DETECTION"] = BypassParser()
     
     def get_parser(self, category: str) -> Optional[BaseParser]:
         """Get appropriate parser for the given category"""
