@@ -1,0 +1,114 @@
+/* Custom CSS for Dexray Intercept Documentation */
+
+/* Improve code block styling */
+.highlight {
+    border-radius: 4px;
+}
+
+/* Add warning styling for security notices */
+.admonition.warning {
+    border-left: 4px solid #e74c3c;
+}
+
+.admonition.warning .admonition-title {
+    background-color: #e74c3c;
+    color: white;
+}
+
+/* Style for important security warnings */
+.admonition.danger {
+    border-left: 4px solid #c0392b;
+    background-color: #fadbd8;
+}
+
+.admonition.danger .admonition-title {
+    background-color: #c0392b;
+    color: white;
+}
+
+/* Improve table styling */
+.rst-content table.docutils {
+    border: 1px solid #e1e4e5;
+    border-radius: 4px;
+}
+
+.rst-content table.docutils td, 
+.rst-content table.docutils th {
+    border: 1px solid #e1e4e5;
+    padding: 8px 12px;
+}
+
+/* Style for API method signatures */
+.py.method {
+    border-left: 3px solid #2980b9;
+    padding-left: 10px;
+    margin-bottom: 20px;
+}
+
+/* Improve navigation */
+.wy-nav-content {
+    max-width: 1200px;
+}
+
+/* Add styling for TypeScript code blocks */
+.highlight-typescript {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 10px;
+}
+
+/* Style for bash command blocks */
+.highlight-bash {
+    background-color: #2c3e50;
+    color: #ecf0f1;
+    border-radius: 4px;
+    padding: 10px;
+}
+
+/* Custom styling for hook configuration examples */
+.hook-config-example {
+    background-color: #f4f4f4;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 15px;
+    margin: 10px 0;
+}
+
+/* Improve copy button styling */
+.copybtn {
+    opacity: 0.3;
+    transition: opacity 0.3s;
+}
+
+.copybtn:hover {
+    opacity: 1;
+}
+
+/* Add project logo styling */
+.wy-side-nav-search .wy-dropdown > a img.logo {
+    max-height: 60px;
+    width: auto;
+}
+
+/* Style for architecture diagrams */
+.architecture-diagram {
+    font-family: monospace;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 15px;
+    margin: 15px 0;
+    overflow-x: auto;
+}
+
+/* Responsive improvements */
+@media screen and (max-width: 768px) {
+    .wy-nav-content {
+        margin-left: 0;
+    }
+    
+    .architecture-diagram {
+        font-size: 12px;
+    }
+}

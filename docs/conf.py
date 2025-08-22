@@ -25,6 +25,9 @@ extensions = [
     'sphinx.ext.githubpages',
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
+    'sphinx.ext.linkcheck',
+    'sphinx_rtd_theme',
+    'sphinx_copybutton',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -101,3 +104,48 @@ napoleon_use_admonition_for_references = False
 napoleon_use_ivar = False
 napoleon_use_param = True
 napoleon_use_rtype = True
+
+# -- Options for copybutton extension ----------------------------------------
+
+# Configure copy button for code blocks
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
+copybutton_only_copy_prompt_lines = True
+copybutton_remove_prompts = True
+
+# -- Options for linkcheck extension -----------------------------------------
+
+# Configure link checking
+linkcheck_ignore = [
+    r'http://localhost:\d+/',
+    r'https://127\.0\.0\.1:\d+/',
+    r'.*example\.com.*',
+    r'.*test\.app.*',
+    r'.*\.apk$',
+]
+
+linkcheck_timeout = 30
+linkcheck_retries = 2
+
+# -- GitHub Pages configuration ---------------------------------------------
+
+# Configure GitHub Pages deployment
+html_baseurl = 'https://your-username.github.io/Sandroid_Dexray-Intercept/'
+
+# -- Additional HTML options ------------------------------------------------
+
+# Add custom CSS
+html_css_files = [
+    'custom.css',
+]
+
+# Add favicon
+html_favicon = '_static/favicon.ico'
+
+# Custom sidebar
+html_sidebars = {
+    '**': [
+        'relations.html',  # needs 'show_related': True theme option to display
+        'searchbox.html',
+    ]
+}
