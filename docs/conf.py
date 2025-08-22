@@ -2,6 +2,7 @@
 
 import os
 import sys
+from datetime import datetime
 
 # Add the src directory to Python path for autodoc
 src_path = os.path.abspath('../src')
@@ -17,13 +18,25 @@ autodoc_mock_imports = [
 
 # -- Project information -----------------------------------------------------
 
+
+current_year = datetime.now().year
+start_year = 2024
+if current_year == start_year:
+    copyright = f"{start_year}, Daniel Baier, Jan-Niclas Hilgert"
+else:
+    copyright = f"{start_year} - {current_year}, Daniel Baier, Jan-Niclas Hilgert"
+
 project = 'SanDroid - Dexray Intercept'
-copyright = '2024, Daniel Baier, Jan-Niclas Hilgert'
 author = 'Daniel Baier, Jan-Niclas Hilgert'
 
 # The full version, including alpha/beta/rc tags
-release = '0.3.0.1'
-version = '0.3.0.1'
+about_path = SRC / "dexray_intercept" / "about.py"
+spec = importlib.util.spec_from_file_location("dexray_intercept.about", about_path)
+about = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(about)
+
+release = about.__version__
+version = about.__version__
 
 # -- General configuration ---------------------------------------------------
 
@@ -37,17 +50,14 @@ extensions = [
 ]
 
 # Try to load optional extensions
-try:
-    import sphinx_rtd_theme
-    extensions.append('sphinx_rtd_theme')
-except ImportError:
-    pass
+import importlib.util
 
-try:
-    import sphinx_copybutton
-    extensions.append('sphinx_copybutton')
-except ImportError:
-    pass
+if importlib.util.find_spec("sphinx_rtd_theme") is not None:
+    extensions.append("sphinx_rtd_theme")
+
+if importlib.util.find_spec("sphinx_copybutton") is not None:
+    extensions.append("sphinx_copybutton")
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -153,7 +163,6 @@ html_baseurl = 'https://your-username.github.io/Sandroid_Dexray-Intercept/'
 # -- Additional HTML options ------------------------------------------------
 
 # Add custom CSS if file exists
-import os
 if os.path.exists(os.path.join('.', '_static', 'custom.css')):
     html_css_files = ['custom.css']
 

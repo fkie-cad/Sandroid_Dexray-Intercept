@@ -1,101 +1,97 @@
-import os
+#!/usr/bin/env python3
+from pathlib import Path
+import importlib.util
 from setuptools import setup, find_packages
-from os.path import abspath, dirname, join
 
-# here - where we are.
-here = os.path.abspath(os.path.dirname(__file__))
+# ---- Paths -----------------------------------------------------------------
+ROOT = Path(__file__).resolve().parent
+SRC = ROOT / "src"
+ABOUT = SRC / "dexray_intercept" / "about.py"
+README = ROOT / "README.md"
+REQS = ROOT / "requirements.txt"
 
-# Path to the about.py file
-init_py_path = join(here, "src", "dexray_intercept", "about.py")
+# ---- Load metadata from about.py (no exec string) --------------------------
+spec = importlib.util.spec_from_file_location("dexray_intercept.about", ABOUT)
+about = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(about)  # type: ignore[attr-defined]
 
-# Read version and author from about.py
-with open(init_py_path) as f:
-    exec(f.read())
+# ---- Long description (README) ---------------------------------------------
+long_description = README.read_text(encoding="utf-8") if README.exists() else ""
 
-# Fetches the content from README.md
-# This will be used for the "long_description" field.
-README_MD = open(join(dirname(abspath(__file__)), "README.md")).read()
+# ---- Requirements parsing ---------------------------------------------------
+def parse_requirements(path: Path):
+    if not path.exists():
+        return []
+    reqs = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        reqs.append(line)
+    return reqs
 
-
-
-# read the package requirements for install_requires
-with open(os.path.join(here, 'requirements.txt'), 'r') as f:
-    requirements = f.readlines()
-
-def get_version():
-    about = {}
-    with open(init_py_path) as f:
-        exec(f.read(), about)
-    return about["__version__"]
-
-def get_author():
-    author = {}
-    with open(init_py_path) as f:
-        exec(f.read(), author)
-    return author["__author__"]
+install_requires = parse_requirements(REQS)
 
 
 setup(
-    # pip install dexray-intercept
     name="dexray-intercept",
-    version=get_version(),
-
-    # The description that will be shown on PyPI.
-    description="This project is part of the dynamic Sandbox Sandroid. Its purpose is to create runtime profiles to track the behavior of an Android application. This is done utilizing frida.",
-
-    # The content that will be shown on your project page.
-    # In this case, we're displaying whatever is there in our README.md file
-    long_description=README_MD,
-
-    # Now, we'll tell PyPI what language our README file is in.
+    version=about.__version__,
+    description=(
+        "Part of the Sandroid dynamic sandbox: creates runtime profiles to "
+        "track Android app behavior using Frida."
+    ),
+    long_description=long_description,
     long_description_content_type="text/markdown",
-
-
     url="https://github.com/fkie-cad/Sandroid_Dexray-Intercept",
 
-    author=get_author(),
+    author=about.__author__,
     author_email="daniel.baier@fkie.fraunhofer.de",
-    license='GPL v3',
+    license="GPL-3.0-only",
 
-     # include other files
+    # Source layout
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
+
+    # Include non-Python assets shipped with the package
+    # (adjust this list to actual non-Python files you want to ship)
     package_data={
-        'dexray_intercept': [
-            'profiling.js',  # the frida agent to do the profiling
-            'services/*.py',
-            'models/*.py', 
-            'parsers/*.py',
-            'formatters/*.py',
-            'utils/*.py'
-        ],  
+        "dexray_intercept": [
+            "profiling.js",
+            # Example: "data/*.json",
+        ]
     },
-
-
-
     include_package_data=True,
-    python_requires='>=3.6',
-    packages=find_packages(where='src'),
-    package_dir={'': 'src'},
-    install_requires=requirements,
 
+    # Runtime requirements
+    install_requires=install_requires,
+    python_requires=">=3.8",
 
     classifiers=[
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Operating System :: OS Independent",
         "Natural Language :: English",
         "Programming Language :: Python :: 3 :: Only",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "Programming Language :: JavaScript",
         "Topic :: Security",
-        "Topic :: Software Development :: Debuggers"
+        "Topic :: Software Development :: Debuggers",
     ],
-
-    # Keywords are tags that identify your project and help searching for it
-    # This field is OPTIONAL
     keywords=["mobile", "instrumentation", "frida", "hook", "android"],
 
+    project_urls={
+        "Source": "https://github.com/fkie-cad/Sandroid_Dexray-Intercept",
+        "Issues": "https://github.com/fkie-cad/Sandroid_Dexray-Intercept/issues",
+        "Documentation": "https://fkie-cad.github.io/Sandroid_Dexray-Intercept/",
+    },
+
     entry_points={
-            'console_scripts': [
-            'ammm=dexray_intercept.ammm:main',
-            'dexray-intercept=dexray_intercept.ammm:main',
+        "console_scripts": [
+            "ammm=dexray_intercept.ammm:main",
+            "dexray-intercept=dexray_intercept.ammm:main",
         ],
     },
 )
