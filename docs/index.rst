@@ -1,7 +1,7 @@
 SanDroid - Dexray Intercept Documentation
 ==========================================
 
-.. image:: https://img.shields.io/badge/version-0.3.0.1-blue.svg
+.. image:: https://img.shields.io/badge/version-1.0.0.0-blue.svg
    :target: https://github.com/fkie-cad/Sandroid_Dexray-Intercept
    :alt: Version
 
@@ -22,7 +22,7 @@ Welcome to the documentation for **SanDroid - Dexray Intercept**, a comprehensiv
 What is Dexray Intercept?
 -------------------------
 
-Dexray Intercept is part of the dynamic analysis sandbox SanDroid. It uses Frida dynamic instrumentation to:
+Dexray Intercept is part of the dynamic analysis sandbox `SanDroid <https://github.com/fkie-cad/Sandroid_core>`. It uses Frida dynamic instrumentation to:
 
 * **Monitor Android app behavior** in real-time during execution
 * **Intercept and log** cryptographic operations, network traffic, file system access, and IPC communications
@@ -69,16 +69,16 @@ Quick Start
    pip install -e .
 
    # Basic usage - attach to running app
-   ammm com.example.app
+   dexray-intercept com.example.app
 
    # Spawn app with crypto and network hooks
-   ammm -s --hooks-crypto --hooks-network com.example.app
+   dexray-intercept -s --hooks-crypto --hooks-network com.example.app
 
    # Comprehensive analysis with bypass hooks
-   ammm -s --hooks-all --hooks-bypass com.example.app
+   dexray-intercept -s --hooks-all --hooks-bypass com.example.app
 
    # Custom analysis with TLS extraction
-   ammm -s --enable-fritap --custom-script ./my_hooks.js com.example.app
+   dexray-intercept -s --enable-fritap --custom-script ./my_hooks.js com.example.app
 
 Architecture Overview
 --------------------

@@ -1,114 +1,146 @@
-/* Custom CSS for Dexray Intercept Documentation */
+/* === Dexray Intercept docs: high-contrast code styling ==================== */
 
-/* Improve code block styling */
-.highlight {
-    border-radius: 4px;
+/* Color palette (tweak here if needed) */
+:root {
+  --code-bg: #1e1e1e;          /* background */
+  --code-fg: #e8e8e8;          /* default text */
+  --code-border: #3c3c3c;      /* border */
+  --code-comment: #6a9955;     /* comments */
+  --code-keyword: #569cd6;     /* keywords */
+  --code-string: #d69d85;      /* strings */
+  --code-number: #b5cea8;      /* numbers */
+  --code-func: #dcdcaa;        /* function names / prompts */
+  --code-operator: #c586c0;    /* operators */
+  --inline-bg: #f5f5f5;        /* inline code on light page */
+  --inline-fg: #333333;
+  --inline-border: #e1e4e5;
 }
 
-/* Add warning styling for security notices */
-.admonition.warning {
-    border-left: 4px solid #e74c3c;
+/* Block code (Pygments output) */
+div.highlight,
+div.highlight pre,
+.rst-content div.highlight pre,
+.rst-content div.literal-block pre,
+.rst-content pre.literal-block {
+  background: var(--code-bg) !important;
+  color: var(--code-fg) !important;
+  border: 1px solid var(--code-border) !important;
+  border-radius: 6px !important;
+  padding: 10px 12px !important;
+  overflow: auto;
+  line-height: 1.5;
+  font-size: 0.95rem;
 }
 
-.admonition.warning .admonition-title {
-    background-color: #e74c3c;
-    color: white;
+/* Reduce inner span low-contrast defaults */
+div.highlight span { color: var(--code-fg) !important; }
+
+/* Token tweaks (Pygments classes used by sphinx_rtd_theme) */
+div.highlight .c,   /* comment */
+div.highlight .c1 { color: var(--code-comment) !important; }
+
+div.highlight .k,   /* keyword */
+div.highlight .kn,
+div.highlight .kd,
+div.highlight .kp,
+div.highlight .kr { color: var(--code-keyword) !important; font-weight: 600; }
+
+div.highlight .s,   /* string */
+div.highlight .s1,
+div.highlight .s2 { color: var(--code-string) !important; }
+
+div.highlight .mi,  /* numbers */
+div.highlight .m { color: var(--code-number) !important; }
+
+div.highlight .nf,  /* function names */
+div.highlight .fm,
+div.highlight .na { color: var(--code-func) !important; }
+
+div.highlight .o,   /* operators */
+div.highlight .ow { color: var(--code-operator) !important; }
+
+/* Shell prompts & output (often gets 'go' token) */
+div.highlight .gp,
+div.highlight .go { color: var(--code-func) !important; }
+
+/* Code-block captions */
+div.code-block-caption {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  border: 1px solid var(--code-border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 6px 10px;
+  font-size: 0.9rem;
 }
 
-/* Style for important security warnings */
-.admonition.danger {
-    border-left: 4px solid #c0392b;
-    background-color: #fadbd8;
+/* Inline code */
+.rst-content code,
+.rst-content tt {
+  background: var(--inline-bg);
+  color: var(--inline-fg);
+  border: 1px solid var(--inline-border);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.95em;
 }
 
-.admonition.danger .admonition-title {
-    background-color: #c0392b;
-    color: white;
+/* Copy button (sphinx-copybutton) */
+button.copybtn {
+  opacity: 0.5;
+  filter: invert(1); /* keeps icon visible on dark blocks */
+  transition: opacity 0.2s ease-in-out;
 }
+button.copybtn:hover { opacity: 1; }
 
-/* Improve table styling */
-.rst-content table.docutils {
-    border: 1px solid #e1e4e5;
-    border-radius: 4px;
-}
+/* === Keep your existing customizations (trimmed to essentials) ============ */
 
+/* Rounded blocks */
+.highlight { border-radius: 6px; }
+
+/* Admonitions */
+.admonition.warning { border-left: 4px solid #e74c3c; }
+.admonition.warning .admonition-title { background-color: #e74c3c; color: #fff; }
+.admonition.danger { border-left: 4px solid #c0392b; background-color: #fadbd8; }
+.admonition.danger .admonition-title { background-color: #c0392b; color: #fff; }
+
+/* Tables */
+.rst-content table.docutils { border: 1px solid #e1e4e5; border-radius: 4px; }
 .rst-content table.docutils td, 
-.rst-content table.docutils th {
-    border: 1px solid #e1e4e5;
-    padding: 8px 12px;
-}
+.rst-content table.docutils th { border: 1px solid #e1e4e5; padding: 8px 12px; }
 
-/* Style for API method signatures */
-.py.method {
-    border-left: 3px solid #2980b9;
-    padding-left: 10px;
-    margin-bottom: 20px;
-}
+/* API method signatures */
+.py.method { border-left: 3px solid #2980b9; padding-left: 10px; margin-bottom: 20px; }
 
-/* Improve navigation */
-.wy-nav-content {
-    max-width: 1200px;
-}
+/* Nav width */
+.wy-nav-content { max-width: 1200px; }
 
-/* Add styling for TypeScript code blocks */
-.highlight-typescript {
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 4px;
-    padding: 10px;
-}
+/* Logo */
+.wy-side-nav-search .wy-dropdown > a img.logo { max-height: 60px; width: auto; }
 
-/* Style for bash command blocks */
-.highlight-bash {
-    background-color: #2c3e50;
-    color: #ecf0f1;
-    border-radius: 4px;
-    padding: 10px;
-}
-
-/* Custom styling for hook configuration examples */
-.hook-config-example {
-    background-color: #f4f4f4;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 15px;
-    margin: 10px 0;
-}
-
-/* Improve copy button styling */
-.copybtn {
-    opacity: 0.3;
-    transition: opacity 0.3s;
-}
-
-.copybtn:hover {
-    opacity: 1;
-}
-
-/* Add project logo styling */
-.wy-side-nav-search .wy-dropdown > a img.logo {
-    max-height: 60px;
-    width: auto;
-}
-
-/* Style for architecture diagrams */
+/* Architecture diagrams */
 .architecture-diagram {
-    font-family: monospace;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 15px;
-    margin: 15px 0;
-    overflow-x: auto;
+  font-family: monospace;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 15px;
+  margin: 15px 0;
+  overflow-x: auto;
 }
 
-/* Responsive improvements */
+/* Responsive */
 @media screen and (max-width: 768px) {
-    .wy-nav-content {
-        margin-left: 0;
-    }
-    
-    .architecture-diagram {
-        font-size: 12px;
-    }
+  .wy-nav-content { margin-left: 0; }
+  .architecture-diagram { font-size: 12px; }
+}
+
+/* === Clean up old per-language overrides ================================ */
+/* Remove old low-contrast overrides so all code blocks use the unified theme */
+.highlight-typescript,
+.highlight-bash {
+  background: unset !important;
+  color: unset !important;
+  border: none !important;
+  padding: 0 !important;
 }
