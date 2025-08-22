@@ -1,4 +1,4 @@
-SanDroid - Dexray Intercept Documentation
+Sandroid - Dexray Intercept Documentation
 ==========================================
 
 .. image:: https://img.shields.io/badge/version-1.0.0.0-blue.svg
@@ -13,7 +13,7 @@ SanDroid - Dexray Intercept Documentation
    :target: https://developer.android.com
    :alt: Platform
 
-Welcome to the documentation for **SanDroid - Dexray Intercept**, a comprehensive Frida-based Android malware analysis tool designed to create runtime profiles that track application behavior in real-time.
+Welcome to the documentation for **Sandroid - Dexray Intercept**, a comprehensive Frida-based Android malware analysis tool designed to create runtime profiles that track application behavior in real-time.
 
 .. warning::
    This tool is designed for **defensive security analysis** only. The samples directory contains actual malware. 
@@ -22,7 +22,7 @@ Welcome to the documentation for **SanDroid - Dexray Intercept**, a comprehensiv
 What is Dexray Intercept?
 -------------------------
 
-Dexray Intercept is part of the dynamic analysis sandbox `SanDroid <https://github.com/fkie-cad/Sandroid_core>`_. It uses Frida dynamic instrumentation to:
+Dexray Intercept is part of the dynamic analysis sandbox `Sandroid <https://github.com/fkie-cad/Sandroid_core>`_. It uses Frida dynamic instrumentation to:
 
 * **Monitor Android app behavior** in real-time during execution
 * **Intercept and log** cryptographic operations, network traffic, file system access, and IPC communications

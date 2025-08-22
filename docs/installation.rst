@@ -1,7 +1,7 @@
 Installation
 ============
 
-This guide covers the installation and setup of SanDroid - Dexray Intercept.
+This guide covers the installation and setup of Sandroid - Dexray Intercept.
 
 System Requirements
 ------------------

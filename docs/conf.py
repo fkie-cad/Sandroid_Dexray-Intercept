@@ -32,7 +32,7 @@ if current_year == start_year:
 else:
     copyright = f"{start_year} - {current_year}, Daniel Baier, Jan-Niclas Hilgert"
 
-project = 'SanDroid - Dexray Intercept'
+project = 'Sandroid - Dexray Intercept'
 author = 'Daniel Baier, Jan-Niclas Hilgert'
 
 # The full version, including alpha/beta/rc tags
