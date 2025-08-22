@@ -6,6 +6,8 @@ This section documents the TypeScript/JavaScript API for creating custom Frida h
 .. important::
    **Always run** ``npm run build`` or ``frida-compile`` after modifying TypeScript hooks to compile them to JavaScript for use by the Python frontend.
 
+Install or update ``frida-tools`` via pip (the latest versions ship ``frida-compile``), then from the project root run ``frida-compile agent/hooking_profile_loader.ts -o src/dexray_intercept/profiling.js``.
+
 Core Architecture
 -----------------
 
@@ -697,10 +699,10 @@ Local Testing
    npm run build
 
    # Test with target app
-   ammm --enable-my-custom com.test.app
+   dexray-intercept --enable-my-custom com.test.app
 
    # Use verbose mode for debugging
-   ammm -v --enable-my-custom com.test.app
+   dexray-intercept -v --enable-my-custom com.test.app
 
 Development Workflow
 ^^^^^^^^^^^^^^^^^^^^
@@ -710,7 +712,7 @@ Development Workflow
    # Development cycle
    1. Edit TypeScript hook file
    2. npm run build                    # Compile to JavaScript
-   3. ammm --enable-my-custom app      # Test with target
+   3. dexray-intercept --enable-my-custom app      # Test with target
    4. Check JSON output for events
    5. Iterate and refine
 
@@ -841,7 +843,7 @@ Here's a complete example of a custom hook implementation:
 .. code-block:: bash
 
    npm run build
-   ammm --enable-android-id com.test.app
+   dexray-intercept --enable-android-id com.test.app
 
 This creates a complete hook system that monitors Android ID access, parses the events in Python, and integrates with the CLI system.
 

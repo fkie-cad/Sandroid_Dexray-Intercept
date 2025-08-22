@@ -100,14 +100,14 @@ The build process compiles ``agent/hooking_profile_loader.ts`` and all hook modu
 
 .. code-block:: bash
 
-   # Check if ammm command is available
-   ammm --version
+   # Check if dexray-intercept command is available
+   dexray-intercept --version
 
    # Test Frida server installation (will auto-install if needed)
-   ammm -f
+   dexray-intercept -f
 
    # Verify device connection
-   ammm --help
+   dexray-intercept --help
 
 Expected output should show the help menu with all available options.
 
@@ -189,7 +189,7 @@ Troubleshooting Installation
    .. code-block:: bash
    
       # Let dexray-intercept auto-install compatible version
-      ammm -f
+      dexray-intercept -f
 
 **Architecture-specific Issues:**
 
@@ -208,16 +208,16 @@ After installation, verify everything works:
    python3 -c "import dexray_intercept; print('✓ Python package installed')"
 
    # 2. Check CLI availability  
-   ammm --version
+   dexray-intercept --version
 
    # 3. Verify TypeScript compilation
    ls -la src/dexray_intercept/profiling.js
 
    # 4. Test device connection
-   ammm -f  # This installs frida-server
+   dexray-intercept -f  # This installs frida-server
 
    # 5. Run a simple test
-   ammm --help
+   dexray-intercept --help
 
 If all steps complete without errors, your installation is ready for use.
 

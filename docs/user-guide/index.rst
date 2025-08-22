@@ -1,7 +1,7 @@
 User Guide
 ==========
 
-This comprehensive user guide covers all aspects of using SanDroid - Dexray Intercept for Android malware analysis and application behavior profiling.
+This comprehensive user guide covers all aspects of using Sandroid - Dexray Intercept for Android malware analysis and application behavior profiling.
 
 .. toctree::
    :maxdepth: 2

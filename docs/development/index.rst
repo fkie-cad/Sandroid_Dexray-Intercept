@@ -46,12 +46,12 @@ Understanding the System Flow
    ┌─────────────────────────────────────────────────────────────────┐
    │                    Target Android Process                       │
    │                                                                 │
-   │  JavaScript hooks execute in target process context           │
+   │  JavaScript hooks execute in target process context             │
    └─────────────────────────────────────────────────────────────────┘
 
 **Key Integration Points:**
 
-1. **TypeScript → JavaScript**: ``frida-compile`` converts TypeScript hooks to JavaScript
+1. **TypeScript → JavaScript**: ``frida-compile`` converts TypeScript hooks to JavaScript (via ``frida-compile agent/hooking_profile_loader.ts -o src/dexray_intercept/profiling.js``)
 2. **JavaScript → Python**: ``am_send()`` passes structured event data to Python
 3. **Python Processing**: Events are parsed, formatted, and stored in profiles
 4. **CLI Integration**: New hooks require CLI parameter additions
@@ -115,7 +115,7 @@ Standard Development Cycle
    npm run build
 
    # 3. Test with target application
-   ammm --enable-my-hooks com.test.app
+   dexray-intercept --enable-my-hooks com.test.app
 
    # 4. Validate JSON output
    cat profile_com.test.app_*.json | jq .
@@ -137,7 +137,7 @@ Hook Development Cycle
    
    # Test iteration
    while true; do
-       ammm -v --enable-my-hooks com.test.app
+       dexray-intercept -v --enable-my-hooks com.test.app
        # Review output, make changes, repeat
    done
 
@@ -161,7 +161,7 @@ Hook Categories
    2. Implement hook functions following established patterns
    3. Add to ``hooking_profile_loader.ts`` for integration
    4. Create corresponding Python parsers
-   5. Add CLI support in ``ammm.py``
+   5. Add CLI support in ``dexray-intercept.py``
 
 Parser Development
 ^^^^^^^^^^^^^^^^^^
@@ -251,10 +251,10 @@ Manual Testing
 .. code-block:: bash
 
    # Test specific hook categories
-   ammm -v --enable-my-hooks com.test.app
+   dexray-intercept -v --enable-my-hooks com.test.app
 
    # Test with malware samples (use caution)
-   ammm --hooks-bypass --enable-my-hooks malware.apk
+   dexray-intercept --hooks-bypass --enable-my-hooks malware.apk
 
    # Validate output format
    python3 -c "
@@ -387,7 +387,7 @@ Development Process
    # Test changes
    npm run build
    python3 -m pytest tests/
-   ammm --enable-my-category com.test.app
+   dexray-intercept --enable-my-category com.test.app
 
 4. **Documentation**
 
@@ -503,13 +503,13 @@ Debugging Hook Issues
 .. code-block:: bash
 
    # Enable verbose mode
-   ammm -v --enable-problematic-hook com.test.app
+   dexray-intercept -v --enable-problematic-hook com.test.app
 
    # Check JavaScript compilation
    cat src/dexray_intercept/profiling.js | grep "my_hook_function"
 
    # Test with minimal app
-   ammm --enable-problematic-hook com.android.calculator
+   dexray-intercept --enable-problematic-hook com.android.calculator
 
    # Validate JSON output
    python3 -m json.tool profile_*.json

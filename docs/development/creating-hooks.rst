@@ -3,6 +3,11 @@ Creating Custom Hooks
 
 This guide provides step-by-step instructions for creating custom hooks to monitor specific Android behaviors not covered by the built-in hook categories.
 
+.. important::
+   You only need to write a new **custom hook** when you’re adding a new feature to **dexray-intercept** itself.  
+   For one-off tweaks, pass your script with ``--custom-script <path/to/script.js>`` and it will be loaded *in addition to* dexray-intercept’s built-in hooks.
+
+
 Overview
 --------
 
@@ -356,7 +361,7 @@ Step 6: Build and Test
 .. code-block:: bash
 
    # Test with verbose output
-   ammm -v --enable-clipboard-monitor com.android.chrome
+   dexray-intercept -v --enable-clipboard-monitor com.android.chrome
 
    # Test specific clipboard operations in the app:
    # 1. Copy text from webpage
@@ -472,10 +477,10 @@ Step 8: Documentation
    .. code-block:: bash
 
       # Monitor clipboard access
-      ammm --enable-clipboard-monitor com.social.app
+      dexray-intercept --enable-clipboard-monitor com.social.app
 
       # Combine with other privacy hooks
-      ammm --hooks-privacy com.banking.app
+      dexray-intercept --hooks-privacy com.banking.app
 
    **Example events:**
 
@@ -502,7 +507,7 @@ Step 8: Documentation
 
       .. code-block:: bash
 
-         ammm --enable-clipboard-monitor com.example.app
+         dexray-intercept --enable-clipboard-monitor com.example.app
 
 Advanced Hook Patterns
 -----------------------
@@ -654,7 +659,7 @@ Test individual hook functionality:
 .. code-block:: bash
 
    # Test hook with specific app
-   ammm --enable-my-hook com.test.app
+   dexray-intercept --enable-my-hook com.test.app
 
    # Verify events are generated
    python3 -c "
@@ -763,7 +768,7 @@ Common Pitfalls and Solutions
    python3 -c "from dexray_intercept.parsers.factory import parser_factory; print(parser_factory.get_parser('MY_CATEGORY'))"
    
    # 3. Check hook configuration
-   ammm -v --enable-my-hook com.test.app  # Look for "[HOOK] Enabled: my_hook"
+   dexray-intercept -v --enable-my-hook com.test.app  # Look for "[HOOK] Enabled: my_hook"
 
 **Issue: App Crashes with Hooks**
 

@@ -273,10 +273,10 @@ Start with minimal hooks and add as needed:
 .. code-block:: bash
 
    # Lightweight network monitoring
-   ammm --enable-web com.example.app
+   dexray-intercept --enable-web com.example.app
    
    # Add crypto if encryption is detected
-   ammm --enable-web --enable-aes com.example.app
+   dexray-intercept --enable-web --enable-aes com.example.app
 
 Comprehensive Analysis Configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -286,7 +286,7 @@ For complete behavioral analysis:
 .. code-block:: bash
 
    # Full monitoring with bypass (resource intensive)
-   ammm --hooks-all --hooks-bypass com.suspicious.app
+   dexray-intercept --hooks-all --hooks-bypass com.suspicious.app
 
 Targeted Analysis Configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -296,10 +296,10 @@ Focus on specific behavior categories:
 .. code-block:: bash
 
    # Banking app analysis - focus on crypto and network
-   ammm --hooks-crypto --hooks-network --enable-fritap com.banking.app
+   dexray-intercept --hooks-crypto --hooks-network --enable-fritap com.banking.app
    
    # Malware analysis - include bypass and process monitoring  
-   ammm --hooks-bypass --hooks-process --hooks-network malware.apk
+   dexray-intercept --hooks-bypass --hooks-process --hooks-network malware.apk
 
 Custom Analysis Configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -309,7 +309,7 @@ Combine built-in hooks with custom scripts:
 .. code-block:: bash
 
    # Custom hooks + built-in categories
-   ammm --custom-script ./app_specific.js --hooks-crypto com.target.app
+   dexray-intercept --custom-script ./app_specific.js --hooks-crypto com.target.app
 
 Hook Interactions
 -----------------
@@ -329,13 +329,13 @@ Hook Interactions
 .. code-block:: bash
 
    # Malware analysis
-   ammm --hooks-bypass --hooks-crypto --hooks-network --hooks-process app.malware
+   dexray-intercept --hooks-bypass --hooks-crypto --hooks-network --hooks-process app.malware
    
    # General security audit
-   ammm --hooks-crypto --hooks-network --hooks-ipc com.example.app
+   dexray-intercept --hooks-crypto --hooks-network --hooks-ipc com.example.app
    
    # Privacy analysis
-   ammm --hooks-services --hooks-network --hooks-filesystem com.social.app
+   dexray-intercept --hooks-services --hooks-network --hooks-filesystem com.social.app
 
 Dynamic Hook Management
 -----------------------
@@ -391,7 +391,7 @@ Custom Frida scripts can be loaded alongside built-in hooks:
 
 .. code-block:: bash
 
-   ammm --custom-script ./my_custom_hooks.js --hooks-crypto com.target.app
+   dexray-intercept --custom-script ./my_custom_hooks.js --hooks-crypto com.target.app
 
 Best Practices
 --------------

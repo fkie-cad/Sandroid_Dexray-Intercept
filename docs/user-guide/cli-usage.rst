@@ -1,14 +1,14 @@
 Command Line Usage
 ==================
 
-The ``ammm`` command is the primary interface for Dexray Intercept. This section covers all command-line options and usage patterns.
+The ``dexray-intercept`` (or ``ammm``) command is the primary interface for Dexray Intercept. This section covers all command-line options and usage patterns.
 
 Basic Syntax
 ------------
 
 .. code-block:: bash
 
-   ammm [OPTIONS] <target>
+   dexray-intercept [OPTIONS] <target>
 
 Where ``<target>`` can be:
    - **Package name**: ``com.example.app``
@@ -29,9 +29,9 @@ Target and Connection
    
    .. code-block:: bash
    
-      ammm com.banking.app          # Package name
-      ammm 1234                     # Process ID  
-      ammm "Banking App"            # App display name
+      dexray-intercept com.banking.app          # Package name
+      dexray-intercept 1234                     # Process ID  
+      dexray-intercept "Banking App"            # App display name
 
 .. option:: -s, --spawn
 
@@ -39,7 +39,7 @@ Target and Connection
    
    .. code-block:: bash
    
-      ammm -s com.example.app
+      dexray-intercept -s com.example.app
 
    .. note::
       Spawning gives you control from app startup, useful for analyzing initialization behavior.
@@ -50,7 +50,7 @@ Target and Connection
    
    .. code-block:: bash
    
-      ammm -fg
+      dexray-intercept -fg
 
 .. option:: -H <ip:port>, --host <ip:port>
 
@@ -58,7 +58,7 @@ Target and Connection
    
    .. code-block:: bash
    
-      ammm -H 192.168.1.100:27042 com.example.app
+      dexray-intercept -H 192.168.1.100:27042 com.example.app
 
 Device and Server Management
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -69,7 +69,7 @@ Device and Server Management
    
    .. code-block:: bash
    
-      ammm -f  # Install frida-server and exit
+      dexray-intercept -f  # Install frida-server and exit
 
 .. option:: --enable_spawn_gating
 
@@ -77,7 +77,7 @@ Device and Server Management
    
    .. code-block:: bash
    
-      ammm --enable_spawn_gating com.example.app
+      dexray-intercept --enable_spawn_gating com.example.app
    
    .. warning::
       This may catch unrelated processes spawned during analysis.
@@ -91,7 +91,7 @@ Output and Debugging
    
    .. code-block:: bash
    
-      ammm -v --hooks-crypto com.example.app
+      dexray-intercept -v --hooks-crypto com.example.app
 
 .. option:: -st, --enable-full-stacktrace
 
@@ -99,7 +99,7 @@ Output and Debugging
    
    .. code-block:: bash
    
-      ammm -st --hooks-crypto com.example.app
+      dexray-intercept -st --hooks-crypto com.example.app
 
 Network Analysis
 ^^^^^^^^^^^^^^^^
@@ -110,7 +110,7 @@ Network Analysis
    
    .. code-block:: bash
    
-      ammm --enable-fritap --hooks-network com.example.app
+      dexray-intercept --enable-fritap --hooks-network com.example.app
 
 .. option:: --fritap-output-dir <directory>
 
@@ -118,7 +118,7 @@ Network Analysis
    
    .. code-block:: bash
    
-      ammm --enable-fritap --fritap-output-dir ./network_logs com.example.app
+      dexray-intercept --enable-fritap --fritap-output-dir ./network_logs com.example.app
 
 Custom Scripts
 ^^^^^^^^^^^^^^
@@ -130,10 +130,10 @@ Custom Scripts
    .. code-block:: bash
    
       # Single custom script
-      ammm --custom-script ./my_hooks.js com.example.app
+      dexray-intercept --custom-script ./my_hooks.js com.example.app
       
       # Multiple custom scripts
-      ammm --custom-script ./script1.js --custom-script ./script2.js com.example.app
+      dexray-intercept --custom-script ./script1.js --custom-script ./script2.js com.example.app
 
 Hook Selection
 --------------
@@ -147,7 +147,7 @@ Hook Groups
    
    .. code-block:: bash
    
-      ammm --hooks-all com.example.app
+      dexray-intercept --hooks-all com.example.app
 
 .. option:: --hooks-crypto
 
@@ -155,7 +155,7 @@ Hook Groups
    
    .. code-block:: bash
    
-      ammm --hooks-crypto com.example.app
+      dexray-intercept --hooks-crypto com.example.app
 
 .. option:: --hooks-network  
 
@@ -163,7 +163,7 @@ Hook Groups
    
    .. code-block:: bash
    
-      ammm --hooks-network com.example.app
+      dexray-intercept --hooks-network com.example.app
 
 .. option:: --hooks-filesystem
 
@@ -171,7 +171,7 @@ Hook Groups
    
    .. code-block:: bash
    
-      ammm --hooks-filesystem com.example.app
+      dexray-intercept --hooks-filesystem com.example.app
 
 .. option:: --hooks-ipc
 
@@ -179,7 +179,7 @@ Hook Groups
    
    .. code-block:: bash
    
-      ammm --hooks-ipc com.example.app
+      dexray-intercept --hooks-ipc com.example.app
 
 .. option:: --hooks-process
 
@@ -187,7 +187,7 @@ Hook Groups
    
    .. code-block:: bash
    
-      ammm --hooks-process com.example.app
+      dexray-intercept --hooks-process com.example.app
 
 .. option:: --hooks-services
 
@@ -195,7 +195,7 @@ Hook Groups
    
    .. code-block:: bash
    
-      ammm --hooks-services com.example.app
+      dexray-intercept --hooks-services com.example.app
 
 .. option:: --hooks-bypass
 
@@ -203,7 +203,7 @@ Hook Groups
    
    .. code-block:: bash
    
-      ammm --hooks-bypass com.example.app
+      dexray-intercept --hooks-bypass com.example.app
 
 Individual Hooks
 ^^^^^^^^^^^^^^^^
@@ -324,10 +324,10 @@ Basic Analysis
 .. code-block:: bash
 
    # Attach to running app with minimal monitoring
-   ammm com.example.app
+   dexray-intercept com.example.app
 
    # Spawn app with crypto monitoring
-   ammm -s --enable-aes com.banking.app
+   dexray-intercept -s --enable-aes com.banking.app
 
 Comprehensive Analysis
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -335,10 +335,10 @@ Comprehensive Analysis
 .. code-block:: bash
 
    # Full monitoring with anti-analysis bypass
-   ammm -s --hooks-all --hooks-bypass suspicious.malware
+   dexray-intercept -s --hooks-all --hooks-bypass suspicious.malware
 
    # Verbose analysis with stack traces
-   ammm -sv --enable-full-stacktrace --hooks-crypto com.example.app
+   dexray-intercept -sv --enable-full-stacktrace --hooks-crypto com.example.app
 
 Network Analysis
 ^^^^^^^^^^^^^^^^
@@ -346,10 +346,10 @@ Network Analysis
 .. code-block:: bash
 
    # Network monitoring with TLS key extraction
-   ammm -s --hooks-network --enable-fritap com.banking.app
+   dexray-intercept -s --hooks-network --enable-fritap com.banking.app
 
    # Custom network analysis directory
-   ammm --enable-fritap --fritap-output-dir ./analysis_2024 --hooks-network com.example.app
+   dexray-intercept --enable-fritap --fritap-output-dir ./analysis_2024 --hooks-network com.example.app
 
 Custom Analysis
 ^^^^^^^^^^^^^^^
@@ -357,10 +357,10 @@ Custom Analysis
 .. code-block:: bash
 
    # Load custom hooks with built-in crypto monitoring  
-   ammm --custom-script ./my_analysis.js --hooks-crypto com.target.app
+   dexray-intercept --custom-script ./my_analysis.js --hooks-crypto com.target.app
 
    # Multiple custom scripts with comprehensive monitoring
-   ammm --custom-script ./script1.js --custom-script ./script2.js --hooks-all com.example.app
+   dexray-intercept --custom-script ./script1.js --custom-script ./script2.js --hooks-all com.example.app
 
 Remote Analysis
 ^^^^^^^^^^^^^^^
@@ -368,10 +368,10 @@ Remote Analysis
 .. code-block:: bash
 
    # Connect to remote device
-   ammm -H 192.168.1.100:27042 --hooks-crypto com.example.app
+   dexray-intercept -H 192.168.1.100:27042 --hooks-crypto com.example.app
 
    # Remote analysis with spawn gating
-   ammm -H 10.0.0.5:27042 --enable_spawn_gating --hooks-all com.example.app
+   dexray-intercept -H 10.0.0.5:27042 --enable_spawn_gating --hooks-all com.example.app
 
 Performance Considerations
 --------------------------
@@ -383,14 +383,14 @@ Start with minimal hooks and add categories as needed:
 .. code-block:: bash
 
    # Start minimal
-   ammm --enable-web com.example.app
+   dexray-intercept --enable-web com.example.app
    
    # Add crypto if needed
-   ammm --enable-web --enable-aes com.example.app
+   dexray-intercept --enable-web --enable-aes com.example.app
    
    # Avoid --hooks-all unless necessary
-   ammm --hooks-crypto --hooks-network com.example.app  # Preferred
-   ammm --hooks-all com.example.app                     # Heavy
+   dexray-intercept --hooks-crypto --hooks-network com.example.app  # Preferred
+   dexray-intercept --hooks-all com.example.app                     # Heavy
 
 **Resource Usage**
 

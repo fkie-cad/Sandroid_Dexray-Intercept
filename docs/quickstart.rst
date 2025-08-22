@@ -24,10 +24,10 @@ Start with the simplest command to attach to a running app:
 .. code-block:: bash
 
    # Attach to running app by package name
-   ammm com.example.app
+   dexray-intercept com.example.app
 
    # Or attach to running app by process ID
-   ammm 1234
+   dexray-intercept 1234
 
 .. note::
    By default, **all hooks are disabled** for performance. You'll see basic process attachment info but no detailed monitoring.
@@ -40,13 +40,13 @@ Enable hook categories based on what you want to monitor:
 .. code-block:: bash
 
    # Monitor cryptographic operations
-   ammm --hooks-crypto com.example.app
+   dexray-intercept --hooks-crypto com.example.app
 
    # Monitor network communications
-   ammm --hooks-network com.example.app
+   dexray-intercept --hooks-network com.example.app
 
    # Monitor multiple categories
-   ammm --hooks-crypto --hooks-network --hooks-filesystem com.example.app
+   dexray-intercept --hooks-crypto --hooks-network --hooks-filesystem com.example.app
 
 3. Comprehensive Analysis
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -56,10 +56,10 @@ For complete behavioral analysis:
 .. code-block:: bash
 
    # Enable all available hooks
-   ammm --hooks-all com.example.app
+   dexray-intercept --hooks-all com.example.app
 
    # Include anti-analysis bypass
-   ammm --hooks-all --hooks-bypass com.example.app
+   dexray-intercept --hooks-all --hooks-bypass com.example.app
 
 Common Scenarios
 ---------------
@@ -72,10 +72,10 @@ For analyzing potentially malicious apps with evasion techniques:
 .. code-block:: bash
 
    # Spawn app with full monitoring and bypass techniques
-   ammm -s --hooks-all --hooks-bypass --enable-fritap suspicious.malware
+   dexray-intercept -s --hooks-all --hooks-bypass --enable-fritap suspicious.malware
 
    # Enable verbose output for detailed analysis
-   ammm -s --hooks-all --hooks-bypass -v suspicious.malware
+   dexray-intercept -s --hooks-all --hooks-bypass -v suspicious.malware
 
 **What this does:**
    - ``-s`` spawns the app (vs attaching to running process)
@@ -92,10 +92,10 @@ Focus on network communications and TLS inspection:
 .. code-block:: bash
 
    # Network monitoring with TLS key extraction
-   ammm -s --hooks-network --enable-fritap com.banking.app
+   dexray-intercept -s --hooks-network --enable-fritap com.banking.app
 
    # Specify custom output directory for network captures
-   ammm -s --hooks-network --enable-fritap --fritap-output-dir ./network_logs com.banking.app
+   dexray-intercept -s --hooks-network --enable-fritap --fritap-output-dir ./network_logs com.banking.app
 
 Scenario 3: Cryptographic Analysis  
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -105,7 +105,7 @@ Analyze encryption/decryption operations:
 .. code-block:: bash
 
    # Monitor crypto operations with stack traces
-   ammm -s --hooks-crypto --enable-full-stacktrace com.encrypted.app
+   dexray-intercept -s --hooks-crypto --enable-full-stacktrace com.encrypted.app
 
 Scenario 4: Custom Hook Analysis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -115,10 +115,10 @@ Load your own custom Frida scripts alongside built-in hooks:
 .. code-block:: bash
 
    # Load custom script with built-in hooks
-   ammm --custom-script ./my_hooks.js --hooks-crypto com.example.app
+   dexray-intercept --custom-script ./my_hooks.js --hooks-crypto com.example.app
 
    # Load multiple custom scripts  
-   ammm --custom-script ./script1.js --custom-script ./script2.js com.example.app
+   dexray-intercept --custom-script ./script1.js --custom-script ./script2.js com.example.app
 
 Understanding the Output
 ------------------------
@@ -227,28 +227,28 @@ Best Practices
    .. code-block:: bash
    
       # Start with minimal hooks and add as needed
-      ammm --enable-web --enable-aes com.example.app
+      dexray-intercept --enable-web --enable-aes com.example.app
       
       # Avoid --hooks-all for performance-sensitive analysis
-      ammm --hooks-crypto --hooks-network com.example.app
+      dexray-intercept --hooks-crypto --hooks-network com.example.app
 
 **Security Considerations**
    .. code-block:: bash
    
       # Always use bypass hooks for evasive malware
-      ammm --hooks-bypass --hooks-crypto suspicious.apk
+      dexray-intercept --hooks-bypass --hooks-crypto suspicious.apk
       
       # Use fritap for complete network analysis
-      ammm --enable-fritap --hooks-network banking.app
+      dexray-intercept --enable-fritap --hooks-network banking.app
 
 **Debugging Issues**
    .. code-block:: bash
    
       # Use verbose mode for troubleshooting
-      ammm -v --hooks-crypto com.problematic.app
+      dexray-intercept -v --hooks-crypto com.problematic.app
       
       # Enable stack traces to see call origins
-      ammm --enable-full-stacktrace --hooks-crypto com.example.app
+      dexray-intercept --enable-full-stacktrace --hooks-crypto com.example.app
 
 Stopping Analysis
 -----------------

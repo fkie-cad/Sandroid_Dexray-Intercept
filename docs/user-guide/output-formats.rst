@@ -507,7 +507,7 @@ Troubleshooting Output Issues
 .. code-block:: bash
 
    # Enable verbose output
-   ammm -v --hooks-crypto com.example.app
+   dexray-intercept -v --hooks-crypto com.example.app
    
    # Check file permissions
    ls -la profile_*.json

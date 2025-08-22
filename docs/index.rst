@@ -22,7 +22,7 @@ Welcome to the documentation for **SanDroid - Dexray Intercept**, a comprehensiv
 What is Dexray Intercept?
 -------------------------
 
-Dexray Intercept is part of the dynamic analysis sandbox `SanDroid <https://github.com/fkie-cad/Sandroid_core>`. It uses Frida dynamic instrumentation to:
+Dexray Intercept is part of the dynamic analysis sandbox `SanDroid <https://github.com/fkie-cad/Sandroid_core>`_. It uses Frida dynamic instrumentation to:
 
 * **Monitor Android app behavior** in real-time during execution
 * **Intercept and log** cryptographic operations, network traffic, file system access, and IPC communications
