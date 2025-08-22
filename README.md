@@ -11,28 +11,6 @@
 
 Dexray Intercept is part of the dynamic Sandbox [Sandroid](https://github.com/fkie-cad/Sandroid_core). Its purpose is to create runtime profiles to track the behavior of an Android application. This is done utilizing frida.
 
-## 📚 Documentation
-
-Comprehensive documentation is available covering installation, usage, API reference, and development:
-
-- **[📖 Full Documentation](https://your-username.github.io/Sandroid_Dexray-Intercept/)** - Complete documentation site
-- **[🚀 Quick Start Guide](https://your-username.github.io/Sandroid_Dexray-Intercept/quickstart.html)** - Get started in minutes
-- **[🐍 Python API Reference](https://your-username.github.io/Sandroid_Dexray-Intercept/api/python-api.html)** - Programmatic usage
-- **[🔧 TypeScript API Reference](https://your-username.github.io/Sandroid_Dexray-Intercept/api/typescript-api.html)** - Custom hook development
-- **[💻 CLI Usage Guide](https://your-username.github.io/Sandroid_Dexray-Intercept/user-guide/cli-usage.html)** - Command-line interface
-- **[⚙️ Hook Configuration](https://your-username.github.io/Sandroid_Dexray-Intercept/user-guide/hook-configuration.html)** - Hook categories and options
-
-### Quick Documentation Access
-
-```bash
-# View documentation locally
-cd docs && make html && open _build/html/index.html
-
-# Build documentation
-pip install -r docs/requirements.txt
-cd docs && make html
-```
-
 ## Install
 
 Just install it with pip:
@@ -264,6 +242,18 @@ In order to do adjustments in the python code it is recommend to install `dexray
 python3 -m pip install -e . 
 ```
 This way local changed in the python code gets reflected without creating a new version of the package.
+
+
+## 📚 Documentation
+
+Comprehensive documentation is available covering installation, usage, API reference, and development:
+
+- **[📖 Full Documentation](https://your-username.github.io/Sandroid_Dexray-Intercept/)** - Complete documentation site
+- **[🚀 Quick Start Guide](https://your-username.github.io/Sandroid_Dexray-Intercept/quickstart.html)** - Get started in minutes
+- **[🐍 Python API Reference](https://your-username.github.io/Sandroid_Dexray-Intercept/api/python-api.html)** - Programmatic usage
+- **[🔧 TypeScript API Reference](https://your-username.github.io/Sandroid_Dexray-Intercept/api/typescript-api.html)** - Custom hook development
+- **[💻 CLI Usage Guide](https://your-username.github.io/Sandroid_Dexray-Intercept/user-guide/cli-usage.html)** - Command-line interface
+- **[⚙️ Hook Configuration](https://your-username.github.io/Sandroid_Dexray-Intercept/user-guide/hook-configuration.html)** - Hook categories and options
 
 
 ## Requirements
