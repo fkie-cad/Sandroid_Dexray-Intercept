@@ -4,7 +4,16 @@ import os
 import sys
 
 # Add the src directory to Python path for autodoc
-sys.path.insert(0, os.path.abspath('../src'))
+src_path = os.path.abspath('../src')
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+# Mock imports for modules that might not be available during docs build
+autodoc_mock_imports = [
+    'frida',
+    'frida_tools',
+    'AndroidFridaManager'
+]
 
 # -- Project information -----------------------------------------------------
 
@@ -25,10 +34,20 @@ extensions = [
     'sphinx.ext.githubpages',
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
-    'sphinx.ext.linkcheck',
-    'sphinx_rtd_theme',
-    'sphinx_copybutton',
 ]
+
+# Try to load optional extensions
+try:
+    import sphinx_rtd_theme
+    extensions.append('sphinx_rtd_theme')
+except ImportError:
+    pass
+
+try:
+    import sphinx_copybutton
+    extensions.append('sphinx_copybutton')
+except ImportError:
+    pass
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -52,7 +71,6 @@ html_theme = 'sphinx_rtd_theme'
 # further.
 html_theme_options = {
     'logo_only': False,
-    'display_version': True,
     'prev_next_buttons_location': 'bottom',
     'style_external_links': False,
     'vcs_pageview_mode': '',
@@ -76,7 +94,6 @@ html_static_path = ['_static']
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
-    'frida': ('https://frida.re/docs/', None),
 }
 
 # -- Options for todo extension ----------------------------------------------
@@ -107,15 +124,16 @@ napoleon_use_rtype = True
 
 # -- Options for copybutton extension ----------------------------------------
 
-# Configure copy button for code blocks
-copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
-copybutton_prompt_is_regexp = True
-copybutton_only_copy_prompt_lines = True
-copybutton_remove_prompts = True
+# Configure copy button for code blocks (only if extension loaded)
+if 'sphinx_copybutton' in extensions:
+    copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+    copybutton_prompt_is_regexp = True
+    copybutton_only_copy_prompt_lines = True
+    copybutton_remove_prompts = True
 
-# -- Options for linkcheck extension -----------------------------------------
+# -- Options for linkcheck builder --------------------------------------------
 
-# Configure link checking
+# Configure link checking (linkcheck is a builder, not an extension)
 linkcheck_ignore = [
     r'http://localhost:\d+/',
     r'https://127\.0\.0\.1:\d+/',
@@ -134,13 +152,14 @@ html_baseurl = 'https://your-username.github.io/Sandroid_Dexray-Intercept/'
 
 # -- Additional HTML options ------------------------------------------------
 
-# Add custom CSS
-html_css_files = [
-    'custom.css',
-]
+# Add custom CSS if file exists
+import os
+if os.path.exists(os.path.join('.', '_static', 'custom.css')):
+    html_css_files = ['custom.css']
 
-# Add favicon
-html_favicon = '_static/favicon.ico'
+# Add favicon if file exists
+if os.path.exists(os.path.join('.', '_static', 'favicon.ico')):
+    html_favicon = '_static/favicon.ico'
 
 # Custom sidebar
 html_sidebars = {

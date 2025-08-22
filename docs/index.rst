@@ -121,8 +121,6 @@ Dexray Intercept uses a **dual-language architecture**:
    :maxdepth: 1
    :caption: Help & Support
 
-   troubleshooting
-
 Requirements
 -----------
 

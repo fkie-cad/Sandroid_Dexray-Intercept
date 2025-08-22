@@ -7,8 +7,6 @@ This section provides comprehensive guidance for developers who want to extend, 
    :maxdepth: 2
 
    creating-hooks
-   building
-   contributing
 
 Overview
 --------
