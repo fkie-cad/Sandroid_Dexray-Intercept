@@ -19,6 +19,7 @@ samples/*
 *.txt
 logs_.*
 logs*
+*.md
 
 samples/unpacking/apktool_out/
 profile_*.json

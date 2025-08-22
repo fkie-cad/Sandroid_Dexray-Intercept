@@ -99,6 +99,10 @@ Once deployed, documentation will be available at:
 
 ### Common Issues
 
+**Deprecated GitHub Actions:**
+- All action versions have been updated to latest stable versions
+- See `.github/WORKFLOW_FIXES.md` for version update details
+
 **Build Fails on TypeScript Compilation:**
 ```bash
 # Check locally
@@ -110,9 +114,14 @@ npm run build
 ```bash
 # Check locally
 cd docs
+pip install -r requirements.txt
 make html
 # Fix any reStructuredText syntax errors
 ```
+
+**Missing Makefile Errors:**
+- `docs/Makefile` and `docs/make.bat` are now included
+- Workflows have fallback to direct sphinx-build commands
 
 **GitHub Pages Not Deploying:**
 1. Check repository Settings → Pages is set to "GitHub Actions"
