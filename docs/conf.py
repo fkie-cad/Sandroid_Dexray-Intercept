@@ -1,5 +1,5 @@
 # Configuration file for the Sphinx documentation builder.
-
+from pathlib import Path
 import os
 import sys
 from datetime import datetime
@@ -9,6 +9,11 @@ import importlib.util
 src_path = os.path.abspath('../src')
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
+
+# ---- Paths -----------------------------------------------------------------
+ROOT = Path(__file__).resolve().parent
+SRC = ROOT / "src"
+
 
 # Mock imports for modules that might not be available during docs build
 autodoc_mock_imports = [
@@ -50,8 +55,6 @@ extensions = [
     'sphinx.ext.todo',
 ]
 
-# Try to load optional extensions
-import importlib.util
 
 if importlib.util.find_spec("sphinx_rtd_theme") is not None:
     extensions.append("sphinx_rtd_theme")
