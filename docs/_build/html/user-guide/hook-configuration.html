@@ -1,0 +1,589 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hook Configuration Guide &mdash; SanDroid - Dexray Intercept 0.3.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f7af4a0e" />
+
+  
+    <link rel="canonical" href="https://your-username.github.io/Sandroid_Dexray-Intercept/user-guide/hook-configuration.html" />
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=426446dc"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Output Formats" href="output-formats.html" />
+    <link rel="prev" title="Command Line Usage" href="cli-usage.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SanDroid - Dexray Intercept
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">User Guide</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="cli-usage.html">Command Line Usage</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Hook Configuration Guide</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#understanding-hooks">Understanding Hooks</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#hook-categories">Hook Categories</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#cryptographic-hooks-hooks-crypto">Cryptographic Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-crypto</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#network-hooks-hooks-network">Network Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-network</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#file-system-hooks-hooks-filesystem">File System Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-filesystem</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#inter-process-communication-hooks-ipc">Inter-Process Communication (<code class="docutils literal notranslate"><span class="pre">--hooks-ipc</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#process-hooks-hooks-process">Process Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-process</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#system-service-hooks-hooks-services">System Service Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-services</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#anti-analysis-bypass-hooks-hooks-bypass">Anti-Analysis Bypass Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-bypass</span></code>)</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#configuration-strategies">Configuration Strategies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#performance-optimized-configuration">Performance-Optimized Configuration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#comprehensive-analysis-configuration">Comprehensive Analysis Configuration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#targeted-analysis-configuration">Targeted Analysis Configuration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#custom-analysis-configuration">Custom Analysis Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#hook-interactions">Hook Interactions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dynamic-hook-management">Dynamic Hook Management</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#custom-hook-integration">Custom Hook Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#best-practices">Best Practices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="output-formats.html">Output Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#key-concepts">Key Concepts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#workflow">Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#getting-help">Getting Help</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/index.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/index.html">Development Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SanDroid - Dexray Intercept</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">User Guide</a></li>
+      <li class="breadcrumb-item active">Hook Configuration Guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/user-guide/hook-configuration.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="hook-configuration-guide">
+<h1>Hook Configuration Guide<a class="headerlink" href="#hook-configuration-guide" title="Link to this heading"></a></h1>
+<p>This guide explains the different hook categories, what they monitor, and how to configure them for optimal analysis results.</p>
+<section id="understanding-hooks">
+<h2>Understanding Hooks<a class="headerlink" href="#understanding-hooks" title="Link to this heading"></a></h2>
+<p><strong>Hooks</strong> are Frida-based instrumentation points that intercept specific Android API calls and operations. Each hook category focuses on a particular aspect of application behavior.</p>
+<p><strong>Key Principles:</strong></p>
+<ul class="simple">
+<li><p><strong>All hooks are disabled by default</strong> for performance reasons</p></li>
+<li><p><strong>Hooks can be enabled individually or by category</strong></p></li>
+<li><p><strong>Multiple hook categories can be combined</strong></p></li>
+<li><p><strong>Custom hooks can supplement built-in functionality</strong></p></li>
+</ul>
+</section>
+<section id="hook-categories">
+<h2>Hook Categories<a class="headerlink" href="#hook-categories" title="Link to this heading"></a></h2>
+<section id="cryptographic-hooks-hooks-crypto">
+<h3>Cryptographic Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-crypto</span></code>)<a class="headerlink" href="#cryptographic-hooks-hooks-crypto" title="Link to this heading"></a></h3>
+<p>Monitors encryption, decryption, and key management operations.</p>
+<dl class="simple">
+<dt><strong>Individual Hooks:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-aes</span></code> - AES encryption/decryption operations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-keystore</span></code> - Android Keystore operations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-encodings</span></code> - Base64, URL encoding/decoding</p></li>
+</ul>
+</dd>
+<dt><strong>What it captures:</strong></dt><dd><ul class="simple">
+<li><p>Cryptographic keys and initialization vectors</p></li>
+<li><p>Plaintext and ciphertext data</p></li>
+<li><p>Encryption algorithms and modes</p></li>
+<li><p>Key generation and storage operations</p></li>
+</ul>
+</dd>
+<dt><strong>Use cases:</strong></dt><dd><ul class="simple">
+<li><p>Analyzing malware encryption schemes</p></li>
+<li><p>Auditing data protection mechanisms</p></li>
+<li><p>Investigating key management practices</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Example events:</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;crypto.key.creation&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;algorithm&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;AES&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;key_length&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">32</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;key_hex&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a1b2c3d4e5f6...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:00Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="network-hooks-hooks-network">
+<h3>Network Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-network</span></code>)<a class="headerlink" href="#network-hooks-hooks-network" title="Link to this heading"></a></h3>
+<p>Monitors all network communications including HTTP/HTTPS, WebSockets, and raw sockets.</p>
+<dl class="simple">
+<dt><strong>Individual Hooks:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-web</span></code> - HTTP/HTTPS, Retrofit, Volley, OkHttp, WebSockets</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-sockets</span></code> - Raw TCP/UDP socket operations</p></li>
+</ul>
+</dd>
+<dt><strong>What it captures:</strong></dt><dd><ul class="simple">
+<li><p>HTTP requests and responses with headers</p></li>
+<li><p>WebSocket messages and connections</p></li>
+<li><p>Socket connections and data transfers</p></li>
+<li><p>SSL/TLS certificate information</p></li>
+</ul>
+</dd>
+<dt><strong>Use cases:</strong></dt><dd><ul class="simple">
+<li><p>Analyzing C2 communications in malware</p></li>
+<li><p>Auditing API usage and data transmission</p></li>
+<li><p>Investigating network-based exfiltration</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Example events:</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http.request&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://api.example.com/data&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;POST&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;headers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;Content-Type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;application/json&quot;</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;body_preview&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;{\&quot;user_id\&quot;: 12345}&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:15Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="file-system-hooks-hooks-filesystem">
+<h3>File System Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-filesystem</span></code>)<a class="headerlink" href="#file-system-hooks-hooks-filesystem" title="Link to this heading"></a></h3>
+<p>Monitors file operations and database access.</p>
+<dl class="simple">
+<dt><strong>Individual Hooks:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-filesystem</span></code> - File read/write/delete operations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-database</span></code> - SQLite database operations</p></li>
+</ul>
+</dd>
+<dt><strong>What it captures:</strong></dt><dd><ul class="simple">
+<li><p>File paths and operations (read, write, delete, move)</p></li>
+<li><p>Database queries and modifications</p></li>
+<li><p>File content previews (configurable)</p></li>
+<li><p>Permission changes and directory operations</p></li>
+</ul>
+</dd>
+<dt><strong>Use cases:</strong></dt><dd><ul class="simple">
+<li><p>Tracking malware file modifications</p></li>
+<li><p>Analyzing data storage patterns</p></li>
+<li><p>Investigating sensitive file access</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Example events:</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;file.write&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;file_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/data/com.example.app/files/config.json&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">256</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;content_preview&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;{\&quot;api_key\&quot;: \&quot;...\&quot;}&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:30Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="inter-process-communication-hooks-ipc">
+<h3>Inter-Process Communication (<code class="docutils literal notranslate"><span class="pre">--hooks-ipc</span></code>)<a class="headerlink" href="#inter-process-communication-hooks-ipc" title="Link to this heading"></a></h3>
+<p>Monitors communication between Android components and processes.</p>
+<dl class="simple">
+<dt><strong>Individual Hooks:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-intents</span></code> - Intent passing between components</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-broadcasts</span></code> - Broadcast receiver operations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-binder</span></code> - Low-level binder communication</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-shared-prefs</span></code> - SharedPreferences access</p></li>
+</ul>
+</dd>
+<dt><strong>What it captures:</strong></dt><dd><ul class="simple">
+<li><p>Intent actions, extras, and target components</p></li>
+<li><p>Broadcast messages and receivers</p></li>
+<li><p>Binder transaction data</p></li>
+<li><p>Preference key-value operations</p></li>
+</ul>
+</dd>
+<dt><strong>Use cases:</strong></dt><dd><ul class="simple">
+<li><p>Analyzing inter-app communication</p></li>
+<li><p>Tracking privilege escalation attempts</p></li>
+<li><p>Investigating data sharing mechanisms</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Example events:</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;intent.send&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;android.intent.action.SEND&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;target_component&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;com.example.receiver/.DataReceiver&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;extras&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;android.intent.extra.TEXT&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;sensitive data&quot;</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:45Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="process-hooks-hooks-process">
+<h3>Process Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-process</span></code>)<a class="headerlink" href="#process-hooks-hooks-process" title="Link to this heading"></a></h3>
+<p>Monitors process creation, library loading, and dynamic code execution.</p>
+<dl class="simple">
+<dt><strong>Individual Hooks:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-dex-unpacking</span></code> - DEX file unpacking detection</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-java-dex</span></code> - Java DEX loading (may crash apps)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-native-libs</span></code> - Native library loading</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-process</span></code> - Process creation and management</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-runtime</span></code> - Runtime behavior and reflection</p></li>
+</ul>
+</dd>
+<dt><strong>What it captures:</strong></dt><dd><ul class="simple">
+<li><p>Dynamically loaded DEX files and libraries</p></li>
+<li><p>Process spawn events and parameters</p></li>
+<li><p>Reflection API usage</p></li>
+<li><p>Native library paths and symbols</p></li>
+</ul>
+</dd>
+<dt><strong>Use cases:</strong></dt><dd><ul class="simple">
+<li><p>Detecting packed or encrypted malware</p></li>
+<li><p>Analyzing code injection techniques</p></li>
+<li><p>Tracking dynamic loading behavior</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Example events:</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dex.unpacking&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;dex_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/app/com.example.app/classes.dex&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;unpacked&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;orig_location&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/system/framework/core.jar&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:31:00Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="system-service-hooks-hooks-services">
+<h3>System Service Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-services</span></code>)<a class="headerlink" href="#system-service-hooks-hooks-services" title="Link to this heading"></a></h3>
+<p>Monitors access to Android system services and hardware.</p>
+<dl class="simple">
+<dt><strong>Individual Hooks:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-location</span></code> - GPS and location services</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-camera</span></code> - Camera access and usage</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-telephony</span></code> - Phone and SMS operations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-bluetooth</span></code> - Bluetooth operations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-clipboard</span></code> - Clipboard access</p></li>
+</ul>
+</dd>
+<dt><strong>What it captures:</strong></dt><dd><ul class="simple">
+<li><p>Location coordinates and providers</p></li>
+<li><p>Camera capture events and parameters</p></li>
+<li><p>Phone calls and SMS messages</p></li>
+<li><p>Bluetooth device scanning and connections</p></li>
+<li><p>Clipboard read/write operations</p></li>
+</ul>
+</dd>
+<dt><strong>Use cases:</strong></dt><dd><ul class="simple">
+<li><p>Analyzing privacy-sensitive operations</p></li>
+<li><p>Tracking hardware access patterns</p></li>
+<li><p>Investigating data collection behavior</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Example events:</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;location.access&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;provider&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;gps&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;latitude&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">37.7749</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;longitude&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">-122.4194</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;accuracy&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">10.0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:31:15Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="anti-analysis-bypass-hooks-hooks-bypass">
+<h3>Anti-Analysis Bypass Hooks (<code class="docutils literal notranslate"><span class="pre">--hooks-bypass</span></code>)<a class="headerlink" href="#anti-analysis-bypass-hooks-hooks-bypass" title="Link to this heading"></a></h3>
+<p>Bypasses common anti-analysis detection techniques used by malware and security-conscious applications.</p>
+<dl class="simple">
+<dt><strong>Individual Hook:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-bypass</span></code> - All bypass techniques</p></li>
+</ul>
+</dd>
+<dt><strong>Detection Methods Bypassed:</strong></dt><dd><ul class="simple">
+<li><p><strong>Root Detection</strong> - su binary checks, root app detection, build tag analysis</p></li>
+<li><p><strong>Frida Detection</strong> - frida-server detection, port scanning, process/thread name checks</p></li>
+<li><p><strong>Debugger Detection</strong> - debug flag checks, tracer detection</p></li>
+<li><p><strong>Emulator Detection</strong> - hardware property checks, system characteristics</p></li>
+<li><p><strong>Hook Detection</strong> - stack trace analysis, library verification</p></li>
+</ul>
+</dd>
+<dt><strong>What it captures:</strong></dt><dd><ul class="simple">
+<li><p>Detection attempts and bypass actions</p></li>
+<li><p>Original vs. modified return values</p></li>
+<li><p>Detection methods used by applications</p></li>
+<li><p>Evasion technique classification</p></li>
+</ul>
+</dd>
+<dt><strong>Use cases:</strong></dt><dd><ul class="simple">
+<li><p>Analyzing sophisticated malware with evasion capabilities</p></li>
+<li><p>Bypassing app protection mechanisms for security research</p></li>
+<li><p>Understanding anti-analysis techniques</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Example events:</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bypass.root.file_check&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;bypass_category&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;root_detection&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;detection_method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;File.exists()&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;file_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/system/bin/su&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;original_result&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;bypassed_result&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:31:30Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="configuration-strategies">
+<h2>Configuration Strategies<a class="headerlink" href="#configuration-strategies" title="Link to this heading"></a></h2>
+<section id="performance-optimized-configuration">
+<h3>Performance-Optimized Configuration<a class="headerlink" href="#performance-optimized-configuration" title="Link to this heading"></a></h3>
+<p>Start with minimal hooks and add as needed:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Lightweight network monitoring</span>
+ammm<span class="w"> </span>--enable-web<span class="w"> </span>com.example.app
+
+<span class="c1"># Add crypto if encryption is detected</span>
+ammm<span class="w"> </span>--enable-web<span class="w"> </span>--enable-aes<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</section>
+<section id="comprehensive-analysis-configuration">
+<h3>Comprehensive Analysis Configuration<a class="headerlink" href="#comprehensive-analysis-configuration" title="Link to this heading"></a></h3>
+<p>For complete behavioral analysis:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Full monitoring with bypass (resource intensive)</span>
+ammm<span class="w"> </span>--hooks-all<span class="w"> </span>--hooks-bypass<span class="w"> </span>com.suspicious.app
+</pre></div>
+</div>
+</section>
+<section id="targeted-analysis-configuration">
+<h3>Targeted Analysis Configuration<a class="headerlink" href="#targeted-analysis-configuration" title="Link to this heading"></a></h3>
+<p>Focus on specific behavior categories:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Banking app analysis - focus on crypto and network</span>
+ammm<span class="w"> </span>--hooks-crypto<span class="w"> </span>--hooks-network<span class="w"> </span>--enable-fritap<span class="w"> </span>com.banking.app
+
+<span class="c1"># Malware analysis - include bypass and process monitoring</span>
+ammm<span class="w"> </span>--hooks-bypass<span class="w"> </span>--hooks-process<span class="w"> </span>--hooks-network<span class="w"> </span>malware.apk
+</pre></div>
+</div>
+</section>
+<section id="custom-analysis-configuration">
+<h3>Custom Analysis Configuration<a class="headerlink" href="#custom-analysis-configuration" title="Link to this heading"></a></h3>
+<p>Combine built-in hooks with custom scripts:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Custom hooks + built-in categories</span>
+ammm<span class="w"> </span>--custom-script<span class="w"> </span>./app_specific.js<span class="w"> </span>--hooks-crypto<span class="w"> </span>com.target.app
+</pre></div>
+</div>
+</section>
+</section>
+<section id="hook-interactions">
+<h2>Hook Interactions<a class="headerlink" href="#hook-interactions" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt><strong>Compatible Combinations:</strong></dt><dd><ul class="simple">
+<li><p>Most hook categories can be safely combined</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--hooks-bypass</span></code> complements all other categories</p></li>
+<li><p>friTap (<code class="docutils literal notranslate"><span class="pre">--enable-fritap</span></code>) works well with <code class="docutils literal notranslate"><span class="pre">--hooks-network</span></code></p></li>
+</ul>
+</dd>
+<dt><strong>Potential Conflicts:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-java-dex</span></code> may crash certain applications</p></li>
+<li><p>Heavy hook combinations may impact app performance</p></li>
+<li><p>Some apps may detect extensive instrumentation</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Recommended Combinations:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Malware analysis</span>
+ammm<span class="w"> </span>--hooks-bypass<span class="w"> </span>--hooks-crypto<span class="w"> </span>--hooks-network<span class="w"> </span>--hooks-process<span class="w"> </span>app.malware
+
+<span class="c1"># General security audit</span>
+ammm<span class="w"> </span>--hooks-crypto<span class="w"> </span>--hooks-network<span class="w"> </span>--hooks-ipc<span class="w"> </span>com.example.app
+
+<span class="c1"># Privacy analysis</span>
+ammm<span class="w"> </span>--hooks-services<span class="w"> </span>--hooks-network<span class="w"> </span>--hooks-filesystem<span class="w"> </span>com.social.app
+</pre></div>
+</div>
+</section>
+<section id="dynamic-hook-management">
+<h2>Dynamic Hook Management<a class="headerlink" href="#dynamic-hook-management" title="Link to this heading"></a></h2>
+<p>Hooks can be managed programmatically using the Python API:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept</span><span class="w"> </span><span class="kn">import</span> <span class="n">AppProfiler</span>
+
+<span class="c1"># Start with minimal hooks</span>
+<span class="n">profiler</span> <span class="o">=</span> <span class="n">AppProfiler</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">hook_config</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;web_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+<span class="n">profiler</span><span class="o">.</span><span class="n">start_profiling</span><span class="p">()</span>
+
+<span class="c1"># Enable additional hooks at runtime</span>
+<span class="n">profiler</span><span class="o">.</span><span class="n">enable_hook</span><span class="p">(</span><span class="s1">&#39;aes_hooks&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+<span class="n">profiler</span><span class="o">.</span><span class="n">enable_hook</span><span class="p">(</span><span class="s1">&#39;bypass_hooks&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Check currently enabled hooks</span>
+<span class="n">enabled</span> <span class="o">=</span> <span class="n">profiler</span><span class="o">.</span><span class="n">get_enabled_hooks</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Active hooks: </span><span class="si">{</span><span class="n">enabled</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="custom-hook-integration">
+<h2>Custom Hook Integration<a class="headerlink" href="#custom-hook-integration" title="Link to this heading"></a></h2>
+<p>Custom Frida scripts can be loaded alongside built-in hooks:</p>
+<p><strong>Custom Script Example:</strong></p>
+<div class="highlight-javascript notranslate"><div class="highlight"><pre><span></span><span class="c1">// my_custom_hooks.js</span>
+<span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Custom hook implementation</span>
+<span class="w">    </span><span class="kd">var</span><span class="w"> </span><span class="nx">MyClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;com.example.MyClass&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="nx">MyClass</span><span class="p">.</span><span class="nx">sensitiveMethod</span><span class="p">.</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Send structured message to Dexray</span>
+<span class="w">        </span><span class="nx">send</span><span class="p">({</span>
+<span class="w">            </span><span class="s2">&quot;profileType&quot;</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;CUSTOM_SCRIPT&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="s2">&quot;profileContent&quot;</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="s2">&quot;script_name&quot;</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;my_custom_hooks.js&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="s2">&quot;event_type&quot;</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;sensitive_method_called&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="s2">&quot;data&quot;</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;method intercepted&quot;</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="s2">&quot;timestamp&quot;</span><span class="o">:</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Date</span><span class="p">().</span><span class="nx">toISOString</span><span class="p">()</span>
+<span class="w">        </span><span class="p">});</span>
+
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">sensitiveMethod</span><span class="p">();</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="p">});</span>
+</pre></div>
+</div>
+<p><strong>Usage:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--custom-script<span class="w"> </span>./my_custom_hooks.js<span class="w"> </span>--hooks-crypto<span class="w"> </span>com.target.app
+</pre></div>
+</div>
+</section>
+<section id="best-practices">
+<h2>Best Practices<a class="headerlink" href="#best-practices" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt><strong>Hook Selection:</strong></dt><dd><ol class="arabic simple">
+<li><p>Start with targeted hook categories based on analysis goals</p></li>
+<li><p>Add <code class="docutils literal notranslate"><span class="pre">--hooks-bypass</span></code> for potentially evasive applications</p></li>
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">--hooks-all</span></code> only when comprehensive coverage is needed</p></li>
+<li><p>Monitor performance impact and adjust accordingly</p></li>
+</ol>
+</dd>
+<dt><strong>Performance:</strong></dt><dd><ol class="arabic simple">
+<li><p>Avoid unnecessary hooks to maintain app responsiveness</p></li>
+<li><p>Use verbose mode (<code class="docutils literal notranslate"><span class="pre">-v</span></code>) only for debugging</p></li>
+<li><p>Consider system resources when enabling multiple categories</p></li>
+</ol>
+</dd>
+<dt><strong>Security:</strong></dt><dd><ol class="arabic simple">
+<li><p>Always use <code class="docutils literal notranslate"><span class="pre">--hooks-bypass</span></code> for malware analysis</p></li>
+<li><p>Combine network hooks with friTap for complete network visibility</p></li>
+<li><p>Enable stack traces (<code class="docutils literal notranslate"><span class="pre">--enable-full-stacktrace</span></code>) for detailed analysis</p></li>
+</ol>
+</dd>
+<dt><strong>Data Management:</strong></dt><dd><ol class="arabic simple">
+<li><p>Regularly clean up old profile files and friTap captures</p></li>
+<li><p>Use descriptive output directories for organized analysis</p></li>
+<li><p>Consider data retention policies for sensitive analysis results</p></li>
+</ol>
+</dd>
+</dl>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Learn about output formats: <a class="reference internal" href="output-formats.html"><span class="doc">Output Formats</span></a></p></li>
+<li><p>Explore the Python API: <a class="reference internal" href="../api/python-api.html"><span class="doc">Python API Reference</span></a></p></li>
+<li><p>Create custom hooks: <a class="reference internal" href="../development/creating-hooks.html"><span class="doc">Creating Custom Hooks</span></a></p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="cli-usage.html" class="btn btn-neutral float-left" title="Command Line Usage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="output-formats.html" class="btn btn-neutral float-right" title="Output Formats" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Daniel Baier, Jan-Niclas Hilgert.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

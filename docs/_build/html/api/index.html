@@ -1,0 +1,330 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Reference &mdash; SanDroid - Dexray Intercept 0.3.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f7af4a0e" />
+
+  
+    <link rel="canonical" href="https://your-username.github.io/Sandroid_Dexray-Intercept/api/index.html" />
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=426446dc"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Python API Reference" href="python-api.html" />
+    <link rel="prev" title="Output Formats" href="../user-guide/output-formats.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SanDroid - Dexray Intercept
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user-guide/index.html">User Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html">Python API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html">TypeScript API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#architecture-integration">Architecture Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#development-workflow">Development Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#quick-examples">Quick Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#typescript-compilation">TypeScript Compilation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#api-compatibility">API Compatibility</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#getting-started">Getting Started</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/index.html">Development Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SanDroid - Dexray Intercept</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">API Reference</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="api-reference">
+<h1>API Reference<a class="headerlink" href="#api-reference" title="Link to this heading"></a></h1>
+<p>This section provides comprehensive API documentation for both Python and TypeScript components of Dexray Intercept.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="python-api.html">Python API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html#core-classes">Core Classes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html#event-classes">Event Classes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html#parsing-and-processing">Parsing and Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html#hook-management">Hook Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html#frida-integration">Frida Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html#utility-functions">Utility Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html#advanced-usage-patterns">Advanced Usage Patterns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html#error-handling">Error Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html#integration-examples">Integration Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python-api.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="typescript-api.html">TypeScript API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#core-architecture">Core Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#logging-and-communication">Logging and Communication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#java-runtime-integration">Java Runtime Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#utility-functions">Utility Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#event-types-and-patterns">Event Types and Patterns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#hook-integration">Hook Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#advanced-patterns">Advanced Patterns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#performance-considerations">Performance Considerations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#testing-hooks">Testing Hooks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#example-complete-custom-hook">Example: Complete Custom Hook</a></li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p>Dexray Intercept provides APIs at two levels:</p>
+<dl class="simple">
+<dt><strong>Python API</strong></dt><dd><p>High-level interface for creating analysis tools, managing profiles, and processing events. Used for:</p>
+<ul class="simple">
+<li><p>Building custom analysis applications</p></li>
+<li><p>Processing profile data programmatically</p></li>
+<li><p>Extending the CLI functionality</p></li>
+<li><p>Integrating with other security tools</p></li>
+</ul>
+</dd>
+<dt><strong>TypeScript API</strong></dt><dd><p>Low-level Frida instrumentation interface for creating custom hooks. Used for:</p>
+<ul class="simple">
+<li><p>Developing new hook categories</p></li>
+<li><p>Creating application-specific instrumentation</p></li>
+<li><p>Extending built-in monitoring capabilities</p></li>
+<li><p>Implementing custom bypass techniques</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="architecture-integration">
+<h2>Architecture Integration<a class="headerlink" href="#architecture-integration" title="Link to this heading"></a></h2>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>┌─────────────────┐    ┌──────────────────┐
+│   Python API    │    │   TypeScript API │
+│                 │    │                  │
+│ • AppProfiler   │    │ • Hook Functions │
+│ • ProfileData   │◄───┤ • Event Creation │
+│ • EventParsers  │    │ • am_send()      │
+│ • HookManager   │    │ • Java.perform() │
+└─────────────────┘    └──────────────────┘
+        │                       │
+        ▼                       ▼
+┌─────────────────────────────────────────┐
+│            Frida Runtime                │
+│                                         │
+│ JavaScript executed in target process   │
+└─────────────────────────────────────────┘
+</pre></div>
+</div>
+</section>
+<section id="development-workflow">
+<h2>Development Workflow<a class="headerlink" href="#development-workflow" title="Link to this heading"></a></h2>
+<p><strong>Creating Analysis Tools (Python)</strong></p>
+<ol class="arabic simple">
+<li><p>Import the API components</p></li>
+<li><p>Configure hook settings</p></li>
+<li><p>Create AppProfiler instance</p></li>
+<li><p>Process events and generate reports</p></li>
+</ol>
+<p><strong>Creating Custom Hooks (TypeScript)</strong></p>
+<ol class="arabic simple">
+<li><p>Write hook functions following API patterns</p></li>
+<li><p>Compile with frida-compile</p></li>
+<li><p>Integrate with hook loader</p></li>
+<li><p>Test with target applications</p></li>
+</ol>
+</section>
+<section id="quick-examples">
+<h2>Quick Examples<a class="headerlink" href="#quick-examples" title="Link to this heading"></a></h2>
+<p><strong>Python API Usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept</span><span class="w"> </span><span class="kn">import</span> <span class="n">AppProfiler</span>
+
+<span class="c1"># Create profiler with specific hooks</span>
+<span class="n">profiler</span> <span class="o">=</span> <span class="n">AppProfiler</span><span class="p">(</span>
+    <span class="n">process_session</span><span class="p">,</span>
+    <span class="n">hook_config</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;aes_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s1">&#39;web_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s1">&#39;bypass_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+
+<span class="c1"># Start analysis</span>
+<span class="n">profiler</span><span class="o">.</span><span class="n">start_profiling</span><span class="p">(</span><span class="s2">&quot;com.example.app&quot;</span><span class="p">)</span>
+
+<span class="c1"># Process results</span>
+<span class="n">profile_data</span> <span class="o">=</span> <span class="n">profiler</span><span class="o">.</span><span class="n">get_profile_data</span><span class="p">()</span>
+<span class="n">crypto_events</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">get_events</span><span class="p">(</span><span class="s1">&#39;CRYPTO_AES&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>TypeScript API Usage:</strong></p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">am_send</span><span class="p">,</span><span class="w"> </span><span class="nx">createCryptoEvent</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/logging.js&quot;</span>
+
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_custom_hooks</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">MyClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;com.example.MyClass&quot;</span><span class="p">);</span>
+
+<span class="w">        </span><span class="nx">MyClass</span><span class="p">.</span><span class="nx">sensitiveMethod</span><span class="p">.</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">(</span><span class="nx">data</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="c1">// Create structured event</span>
+<span class="w">            </span><span class="nx">createCryptoEvent</span><span class="p">(</span><span class="s2">&quot;custom.operation&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">operation_type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;sensitive_method&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nx">data_length</span><span class="o">:</span><span class="w"> </span><span class="kt">data.length</span><span class="p">,</span>
+<span class="w">                </span><span class="nx">timestamp</span><span class="o">:</span><span class="w"> </span><span class="kt">Date.now</span><span class="p">()</span>
+<span class="w">            </span><span class="p">});</span>
+
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">sensitiveMethod</span><span class="p">(</span><span class="nx">data</span><span class="p">);</span>
+<span class="w">        </span><span class="p">};</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="typescript-compilation">
+<h2>TypeScript Compilation<a class="headerlink" href="#typescript-compilation" title="Link to this heading"></a></h2>
+<p>All TypeScript hooks must be compiled to JavaScript before use:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Compile all hooks</span>
+npm<span class="w"> </span>run<span class="w"> </span>build
+
+<span class="c1"># Watch mode for development</span>
+npm<span class="w"> </span>run<span class="w"> </span>watch
+
+<span class="c1"># Manual compilation</span>
+npx<span class="w"> </span>frida-compile<span class="w"> </span>agent/hooking_profile_loader.ts<span class="w"> </span>-o<span class="w"> </span>src/dexray_intercept/profiling.js
+</pre></div>
+</div>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p><strong>Always run</strong> <code class="docutils literal notranslate"><span class="pre">npm</span> <span class="pre">run</span> <span class="pre">build</span></code> <strong>after modifying TypeScript hooks</strong> to ensure changes are included in the Python package.</p>
+</div>
+</section>
+<section id="api-compatibility">
+<h2>API Compatibility<a class="headerlink" href="#api-compatibility" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt><strong>Version Compatibility:</strong></dt><dd><ul class="simple">
+<li><p>Python API: Stable, backwards compatible</p></li>
+<li><p>TypeScript API: Evolving, breaking changes possible between versions</p></li>
+<li><p>Event formats: Versioned, parsers handle legacy formats</p></li>
+</ul>
+</dd>
+<dt><strong>Threading Considerations:</strong></dt><dd><ul class="simple">
+<li><p>Python API is thread-safe for most operations</p></li>
+<li><p>Event processing occurs on background threads</p></li>
+<li><p>UI updates should use main thread</p></li>
+</ul>
+</dd>
+<dt><strong>Error Handling:</strong></dt><dd><ul class="simple">
+<li><p>Python exceptions follow standard Python patterns</p></li>
+<li><p>TypeScript errors are caught and logged</p></li>
+<li><p>Network timeouts and device disconnections are handled gracefully</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="getting-started">
+<h2>Getting Started<a class="headerlink" href="#getting-started" title="Link to this heading"></a></h2>
+<p>Choose your development path:</p>
+<ul class="simple">
+<li><p><strong>Building analysis tools</strong>: Start with <a class="reference internal" href="python-api.html"><span class="doc">Python API Reference</span></a></p></li>
+<li><p><strong>Creating custom hooks</strong>: Begin with <a class="reference internal" href="typescript-api.html"><span class="doc">TypeScript API Reference</span></a></p></li>
+<li><p><strong>Both</strong>: Review both APIs for complete understanding</p></li>
+</ul>
+<p>Each API section includes:</p>
+<ul class="simple">
+<li><p>Complete class and function reference</p></li>
+<li><p>Usage examples and patterns</p></li>
+<li><p>Best practices and common pitfalls</p></li>
+<li><p>Integration guidelines</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../user-guide/output-formats.html" class="btn btn-neutral float-left" title="Output Formats" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="python-api.html" class="btn btn-neutral float-right" title="Python API Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Daniel Baier, Jan-Niclas Hilgert.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

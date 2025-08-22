@@ -1,0 +1,931 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Creating Custom Hooks &mdash; SanDroid - Dexray Intercept 0.3.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f7af4a0e" />
+
+  
+    <link rel="canonical" href="https://your-username.github.io/Sandroid_Dexray-Intercept/development/creating-hooks.html" />
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=426446dc"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="prev" title="Development Guide" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SanDroid - Dexray Intercept
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user-guide/index.html">User Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/index.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Development Guide</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Creating Custom Hooks</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#overview">Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-android-clipboard-monitoring">Example: Android Clipboard Monitoring</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#step-1-design-the-hook">Step 1: Design the Hook</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#step-2-implement-typescript-hook">Step 2: Implement TypeScript Hook</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#step-3-create-python-parser">Step 3: Create Python Parser</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#step-4-integrate-with-hook-loader">Step 4: Integrate with Hook Loader</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#step-5-add-cli-support">Step 5: Add CLI Support</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#step-6-build-and-test">Step 6: Build and Test</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#step-7-create-unit-tests">Step 7: Create Unit Tests</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#step-8-documentation">Step 8: Documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#advanced-hook-patterns">Advanced Hook Patterns</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#conditional-hook-installation">Conditional Hook Installation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#state-management-between-hooks">State Management Between Hooks</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#multi-api-hooking-pattern">Multi-API Hooking Pattern</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#error-handling-and-robustness">Error Handling and Robustness</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#testing-strategies">Testing Strategies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#unit-testing-hooks">Unit Testing Hooks</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#integration-testing">Integration Testing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#performance-testing">Performance Testing</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#common-pitfalls-and-solutions">Common Pitfalls and Solutions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#architecture-for-developers">Architecture for Developers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#development-environment-setup">Development Environment Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#development-workflow">Development Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#core-development-areas">Core Development Areas</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#testing-and-validation">Testing and Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#documentation-standards">Documentation Standards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#contributing-workflow">Contributing Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#quality-assurance">Quality Assurance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#common-development-tasks">Common Development Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SanDroid - Dexray Intercept</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">Development Guide</a></li>
+      <li class="breadcrumb-item active">Creating Custom Hooks</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/development/creating-hooks.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="creating-custom-hooks">
+<h1>Creating Custom Hooks<a class="headerlink" href="#creating-custom-hooks" title="Link to this heading"></a></h1>
+<p>This guide provides step-by-step instructions for creating custom hooks to monitor specific Android behaviors not covered by the built-in hook categories.</p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p>Creating a custom hook involves several coordinated steps:</p>
+<ol class="arabic simple">
+<li><p><strong>Design the hook</strong> - Determine what to monitor and event structure</p></li>
+<li><p><strong>Implement TypeScript hooks</strong> - Write Frida instrumentation code</p></li>
+<li><p><strong>Create Python parsers</strong> - Process events in Python</p></li>
+<li><p><strong>Integrate with CLI</strong> - Add command-line support</p></li>
+<li><p><strong>Test and validate</strong> - Ensure functionality works correctly</p></li>
+</ol>
+<p>This guide walks through creating a complete hook category from scratch.</p>
+</section>
+<section id="example-android-clipboard-monitoring">
+<h2>Example: Android Clipboard Monitoring<a class="headerlink" href="#example-android-clipboard-monitoring" title="Link to this heading"></a></h2>
+<p>We’ll create a comprehensive clipboard monitoring hook as a practical example.</p>
+<section id="step-1-design-the-hook">
+<h3>Step 1: Design the Hook<a class="headerlink" href="#step-1-design-the-hook" title="Link to this heading"></a></h3>
+<p><strong>Target Behavior:</strong> Monitor clipboard access (read/write operations)</p>
+<dl class="simple">
+<dt><strong>Target APIs:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">android.content.ClipboardManager.getPrimaryClip()</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">android.content.ClipboardManager.setPrimaryClip()</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">android.content.ClipData</span></code> operations</p></li>
+</ul>
+</dd>
+<dt><strong>Event Types to Generate:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">clipboard.read</span></code> - When app reads clipboard content</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">clipboard.write</span></code> - When app writes to clipboard</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">clipboard.clear</span></code> - When app clears clipboard</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Event Data Structure:</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;clipboard.read&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:00.000Z&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;clip_label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Copied text&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;clip_text&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Hello World&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;clip_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;text/plain&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;item_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;source_app&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;com.example.app&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="step-2-implement-typescript-hook">
+<h3>Step 2: Implement TypeScript Hook<a class="headerlink" href="#step-2-implement-typescript-hook" title="Link to this heading"></a></h3>
+<p>Create the hook file at <code class="docutils literal notranslate"><span class="pre">agent/clipboard/clipboard_monitor.ts</span></code>:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">log</span><span class="p">,</span><span class="w"> </span><span class="nx">devlog</span><span class="p">,</span><span class="w"> </span><span class="nx">am_send</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/logging.js&quot;</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Where</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/misc.js&quot;</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Java</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/javalib.js&quot;</span>
+
+<span class="c1">// Profile type identifier - must be unique</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;CLIPBOARD_MONITOR&quot;</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Create clipboard monitoring event</span>
+<span class="cm"> * @param eventType Specific clipboard event type</span>
+<span class="cm"> * @param data Event-specific data</span>
+<span class="cm"> */</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">createClipboardEvent</span><span class="p">(</span><span class="nx">eventType</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">event</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">event_type</span><span class="o">:</span><span class="w"> </span><span class="kt">eventType</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">timestamp</span><span class="o">:</span><span class="w"> </span><span class="kt">Date.now</span><span class="p">(),</span>
+<span class="w">        </span><span class="p">...</span><span class="nx">data</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="w">    </span><span class="nx">am_send</span><span class="p">(</span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="p">,</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">event</span><span class="p">));</span>
+<span class="p">}</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Extract text content from ClipData safely</span>
+<span class="cm"> * @param clipData Android ClipData object</span>
+<span class="cm"> * @returns Text content or null</span>
+<span class="cm"> */</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">extractClipText</span><span class="p">(</span><span class="nx">clipData</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">clipData</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">itemCount</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">clipData</span><span class="p">.</span><span class="nx">getItemCount</span><span class="p">();</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">itemCount</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="mf">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">firstItem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">clipData</span><span class="p">.</span><span class="nx">getItemAt</span><span class="p">(</span><span class="mf">0</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">firstItem</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">text</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">firstItem</span><span class="p">.</span><span class="nx">getText</span><span class="p">();</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">text</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="nx">text</span><span class="p">.</span><span class="nx">toString</span><span class="p">()</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Error extracting clip text: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">error</span><span class="p">);</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Install clipboard monitoring hooks</span>
+<span class="cm"> */</span>
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_clipboard_monitor_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Installing clipboard monitoring hooks&quot;</span><span class="p">);</span>
+
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="c1">// Hook ClipboardManager</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">ClipboardManager</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;android.content.ClipboardManager&quot;</span><span class="p">);</span>
+
+<span class="w">            </span><span class="c1">// Monitor clipboard reads</span>
+<span class="w">            </span><span class="nx">ClipboardManager</span><span class="p">.</span><span class="nx">getPrimaryClip</span><span class="p">.</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="kd">const</span><span class="w"> </span><span class="nx">clipData</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">getPrimaryClip</span><span class="p">();</span>
+
+<span class="w">                </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">clipData</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="kd">const</span><span class="w"> </span><span class="nx">clipText</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">extractClipText</span><span class="p">(</span><span class="nx">clipData</span><span class="p">);</span>
+<span class="w">                    </span><span class="kd">const</span><span class="w"> </span><span class="nx">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">clipData</span><span class="p">.</span><span class="nx">getDescription</span><span class="p">();</span>
+
+<span class="w">                    </span><span class="nx">createClipboardEvent</span><span class="p">(</span><span class="s2">&quot;clipboard.read&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="nx">clip_label</span><span class="o">:</span><span class="w"> </span><span class="kt">description</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="nx">description</span><span class="p">.</span><span class="nx">getLabel</span><span class="p">().</span><span class="nx">toString</span><span class="p">()</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="w">                        </span><span class="nx">clip_text</span><span class="o">:</span><span class="w"> </span><span class="kt">clipText</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="w">                        </span><span class="nx">clip_type</span><span class="o">:</span><span class="w"> </span><span class="kt">description</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="nx">description</span><span class="p">.</span><span class="nx">getMimeType</span><span class="p">(</span><span class="mf">0</span><span class="p">).</span><span class="nx">toString</span><span class="p">()</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+<span class="w">                        </span><span class="nx">item_count</span><span class="o">:</span><span class="w"> </span><span class="kt">clipData.getItemCount</span><span class="p">(),</span>
+<span class="w">                        </span><span class="nx">operation</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;read&quot;</span>
+<span class="w">                    </span><span class="p">});</span>
+<span class="w">                </span><span class="p">}</span>
+
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="nx">clipData</span><span class="p">;</span>
+<span class="w">            </span><span class="p">};</span>
+
+<span class="w">            </span><span class="c1">// Monitor clipboard writes</span>
+<span class="w">            </span><span class="nx">ClipboardManager</span><span class="p">.</span><span class="nx">setPrimaryClip</span><span class="p">.</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">(</span><span class="nx">clip</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="kd">const</span><span class="w"> </span><span class="nx">clipText</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">extractClipText</span><span class="p">(</span><span class="nx">clip</span><span class="p">);</span>
+<span class="w">                </span><span class="kd">const</span><span class="w"> </span><span class="nx">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">clip</span><span class="p">.</span><span class="nx">getDescription</span><span class="p">();</span>
+
+<span class="w">                </span><span class="nx">createClipboardEvent</span><span class="p">(</span><span class="s2">&quot;clipboard.write&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nx">clip_label</span><span class="o">:</span><span class="w"> </span><span class="kt">description</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="nx">description</span><span class="p">.</span><span class="nx">getLabel</span><span class="p">().</span><span class="nx">toString</span><span class="p">()</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="w">                    </span><span class="nx">clip_text</span><span class="o">:</span><span class="w"> </span><span class="kt">clipText</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="w">                    </span><span class="nx">clip_type</span><span class="o">:</span><span class="w"> </span><span class="kt">description</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="nx">description</span><span class="p">.</span><span class="nx">getMimeType</span><span class="p">(</span><span class="mf">0</span><span class="p">).</span><span class="nx">toString</span><span class="p">()</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+<span class="w">                    </span><span class="nx">item_count</span><span class="o">:</span><span class="w"> </span><span class="kt">clip.getItemCount</span><span class="p">(),</span>
+<span class="w">                    </span><span class="nx">operation</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;write&quot;</span>
+<span class="w">                </span><span class="p">});</span>
+
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">setPrimaryClip</span><span class="p">(</span><span class="nx">clip</span><span class="p">);</span>
+<span class="w">            </span><span class="p">};</span>
+
+<span class="w">            </span><span class="c1">// Monitor clipboard clearing (if available)</span>
+<span class="w">            </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">ClipboardManager</span><span class="p">.</span><span class="nx">clearPrimaryClip</span><span class="p">.</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nx">createClipboardEvent</span><span class="p">(</span><span class="s2">&quot;clipboard.clear&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="nx">operation</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;clear&quot;</span>
+<span class="w">                    </span><span class="p">});</span>
+
+<span class="w">                    </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">clearPrimaryClip</span><span class="p">();</span>
+<span class="w">                </span><span class="p">};</span>
+<span class="w">            </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;clearPrimaryClip not available on this Android version&quot;</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+
+<span class="w">            </span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Clipboard monitoring hooks installed successfully&quot;</span><span class="p">);</span>
+
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Error installing clipboard hooks: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">error</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Install comprehensive clipboard hooks (main export function)</span>
+<span class="cm"> */</span>
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_clipboard_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Installing comprehensive clipboard hooks&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="nx">install_clipboard_monitor_hooks</span><span class="p">();</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="step-3-create-python-parser">
+<h3>Step 3: Create Python Parser<a class="headerlink" href="#step-3-create-python-parser" title="Link to this heading"></a></h3>
+<p>Create parser at <code class="docutils literal notranslate"><span class="pre">src/dexray_intercept/parsers/clipboard.py</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseParser</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..models.events</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClipboardEvent</span><span class="p">(</span><span class="n">Event</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Event representing clipboard operations&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">event_type</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">clip_label</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">clip_text</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">clip_type</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">item_count</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">operation</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_event_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;event_type&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_type</span><span class="p">,</span>
+            <span class="s2">&quot;operation&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">operation</span><span class="p">,</span>
+            <span class="s2">&quot;timestamp&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span>
+        <span class="p">}</span>
+
+        <span class="c1"># Add optional fields if present</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">clip_label</span><span class="p">:</span>
+            <span class="n">data</span><span class="p">[</span><span class="s2">&quot;clip_label&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">clip_label</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">clip_text</span><span class="p">:</span>
+            <span class="n">data</span><span class="p">[</span><span class="s2">&quot;clip_text&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">clip_text</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">clip_type</span><span class="p">:</span>
+            <span class="n">data</span><span class="p">[</span><span class="s2">&quot;clip_type&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">clip_type</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">item_count</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">data</span><span class="p">[</span><span class="s2">&quot;item_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">item_count</span>
+
+        <span class="k">return</span> <span class="n">data</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClipboardParser</span><span class="p">(</span><span class="n">BaseParser</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parser for clipboard monitoring events&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">parse_json_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ClipboardEvent</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse JSON data into ClipboardEvent&quot;&quot;&quot;</span>
+        <span class="n">event_type</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;event_type&#39;</span><span class="p">,</span> <span class="s1">&#39;clipboard.unknown&#39;</span><span class="p">)</span>
+
+        <span class="n">event</span> <span class="o">=</span> <span class="n">ClipboardEvent</span><span class="p">(</span><span class="n">event_type</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+
+        <span class="c1"># Map fields from hook data</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">clip_label</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;clip_label&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">clip_text</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;clip_text&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">clip_type</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;clip_type&#39;</span><span class="p">,</span> <span class="s1">&#39;unknown&#39;</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">item_count</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;item_count&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">operation</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;operation&#39;</span><span class="p">,</span> <span class="s1">&#39;unknown&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Add metadata for analysis</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_add_clipboard_metadata</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">event</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_add_clipboard_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">:</span> <span class="n">ClipboardEvent</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add clipboard-specific metadata&quot;&quot;&quot;</span>
+
+        <span class="c1"># Categorize clipboard operations</span>
+        <span class="n">operation_descriptions</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;clipboard.read&#39;</span><span class="p">:</span> <span class="s1">&#39;Application read clipboard content&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;clipboard.write&#39;</span><span class="p">:</span> <span class="s1">&#39;Application wrote to clipboard&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;clipboard.clear&#39;</span><span class="p">:</span> <span class="s1">&#39;Application cleared clipboard&#39;</span>
+        <span class="p">}</span>
+
+        <span class="n">description</span> <span class="o">=</span> <span class="n">operation_descriptions</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">event_type</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;Unknown clipboard operation: </span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">event_type</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;description&#39;</span><span class="p">,</span> <span class="n">description</span><span class="p">)</span>
+
+        <span class="c1"># Add privacy sensitivity metadata</span>
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">clip_text</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">clip_text</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;contains_data&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+            <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;data_length&#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">clip_text</span><span class="p">))</span>
+
+            <span class="c1"># Detect potentially sensitive content</span>
+            <span class="n">sensitive_indicators</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;password&#39;</span><span class="p">,</span> <span class="s1">&#39;token&#39;</span><span class="p">,</span> <span class="s1">&#39;key&#39;</span><span class="p">,</span> <span class="s1">&#39;secret&#39;</span><span class="p">,</span> <span class="s1">&#39;credential&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">indicator</span> <span class="ow">in</span> <span class="n">event</span><span class="o">.</span><span class="n">clip_text</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">indicator</span> <span class="ow">in</span> <span class="n">sensitive_indicators</span><span class="p">):</span>
+                <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;potentially_sensitive&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+                <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;sensitivity_level&#39;</span><span class="p">,</span> <span class="s1">&#39;high&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;sensitivity_level&#39;</span><span class="p">,</span> <span class="s1">&#39;medium&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;contains_data&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+            <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;sensitivity_level&#39;</span><span class="p">,</span> <span class="s1">&#39;low&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Add operation category</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;category&#39;</span><span class="p">,</span> <span class="s1">&#39;privacy&#39;</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;subcategory&#39;</span><span class="p">,</span> <span class="s1">&#39;clipboard_access&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="step-4-integrate-with-hook-loader">
+<h3>Step 4: Integrate with Hook Loader<a class="headerlink" href="#step-4-integrate-with-hook-loader" title="Link to this heading"></a></h3>
+<p><strong>4a. Add to Hook Loader</strong> (<code class="docutils literal notranslate"><span class="pre">agent/hooking_profile_loader.ts</span></code>):</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Add import at the top</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">install_clipboard_hooks</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;./clipboard/clipboard_monitor.js&quot;</span>
+
+<span class="c1">// Add to hook configuration</span>
+<span class="k">export</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nx">hook_config</span><span class="o">:</span><span class="w"> </span><span class="kt">HookConfig</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ... existing hooks ...</span>
+<span class="w">    </span><span class="s1">&#39;clipboard_monitor_hooks&#39;</span><span class="o">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="c1">// Add to installation function</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">load_profile_hooks</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ... existing installations ...</span>
+<span class="w">    </span><span class="nx">install_hook_conditionally</span><span class="p">(</span><span class="s1">&#39;clipboard_monitor_hooks&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">install_clipboard_hooks</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>4b. Register Parser</strong> (<code class="docutils literal notranslate"><span class="pre">src/dexray_intercept/parsers/factory.py</span></code>):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Add import</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.clipboard</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClipboardParser</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_register_default_parsers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="c1"># ... existing parsers ...</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_parsers</span><span class="p">[</span><span class="s2">&quot;CLIPBOARD_MONITOR&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ClipboardParser</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="step-5-add-cli-support">
+<h3>Step 5: Add CLI Support<a class="headerlink" href="#step-5-add-cli-support" title="Link to this heading"></a></h3>
+<p>Modify <code class="docutils literal notranslate"><span class="pre">src/dexray_intercept/ammm.py</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Add to hook groups (optional - create privacy group)</span>
+<span class="k">if</span> <span class="n">parsed_args</span><span class="o">.</span><span class="n">hooks_privacy</span><span class="p">:</span>
+    <span class="n">hook_config</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+        <span class="s1">&#39;clipboard_monitor_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="c1"># other privacy-related hooks</span>
+    <span class="p">})</span>
+
+<span class="c1"># Add to individual hooks mapping</span>
+<span class="n">individual_hooks</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="c1"># ... existing hooks ...</span>
+    <span class="s1">&#39;enable_clipboard_monitor&#39;</span><span class="p">:</span> <span class="s1">&#39;clipboard_monitor_hooks&#39;</span>
+<span class="p">}</span>
+
+<span class="c1"># Add CLI argument</span>
+<span class="n">hooks</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--enable-clipboard-monitor&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
+                   <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Enable clipboard access monitoring&quot;</span><span class="p">)</span>
+
+<span class="c1"># Optional: Add to hook groups</span>
+<span class="n">hooks</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--hooks-privacy&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_const&quot;</span><span class="p">,</span> <span class="n">const</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                   <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Enable privacy-related hooks (clipboard, etc.)&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="step-6-build-and-test">
+<h3>Step 6: Build and Test<a class="headerlink" href="#step-6-build-and-test" title="Link to this heading"></a></h3>
+<p><strong>6a. Compile TypeScript:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Compile hooks to JavaScript</span>
+npm<span class="w"> </span>run<span class="w"> </span>build
+
+<span class="c1"># Verify compilation</span>
+grep<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;install_clipboard_hooks&quot;</span><span class="w"> </span>src/dexray_intercept/profiling.js
+</pre></div>
+</div>
+<p><strong>6b. Test with Target App:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Test with verbose output</span>
+ammm<span class="w"> </span>-v<span class="w"> </span>--enable-clipboard-monitor<span class="w"> </span>com.android.chrome
+
+<span class="c1"># Test specific clipboard operations in the app:</span>
+<span class="c1"># 1. Copy text from webpage</span>
+<span class="c1"># 2. Paste in address bar</span>
+<span class="c1"># 3. Clear clipboard (if supported)</span>
+</pre></div>
+</div>
+<p><strong>6c. Validate JSON Output:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check generated events</span>
+cat<span class="w"> </span>profile_com.android.chrome_*.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">&#39;.CLIPBOARD_MONITOR&#39;</span>
+
+<span class="c1"># Expected output:</span>
+<span class="o">[</span>
+<span class="w">  </span><span class="o">{</span>
+<span class="w">    </span><span class="s2">&quot;event_type&quot;</span>:<span class="w"> </span><span class="s2">&quot;clipboard.write&quot;</span>,
+<span class="w">    </span><span class="s2">&quot;operation&quot;</span>:<span class="w"> </span><span class="s2">&quot;write&quot;</span>,
+<span class="w">    </span><span class="s2">&quot;clip_text&quot;</span>:<span class="w"> </span><span class="s2">&quot;Hello World&quot;</span>,
+<span class="w">    </span><span class="s2">&quot;clip_type&quot;</span>:<span class="w"> </span><span class="s2">&quot;text/plain&quot;</span>,
+<span class="w">    </span><span class="s2">&quot;item_count&quot;</span>:<span class="w"> </span><span class="m">1</span>,
+<span class="w">    </span><span class="s2">&quot;timestamp&quot;</span>:<span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:00.000Z&quot;</span>
+<span class="w">  </span><span class="o">}</span>
+<span class="o">]</span>
+</pre></div>
+</div>
+</section>
+<section id="step-7-create-unit-tests">
+<h3>Step 7: Create Unit Tests<a class="headerlink" href="#step-7-create-unit-tests" title="Link to this heading"></a></h3>
+<p>Create <code class="docutils literal notranslate"><span class="pre">tests/test_clipboard_parser.py</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">unittest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.parsers.clipboard</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClipboardParser</span><span class="p">,</span> <span class="n">ClipboardEvent</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TestClipboardParser</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span> <span class="o">=</span> <span class="n">ClipboardParser</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="s2">&quot;2024-08-20T10:30:00.000Z&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_parse_clipboard_write</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Test parsing clipboard write event&quot;&quot;&quot;</span>
+        <span class="n">test_data</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;event_type&#39;</span><span class="p">:</span> <span class="s1">&#39;clipboard.write&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;clip_text&#39;</span><span class="p">:</span> <span class="s1">&#39;Hello World&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;clip_type&#39;</span><span class="p">:</span> <span class="s1">&#39;text/plain&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;item_count&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s1">&#39;operation&#39;</span><span class="p">:</span> <span class="s1">&#39;write&#39;</span>
+        <span class="p">}</span>
+
+        <span class="n">event</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse_json_data</span><span class="p">(</span><span class="n">test_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIsInstance</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">ClipboardEvent</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">event_type</span><span class="p">,</span> <span class="s1">&#39;clipboard.write&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">clip_text</span><span class="p">,</span> <span class="s1">&#39;Hello World&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">operation</span><span class="p">,</span> <span class="s1">&#39;write&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_parse_clipboard_read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Test parsing clipboard read event&quot;&quot;&quot;</span>
+        <span class="n">test_data</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;event_type&#39;</span><span class="p">:</span> <span class="s1">&#39;clipboard.read&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;clip_text&#39;</span><span class="p">:</span> <span class="s1">&#39;Sensitive password: 12345&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;operation&#39;</span><span class="p">:</span> <span class="s1">&#39;read&#39;</span>
+        <span class="p">}</span>
+
+        <span class="n">event</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse_json_data</span><span class="p">(</span><span class="n">test_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">event_type</span><span class="p">,</span> <span class="s1">&#39;clipboard.read&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;potentially_sensitive&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sensitivity_level&#39;</span><span class="p">),</span> <span class="s1">&#39;high&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_empty_clipboard</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Test parsing empty clipboard operation&quot;&quot;&quot;</span>
+        <span class="n">test_data</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;event_type&#39;</span><span class="p">:</span> <span class="s1">&#39;clipboard.clear&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;operation&#39;</span><span class="p">:</span> <span class="s1">&#39;clear&#39;</span>
+        <span class="p">}</span>
+
+        <span class="n">event</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse_json_data</span><span class="p">(</span><span class="n">test_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">operation</span><span class="p">,</span> <span class="s1">&#39;clear&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertFalse</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;contains_data&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">unittest</span><span class="o">.</span><span class="n">main</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="step-8-documentation">
+<h3>Step 8: Documentation<a class="headerlink" href="#step-8-documentation" title="Link to this heading"></a></h3>
+<p><strong>8a. Update User Documentation</strong> (<code class="docutils literal notranslate"><span class="pre">docs/user-guide/hook-configuration.rst</span></code>):</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span><span class="gh">Clipboard Monitoring (``--enable-clipboard-monitor``)</span>
+<span class="gh">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>
+
+Monitors clipboard access operations including read, write, and clear operations.
+
+<span class="gs">**What it captures:**</span>
+   - Clipboard content (text, images, etc.)
+   <span class="m">-</span> Content types and labels
+   <span class="m">-</span> Operation timing and frequency
+   <span class="m">-</span> Potentially sensitive data detection
+
+<span class="gs">**Use cases:**</span>
+   - Privacy analysis of data sharing
+   <span class="m">-</span> Detecting clipboard-based data exfiltration
+   <span class="m">-</span> Monitoring sensitive information exposure
+
+<span class="gs">**Example usage:**</span>
+
+<span class="p">..</span> <span class="ow">code-block</span><span class="p">::</span> <span class="k">bash</span>
+
+   <span class="c1"># Monitor clipboard access</span>
+   ammm<span class="w"> </span>--enable-clipboard-monitor<span class="w"> </span>com.social.app
+
+   <span class="c1"># Combine with other privacy hooks</span>
+   ammm<span class="w"> </span>--hooks-privacy<span class="w"> </span>com.banking.app
+
+<span class="gs">**Example events:**</span>
+
+<span class="p">..</span> <span class="ow">code-block</span><span class="p">::</span> <span class="k">json</span>
+
+   <span class="p">{</span>
+   <span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;clipboard.write&quot;</span><span class="p">,</span>
+   <span class="w">  </span><span class="nt">&quot;clip_text&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Hello World&quot;</span><span class="p">,</span>
+   <span class="w">  </span><span class="nt">&quot;clip_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;text/plain&quot;</span><span class="p">,</span>
+   <span class="w">  </span><span class="nt">&quot;operation&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;write&quot;</span><span class="p">,</span>
+   <span class="w">  </span><span class="nt">&quot;metadata&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+   <span class="w">    </span><span class="nt">&quot;sensitivity_level&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;medium&quot;</span><span class="p">,</span>
+   <span class="w">    </span><span class="nt">&quot;contains_data&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+   <span class="w">  </span><span class="p">}</span>
+   <span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>8b. Update CLI Documentation</strong> (<code class="docutils literal notranslate"><span class="pre">docs/user-guide/cli-usage.rst</span></code>):</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span><span class="p">..</span> <span class="ow">option</span><span class="p">::</span> --enable-clipboard-monitor
+
+   Enable clipboard access monitoring.
+
+<span class="p">   ..</span> <span class="ow">code-block</span><span class="p">::</span> bash
+
+      ammm --enable-clipboard-monitor com.example.app
+</pre></div>
+</div>
+</section>
+</section>
+<section id="advanced-hook-patterns">
+<h2>Advanced Hook Patterns<a class="headerlink" href="#advanced-hook-patterns" title="Link to this heading"></a></h2>
+<section id="conditional-hook-installation">
+<h3>Conditional Hook Installation<a class="headerlink" href="#conditional-hook-installation" title="Link to this heading"></a></h3>
+<p>Install hooks only when target conditions are met:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_conditional_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="c1">// Check if target API is available</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">Build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;android.os.Build&quot;</span><span class="p">);</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">sdkVersion</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Build</span><span class="p">.</span><span class="nx">VERSION</span><span class="p">.</span><span class="nx">SDK_INT</span><span class="p">.</span><span class="nx">value</span><span class="p">;</span>
+
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">sdkVersion</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">28</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">install_android_p_plus_hooks</span><span class="p">();</span>
+<span class="w">            </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">install_legacy_android_hooks</span><span class="p">();</span>
+<span class="w">            </span><span class="p">}</span>
+
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Conditional installation failed: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">error</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="state-management-between-hooks">
+<h3>State Management Between Hooks<a class="headerlink" href="#state-management-between-hooks" title="Link to this heading"></a></h3>
+<p>Maintain state across multiple hook invocations:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Global state for tracking clipboard sessions</span>
+<span class="kd">interface</span><span class="w"> </span><span class="nx">ClipboardSession</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">startTime</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">operationCount</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">lastOperation</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">clipboardSessions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Map</span><span class="o">&lt;</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">ClipboardSession</span><span class="o">&gt;</span><span class="p">();</span>
+
+<span class="kd">function</span><span class="w"> </span><span class="nx">trackClipboardSession</span><span class="p">(</span><span class="nx">appPackage</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">operation</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">session</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">clipboardSessions</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="nx">appPackage</span><span class="p">)</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">startTime</span><span class="o">:</span><span class="w"> </span><span class="kt">Date.now</span><span class="p">(),</span>
+<span class="w">        </span><span class="nx">operationCount</span><span class="o">:</span><span class="w"> </span><span class="kt">0</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">lastOperation</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;&#39;</span>
+<span class="w">    </span><span class="p">};</span>
+
+<span class="w">    </span><span class="nx">session</span><span class="p">.</span><span class="nx">operationCount</span><span class="o">++</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">session</span><span class="p">.</span><span class="nx">lastOperation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">operation</span><span class="p">;</span>
+
+<span class="w">    </span><span class="nx">clipboardSessions</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="nx">appPackage</span><span class="p">,</span><span class="w"> </span><span class="nx">session</span><span class="p">);</span>
+
+<span class="w">    </span><span class="c1">// Create session tracking event</span>
+<span class="w">    </span><span class="nx">createClipboardEvent</span><span class="p">(</span><span class="s2">&quot;clipboard.session&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">app_package</span><span class="o">:</span><span class="w"> </span><span class="kt">appPackage</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">operation_count</span><span class="o">:</span><span class="w"> </span><span class="kt">session.operationCount</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">session_duration</span><span class="o">:</span><span class="w"> </span><span class="kt">Date.now</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">session</span><span class="p">.</span><span class="nx">startTime</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">last_operation</span><span class="o">:</span><span class="w"> </span><span class="kt">operation</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="multi-api-hooking-pattern">
+<h3>Multi-API Hooking Pattern<a class="headerlink" href="#multi-api-hooking-pattern" title="Link to this heading"></a></h3>
+<p>Hook multiple related APIs systematically:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_comprehensive_clipboard_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Primary clipboard API</span>
+<span class="w">        </span><span class="nx">hookClipboardManager</span><span class="p">();</span>
+
+<span class="w">        </span><span class="c1">// Clipboard service API (if available)</span>
+<span class="w">        </span><span class="nx">hookClipboardService</span><span class="p">();</span>
+
+<span class="w">        </span><span class="c1">// Text selection APIs that interact with clipboard</span>
+<span class="w">        </span><span class="nx">hookTextSelection</span><span class="p">();</span>
+
+<span class="w">        </span><span class="c1">// Intent-based clipboard operations</span>
+<span class="w">        </span><span class="nx">hookClipboardIntents</span><span class="p">();</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+
+<span class="kd">function</span><span class="w"> </span><span class="nx">hookClipboardManager</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Implementation for ClipboardManager hooks</span>
+<span class="p">}</span>
+
+<span class="kd">function</span><span class="w"> </span><span class="nx">hookClipboardService</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">IClipboard</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;android.content.IClipboard&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="c1">// Hook service-level operations</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;IClipboard not available: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">error</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="error-handling-and-robustness">
+<h3>Error Handling and Robustness<a class="headerlink" href="#error-handling-and-robustness" title="Link to this heading"></a></h3>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_robust_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">hookTargets</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+<span class="w">            </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">className</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;android.content.ClipboardManager&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nx">methods</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;getPrimaryClip&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;setPrimaryClip&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;clearPrimaryClip&quot;</span><span class="p">]</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">className</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;android.content.IClipboard&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nx">methods</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;getPrimaryClip&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;setPrimaryClip&quot;</span><span class="p">]</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">];</span>
+
+<span class="w">        </span><span class="nx">hookTargets</span><span class="p">.</span><span class="nx">forEach</span><span class="p">(</span><span class="nx">target</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="kd">const</span><span class="w"> </span><span class="nx">targetClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="nx">target</span><span class="p">.</span><span class="nx">className</span><span class="p">);</span>
+
+<span class="w">                </span><span class="nx">target</span><span class="p">.</span><span class="nx">methods</span><span class="p">.</span><span class="nx">forEach</span><span class="p">(</span><span class="nx">methodName</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="nx">installMethodHook</span><span class="p">(</span><span class="nx">targetClass</span><span class="p">,</span><span class="w"> </span><span class="nx">methodName</span><span class="p">);</span>
+<span class="w">                    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">methodError</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="nx">devlog</span><span class="p">(</span><span class="sb">`Method </span><span class="si">${</span><span class="nx">methodName</span><span class="si">}</span><span class="sb"> not available: </span><span class="si">${</span><span class="nx">methodError</span><span class="si">}</span><span class="sb">`</span><span class="p">);</span>
+<span class="w">                    </span><span class="p">}</span>
+<span class="w">                </span><span class="p">});</span>
+
+<span class="w">            </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">classError</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">devlog</span><span class="p">(</span><span class="sb">`Class </span><span class="si">${</span><span class="nx">target</span><span class="p">.</span><span class="nx">className</span><span class="si">}</span><span class="sb"> not available: </span><span class="si">${</span><span class="nx">classError</span><span class="si">}</span><span class="sb">`</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">});</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="testing-strategies">
+<h2>Testing Strategies<a class="headerlink" href="#testing-strategies" title="Link to this heading"></a></h2>
+<section id="unit-testing-hooks">
+<h3>Unit Testing Hooks<a class="headerlink" href="#unit-testing-hooks" title="Link to this heading"></a></h3>
+<p>Test individual hook functionality:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Test hook with specific app</span>
+ammm<span class="w"> </span>--enable-my-hook<span class="w"> </span>com.test.app
+
+<span class="c1"># Verify events are generated</span>
+python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<span class="s2">import json</span>
+<span class="s2">with open(&#39;profile_com.test.app_*.json&#39;) as f:</span>
+<span class="s2">    data = json.load(f)</span>
+<span class="s2">    events = data.get(&#39;MY_HOOK_CATEGORY&#39;, [])</span>
+<span class="s2">    print(f&#39;Generated {len(events)} events&#39;)</span>
+<span class="s2">    for event in events[:3]:</span>
+<span class="s2">        print(f&#39;Event: {event[\&quot;event_type\&quot;]}&#39;)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="integration-testing">
+<h3>Integration Testing<a class="headerlink" href="#integration-testing" title="Link to this heading"></a></h3>
+<p>Test hook interaction with other components:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># tests/integration/test_clipboard_integration.py</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">unittest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept</span><span class="w"> </span><span class="kn">import</span> <span class="n">AppProfiler</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.parsers.factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">parser_factory</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TestClipboardIntegration</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_parser_registration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Test that clipboard parser is registered&quot;&quot;&quot;</span>
+        <span class="n">parser</span> <span class="o">=</span> <span class="n">parser_factory</span><span class="o">.</span><span class="n">get_parser</span><span class="p">(</span><span class="s2">&quot;CLIPBOARD_MONITOR&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIsNotNone</span><span class="p">(</span><span class="n">parser</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_hook_config_integration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Test hook configuration integration&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.ammm</span><span class="w"> </span><span class="kn">import</span> <span class="n">parse_hook_config</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">argparse</span><span class="w"> </span><span class="kn">import</span> <span class="n">Namespace</span>
+
+        <span class="n">args</span> <span class="o">=</span> <span class="n">Namespace</span><span class="p">()</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">enable_clipboard_monitor</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="c1"># Set other args to False...</span>
+
+        <span class="n">config</span> <span class="o">=</span> <span class="n">parse_hook_config</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;clipboard_monitor_hooks&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
+</pre></div>
+</div>
+</section>
+<section id="performance-testing">
+<h3>Performance Testing<a class="headerlink" href="#performance-testing" title="Link to this heading"></a></h3>
+<p>Validate hook performance impact:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">test_clipboard_hook_performance</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Test that clipboard hooks don&#39;t significantly impact performance&quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+    <span class="c1"># Baseline measurement</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">run_app_without_hooks</span><span class="p">()</span>
+    <span class="n">baseline_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+
+    <span class="c1"># With hooks measurement</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">run_app_with_clipboard_hooks</span><span class="p">()</span>
+    <span class="n">hook_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+
+    <span class="c1"># Performance impact should be minimal</span>
+    <span class="n">performance_impact</span> <span class="o">=</span> <span class="p">(</span><span class="n">hook_time</span> <span class="o">-</span> <span class="n">baseline_time</span><span class="p">)</span> <span class="o">/</span> <span class="n">baseline_time</span>
+    <span class="k">assert</span> <span class="n">performance_impact</span> <span class="o">&lt;</span> <span class="mf">0.1</span>  <span class="c1"># Less than 10% impact</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="common-pitfalls-and-solutions">
+<h2>Common Pitfalls and Solutions<a class="headerlink" href="#common-pitfalls-and-solutions" title="Link to this heading"></a></h2>
+<p><strong>Issue: Hook Not Installing</strong></p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Problem: Class not found</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">MyClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;com.example.MyClass&quot;</span><span class="p">);</span><span class="w">  </span><span class="c1">// May throw</span>
+
+<span class="c1">// Solution: Defensive loading</span>
+<span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">MyClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;com.example.MyClass&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="c1">// Install hooks</span>
+<span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;MyClass not available: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">error</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="p">;</span><span class="w"> </span><span class="c1">// Skip gracefully</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>Issue: Method Overloads Not Working</strong></p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Problem: Incorrect overload specification</span>
+<span class="nx">MyClass</span><span class="p">.</span><span class="nx">myMethod</span><span class="p">.</span><span class="nx">overload</span><span class="p">(</span><span class="s2">&quot;String&quot;</span><span class="p">).</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">...</span><span class="w">  </span><span class="c1">// Wrong</span>
+
+<span class="c1">// Solution: Use correct Java type names</span>
+<span class="nx">MyClass</span><span class="p">.</span><span class="nx">myMethod</span><span class="p">.</span><span class="nx">overload</span><span class="p">(</span><span class="s2">&quot;java.lang.String&quot;</span><span class="p">).</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">...</span>
+</pre></div>
+</div>
+<p><strong>Issue: Events Not Appearing in JSON</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Debug steps:</span>
+<span class="c1"># 1. Check TypeScript compilation</span>
+npm<span class="w"> </span>run<span class="w"> </span>build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>grep<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;my_hook&quot;</span><span class="w"> </span>src/dexray_intercept/profiling.js
+
+<span class="c1"># 2. Check parser registration</span>
+python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;from dexray_intercept.parsers.factory import parser_factory; print(parser_factory.get_parser(&#39;MY_CATEGORY&#39;))&quot;</span>
+
+<span class="c1"># 3. Check hook configuration</span>
+ammm<span class="w"> </span>-v<span class="w"> </span>--enable-my-hook<span class="w"> </span>com.test.app<span class="w">  </span><span class="c1"># Look for &quot;[HOOK] Enabled: my_hook&quot;</span>
+</pre></div>
+</div>
+<p><strong>Issue: App Crashes with Hooks</strong></p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Problem: Unhandled exceptions in hooks</span>
+<span class="nx">MyClass</span><span class="p">.</span><span class="nx">sensitiveMethod</span><span class="p">.</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// This might throw and crash the app</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">sensitiveMethod</span><span class="p">();</span>
+<span class="w">    </span><span class="nx">processResult</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span><span class="w">  </span><span class="c1">// May fail</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="c1">// Solution: Comprehensive error handling</span>
+<span class="nx">MyClass</span><span class="p">.</span><span class="nx">sensitiveMethod</span><span class="p">.</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">sensitiveMethod</span><span class="p">();</span>
+<span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">processResult</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">processingError</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Result processing failed: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">processingError</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">methodError</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Method execution failed: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">methodError</span><span class="p">);</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="nx">methodError</span><span class="p">;</span><span class="w"> </span><span class="c1">// Re-throw to maintain app behavior</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>After creating your custom hook:</p>
+<ol class="arabic simple">
+<li><p><strong>Test thoroughly</strong> with multiple target applications</p></li>
+<li><p><strong>Document the hook</strong> in user guides and API reference</p></li>
+<li><p><strong>Create examples</strong> showing practical usage scenarios</p></li>
+<li><p><strong>Consider contributing</strong> the hook back to the project</p></li>
+<li><p><strong>Monitor performance</strong> impact on target applications</p></li>
+</ol>
+<p>For more advanced patterns and integration:</p>
+<ul class="simple">
+<li><p>Study existing hooks in the <code class="docutils literal notranslate"><span class="pre">agent/</span></code> directory</p></li>
+<li><p>Review the <a class="reference internal" href="../api/typescript-api.html"><span class="doc">TypeScript API Reference</span></a> for detailed API reference</p></li>
+<li><p>Check the <span class="xref std std-doc">building</span> guide for development workflow</p></li>
+<li><p>See <span class="xref std std-doc">contributing</span> for submission guidelines</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="Development Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Daniel Baier, Jan-Niclas Hilgert.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

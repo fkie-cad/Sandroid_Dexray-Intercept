@@ -1,0 +1,671 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Output Formats &mdash; SanDroid - Dexray Intercept 0.3.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f7af4a0e" />
+
+  
+    <link rel="canonical" href="https://your-username.github.io/Sandroid_Dexray-Intercept/user-guide/output-formats.html" />
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=426446dc"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="API Reference" href="../api/index.html" />
+    <link rel="prev" title="Hook Configuration Guide" href="hook-configuration.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SanDroid - Dexray Intercept
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">User Guide</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="cli-usage.html">Command Line Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hook-configuration.html">Hook Configuration Guide</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Output Formats</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#overview">Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#real-time-terminal-output">Real-Time Terminal Output</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#json-profile-format">JSON Profile Format</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#basic-structure">Basic Structure</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#event-categories">Event Categories</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#file-naming-convention">File Naming Convention</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#network-capture-files-fritap">Network Capture Files (friTap)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#tls-key-log-files">TLS Key Log Files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#network-capture-files">Network Capture Files</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#working-with-output-data">Working with Output Data</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#programmatic-analysis">Programmatic Analysis</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#integration-with-analysis-tools">Integration with Analysis Tools</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#advanced-output-processing">Advanced Output Processing</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#custom-event-filtering">Custom Event Filtering</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#real-time-event-streaming">Real-time Event Streaming</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#output-customization">Output Customization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#environment-variables">Environment Variables</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#profile-data-validation">Profile Data Validation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#best-practices">Best Practices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#troubleshooting-output-issues">Troubleshooting Output Issues</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#key-concepts">Key Concepts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#workflow">Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#getting-help">Getting Help</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/index.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/index.html">Development Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SanDroid - Dexray Intercept</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">User Guide</a></li>
+      <li class="breadcrumb-item active">Output Formats</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/user-guide/output-formats.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="output-formats">
+<h1>Output Formats<a class="headerlink" href="#output-formats" title="Link to this heading"></a></h1>
+<p>Dexray Intercept provides multiple output formats to support different analysis workflows and integration requirements.</p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p>The tool generates output in two primary modes:</p>
+<ol class="arabic simple">
+<li><p><strong>Real-time Terminal Output</strong> - Live event stream for monitoring</p></li>
+<li><p><strong>JSON Profile Files</strong> - Structured data for analysis and integration</p></li>
+</ol>
+<p>Additionally, when friTap is enabled:</p>
+<ol class="arabic simple" start="3">
+<li><p><strong>TLS Key Logs</strong> - For decrypting captured network traffic</p></li>
+<li><p><strong>Network Capture Files</strong> - PCAP files of all network traffic</p></li>
+</ol>
+</section>
+<section id="real-time-terminal-output">
+<h2>Real-Time Terminal Output<a class="headerlink" href="#real-time-terminal-output" title="Link to this heading"></a></h2>
+<p>Events appear in the terminal as they occur, color-coded by category:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>[*] attaching to app: com.example.app
+[*] enabled hooks: aes_hooks, web_hooks, bypass_hooks
+[*] starting app profiling
+[*] press Ctrl+C to stop the profiling ...
+
+[CRYPTO] AES key creation: algorithm=AES, key_length=32, key=a1b2c3d4...
+[WEB] HTTP request: GET https://api.example.com/users/profile
+[BYPASS] Root detection bypassed: File.exists() -&gt; /system/bin/su (false)
+[CUSTOM] my_script.js: Custom hook triggered with data: {...}
+</pre></div>
+</div>
+<dl class="simple">
+<dt><strong>Color Coding:</strong></dt><dd><ul class="simple">
+<li><p><strong>[CRYPTO]</strong> - Blue - Cryptographic operations</p></li>
+<li><p><strong>[WEB]</strong> - Green - Network communications</p></li>
+<li><p><strong>[FILE]</strong> - Yellow - File system operations</p></li>
+<li><p><strong>[IPC]</strong> - Cyan - Inter-process communication</p></li>
+<li><p><strong>[BYPASS]</strong> - Red - Anti-analysis bypass events</p></li>
+<li><p><strong>[CUSTOM]</strong> - Magenta - Custom script messages</p></li>
+</ul>
+</dd>
+<dt><strong>Verbosity Levels:</strong></dt><dd><ul class="simple">
+<li><p><strong>Normal</strong>: Essential events only</p></li>
+<li><p><strong>Verbose (``-v``)</strong>: All events including debug information</p></li>
+<li><p><strong>Stack traces (``–enable-full-stacktrace``)</strong>: Include call origin information</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="json-profile-format">
+<h2>JSON Profile Format<a class="headerlink" href="#json-profile-format" title="Link to this heading"></a></h2>
+<p>When analysis stops (Ctrl+C), a comprehensive JSON profile is generated containing all captured events.</p>
+<section id="basic-structure">
+<h3>Basic Structure<a class="headerlink" href="#basic-structure" title="Link to this heading"></a></h3>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;CATEGORY_NAME&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;specific.event.type&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:00.000Z&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;field1&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;value1&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;field2&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;value2&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;_metadata&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;created_at&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:00.000Z&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2.0&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;total_events&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;category_breakdown&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;CRYPTO_AES&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">15</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;WEB&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;BYPASS_DETECTION&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">7</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="event-categories">
+<h3>Event Categories<a class="headerlink" href="#event-categories" title="Link to this heading"></a></h3>
+<dl class="simple">
+<dt><strong>CRYPTO_AES</strong></dt><dd><p>AES encryption/decryption operations</p>
+</dd>
+</dl>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;crypto.cipher.operation&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;algorithm&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;AES/CBC/PKCS5Padding&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;operation_mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;operation_mode_desc&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ENCRYPT_MODE (1)&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;key_hex&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a1b2c3d4e5f67890...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;iv_hex&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1234567890abcdef...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;input_hex&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;48656c6c6f20576f726c64&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;output_hex&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;8b7df143d91c7169...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;plaintext&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Hello World&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;stack_trace&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;com.example.CryptoManager.encrypt()&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:00.000Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt><strong>WEB</strong></dt><dd><p>Network communications</p>
+</dd>
+</dl>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http.request&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://api.example.com/login&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;POST&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;headers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;Content-Type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;application/json&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;Authorization&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Bearer eyJ0eXAi...&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;body_preview&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;{\&quot;username\&quot;: \&quot;user@example.com\&quot;}&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;response_code&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">200</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;response_headers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;Set-Cookie&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;session=abc123; HttpOnly&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;library&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OkHttp&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:15.000Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt><strong>FILE_SYSTEM</strong></dt><dd><p>File operations</p>
+</dd>
+</dl>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;file.write&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;operation&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;write&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;file_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/data/data/com.example.app/shared_prefs/config.xml&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">256</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;content_preview&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;?xml version=\&quot;1.0\&quot; encoding=\&quot;utf-8\&quot;?&gt;...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;permissions&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;rw-rw----&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:30.000Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt><strong>BYPASS_DETECTION</strong></dt><dd><p>Anti-analysis bypass events</p>
+</dd>
+</dl>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bypass.root.file_check&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;bypass_category&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;root_detection&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;detection_method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;File.exists()&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;file_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/system/bin/su&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;original_result&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;bypassed_result&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;file_check_bypassed&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;metadata&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Root detection via file existence check&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;severity&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;high&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;mitre_technique&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;T1622&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:30:45.000Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt><strong>CUSTOM_SCRIPT</strong></dt><dd><p>Custom script messages</p>
+</dd>
+</dl>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;custom_script.message&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;script_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;banking_analysis.js&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;hook_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;pin_validation&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;pin_length&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">6</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;validation_result&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;success&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-08-20T10:31:00.000Z&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="file-naming-convention">
+<h3>File Naming Convention<a class="headerlink" href="#file-naming-convention" title="Link to this heading"></a></h3>
+<p>JSON profiles are automatically named with timestamps:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>profile_&lt;target&gt;_&lt;timestamp&gt;.json
+</pre></div>
+</div>
+<dl class="simple">
+<dt>Examples:</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">profile_com.banking.app_2024-08-20_10-30-45.json</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">profile_1234_2024-08-20_15-45-30.json</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">profile_unknown_app_2024-08-20_09-15-22.json</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</section>
+</section>
+<section id="network-capture-files-fritap">
+<h2>Network Capture Files (friTap)<a class="headerlink" href="#network-capture-files-fritap" title="Link to this heading"></a></h2>
+<p>When <code class="docutils literal notranslate"><span class="pre">--enable-fritap</span></code> is used, additional network analysis files are generated:</p>
+<section id="tls-key-log-files">
+<h3>TLS Key Log Files<a class="headerlink" href="#tls-key-log-files" title="Link to this heading"></a></h3>
+<p>Contains extracted TLS keys for decrypting captured traffic:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span># TLS Key Log Format
+CLIENT_RANDOM 52362c1a7cf70c40... 10203040506070...
+CLIENT_RANDOM 52362c1a7cf70c41... 20304050607080...
+</pre></div>
+</div>
+<dl class="simple">
+<dt><strong>Filename format:</strong></dt><dd><p><code class="docutils literal notranslate"><span class="pre">dexray_tlskeys_&lt;app&gt;_&lt;timestamp&gt;.log</span></code></p>
+</dd>
+<dt><strong>Usage:</strong></dt><dd><p>Import into Wireshark or other network analysis tools to decrypt TLS traffic.</p>
+</dd>
+</dl>
+</section>
+<section id="network-capture-files">
+<h3>Network Capture Files<a class="headerlink" href="#network-capture-files" title="Link to this heading"></a></h3>
+<p>PCAP files containing all network traffic:</p>
+<dl class="simple">
+<dt><strong>Filename format:</strong></dt><dd><p><code class="docutils literal notranslate"><span class="pre">dexray_unfiltered_traffic_&lt;app&gt;_&lt;timestamp&gt;.pcap</span></code></p>
+</dd>
+<dt><strong>Contents:</strong></dt><dd><ul class="simple">
+<li><p>Raw network packets</p></li>
+<li><p>All protocols (TCP, UDP, ICMP, etc.)</p></li>
+<li><p>Decryptable when combined with TLS key logs</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Analysis workflow:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Open in Wireshark with TLS keys</span>
+wireshark<span class="w"> </span>dexray_unfiltered_traffic_com.banking.app_20240820_103000.pcap
+
+<span class="c1"># In Wireshark, load TLS keys:</span>
+<span class="c1"># Edit → Preferences → Protocols → TLS → (Pre)-Master-Secret log filename</span>
+<span class="c1"># Select: dexray_tlskeys_com.banking.app_20240820_103000.log</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="working-with-output-data">
+<h2>Working with Output Data<a class="headerlink" href="#working-with-output-data" title="Link to this heading"></a></h2>
+<section id="programmatic-analysis">
+<h3>Programmatic Analysis<a class="headerlink" href="#programmatic-analysis" title="Link to this heading"></a></h3>
+<p><strong>Python JSON Processing:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+
+<span class="c1"># Load profile data</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;profile_com.example.app_2024-08-20_10-30-45.json&#39;</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">profile</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+<span class="c1"># Analyze crypto events</span>
+<span class="n">crypto_events</span> <span class="o">=</span> <span class="n">profile</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;CRYPTO_AES&#39;</span><span class="p">,</span> <span class="p">[])</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">crypto_events</span><span class="p">)</span><span class="si">}</span><span class="s2"> crypto operations&quot;</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">crypto_events</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;event_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;crypto.key.creation&#39;</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;AES key: </span><span class="si">{</span><span class="n">event</span><span class="p">[</span><span class="s1">&#39;algorithm&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">event</span><span class="p">[</span><span class="s1">&#39;key_length&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> bytes)&quot;</span><span class="p">)</span>
+
+<span class="c1"># Analyze network traffic</span>
+<span class="n">web_events</span> <span class="o">=</span> <span class="n">profile</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;WEB&#39;</span><span class="p">,</span> <span class="p">[])</span>
+<span class="n">unique_domains</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+<span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">web_events</span><span class="p">:</span>
+    <span class="k">if</span> <span class="s1">&#39;url&#39;</span> <span class="ow">in</span> <span class="n">event</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">urlparse</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">urlparse</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="s1">&#39;url&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">netloc</span>
+        <span class="n">unique_domains</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Contacted domains: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">unique_domains</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Filtering and Searching:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Find all bypass events</span>
+<span class="n">bypass_events</span> <span class="o">=</span> <span class="n">profile</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;BYPASS_DETECTION&#39;</span><span class="p">,</span> <span class="p">[])</span>
+<span class="n">root_detections</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">bypass_events</span> <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bypass_category&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;root_detection&#39;</span><span class="p">]</span>
+
+<span class="c1"># Find crypto operations with specific algorithms</span>
+<span class="n">aes_256_ops</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">crypto_events</span> <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key_length&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">32</span><span class="p">]</span>
+
+<span class="c1"># Time-based filtering</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+<span class="n">start_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromisoformat</span><span class="p">(</span><span class="s1">&#39;2024-08-20T10:30:00.000Z&#39;</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;Z&#39;</span><span class="p">,</span> <span class="s1">&#39;+00:00&#39;</span><span class="p">))</span>
+
+<span class="n">recent_events</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">category</span> <span class="ow">in</span> <span class="n">profile</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">category</span> <span class="o">!=</span> <span class="s1">&#39;_metadata&#39;</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">profile</span><span class="p">[</span><span class="n">category</span><span class="p">]:</span>
+            <span class="n">event_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromisoformat</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="s1">&#39;timestamp&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;Z&#39;</span><span class="p">,</span> <span class="s1">&#39;+00:00&#39;</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">event_time</span> <span class="o">&gt;</span> <span class="n">start_time</span><span class="p">:</span>
+                <span class="n">recent_events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="integration-with-analysis-tools">
+<h3>Integration with Analysis Tools<a class="headerlink" href="#integration-with-analysis-tools" title="Link to this heading"></a></h3>
+<p><strong>Threat Intelligence Platforms:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Extract IOCs from network events</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">extract_iocs</span><span class="p">(</span><span class="n">profile</span><span class="p">):</span>
+    <span class="n">iocs</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;domains&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;urls&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;ips&#39;</span><span class="p">:</span> <span class="p">[]}</span>
+
+    <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">profile</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;WEB&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+        <span class="k">if</span> <span class="s1">&#39;url&#39;</span> <span class="ow">in</span> <span class="n">event</span><span class="p">:</span>
+            <span class="n">iocs</span><span class="p">[</span><span class="s1">&#39;urls&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="s1">&#39;url&#39;</span><span class="p">])</span>
+            <span class="n">domain</span> <span class="o">=</span> <span class="n">urlparse</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="s1">&#39;url&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">netloc</span>
+            <span class="n">iocs</span><span class="p">[</span><span class="s1">&#39;domains&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">iocs</span>
+</pre></div>
+</div>
+<p><strong>SIEM Integration:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Convert to common log format</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">to_siem_format</span><span class="p">(</span><span class="n">event</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;timestamp&#39;</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;timestamp&#39;</span><span class="p">],</span>
+        <span class="s1">&#39;source&#39;</span><span class="p">:</span> <span class="s1">&#39;dexray-intercept&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;category&#39;</span><span class="p">:</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;event_type&#39;</span><span class="p">,</span> <span class="s1">&#39;unknown&#39;</span><span class="p">),</span>
+        <span class="s1">&#39;severity&#39;</span><span class="p">:</span> <span class="n">get_severity</span><span class="p">(</span><span class="n">event</span><span class="p">),</span>
+        <span class="s1">&#39;details&#39;</span><span class="p">:</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+    <span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>Malware Analysis Workflows:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Detect suspicious patterns</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">analyze_malware_indicators</span><span class="p">(</span><span class="n">profile</span><span class="p">):</span>
+    <span class="n">indicators</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Check for root detection bypass</span>
+    <span class="n">bypass_events</span> <span class="o">=</span> <span class="n">profile</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;BYPASS_DETECTION&#39;</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bypass_category&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;root_detection&#39;</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">bypass_events</span><span class="p">):</span>
+        <span class="n">indicators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;root_detection_evasion&#39;</span><span class="p">)</span>
+
+    <span class="c1"># Check for network exfiltration</span>
+    <span class="n">web_events</span> <span class="o">=</span> <span class="n">profile</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;WEB&#39;</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="n">suspicious_domains</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;suspicious.com&#39;</span><span class="p">,</span> <span class="s1">&#39;evil.net&#39;</span><span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">web_events</span><span class="p">:</span>
+        <span class="n">url</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;url&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">domain</span> <span class="ow">in</span> <span class="n">url</span> <span class="k">for</span> <span class="n">domain</span> <span class="ow">in</span> <span class="n">suspicious_domains</span><span class="p">):</span>
+            <span class="n">indicators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;c2_communication&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">indicators</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="advanced-output-processing">
+<h2>Advanced Output Processing<a class="headerlink" href="#advanced-output-processing" title="Link to this heading"></a></h2>
+<section id="custom-event-filtering">
+<h3>Custom Event Filtering<a class="headerlink" href="#custom-event-filtering" title="Link to this heading"></a></h3>
+<p>Filter events during analysis using the Python API:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept</span><span class="w"> </span><span class="kn">import</span> <span class="n">AppProfiler</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CustomProfileCollector</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">original_collector</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">original</span> <span class="o">=</span> <span class="n">original_collector</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filtered_events</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_frida_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="c1"># Custom filtering logic</span>
+        <span class="n">payload</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;payload&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">event_type</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;profileType&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Only collect crypto and network events</span>
+        <span class="k">if</span> <span class="n">event_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;CRYPTO_AES&#39;</span><span class="p">,</span> <span class="s1">&#39;WEB&#39;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">original</span><span class="o">.</span><span class="n">process_frida_message</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="kc">False</span>
+</pre></div>
+</div>
+</section>
+<section id="real-time-event-streaming">
+<h3>Real-time Event Streaming<a class="headerlink" href="#real-time-event-streaming" title="Link to this heading"></a></h3>
+<p>Process events as they occur:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">queue</span><span class="w"> </span><span class="kn">import</span> <span class="n">Queue</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">threading</span><span class="w"> </span><span class="kn">import</span> <span class="n">Thread</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">EventStreamer</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">event_queue</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">running</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event_data</span><span class="p">):</span>
+        <span class="c1"># Real-time processing</span>
+        <span class="k">if</span> <span class="n">event_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;event_type&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;crypto.key.creation&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">alert_crypto_key</span><span class="p">(</span><span class="n">event_data</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="s1">&#39;suspicious.com&#39;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">event_data</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">alert_suspicious_network</span><span class="p">(</span><span class="n">event_data</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">alert_crypto_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;🔐 CRYPTO ALERT: </span><span class="si">{</span><span class="n">event</span><span class="p">[</span><span class="s1">&#39;algorithm&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> key created&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">alert_suspicious_network</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;🚨 NETWORK ALERT: Suspicious domain contacted&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="output-customization">
+<h2>Output Customization<a class="headerlink" href="#output-customization" title="Link to this heading"></a></h2>
+<section id="environment-variables">
+<h3>Environment Variables<a class="headerlink" href="#environment-variables" title="Link to this heading"></a></h3>
+<p>Control output behavior:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Disable colored output</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">DEXRAY_NO_COLOR</span><span class="o">=</span><span class="m">1</span>
+
+<span class="c1"># Custom output directory</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">DEXRAY_OUTPUT_DIR</span><span class="o">=</span>/path/to/analysis/output
+
+<span class="c1"># Maximum content preview length</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">DEXRAY_PREVIEW_MAX_LENGTH</span><span class="o">=</span><span class="m">100</span>
+</pre></div>
+</div>
+</section>
+<section id="profile-data-validation">
+<h3>Profile Data Validation<a class="headerlink" href="#profile-data-validation" title="Link to this heading"></a></h3>
+<p>Validate JSON profile integrity:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">validate_profile</span><span class="p">(</span><span class="n">profile_path</span><span class="p">):</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">profile_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">profile</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+    <span class="c1"># Check required metadata</span>
+    <span class="k">if</span> <span class="s1">&#39;_metadata&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">profile</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Missing metadata&quot;</span>
+
+    <span class="n">metadata</span> <span class="o">=</span> <span class="n">profile</span><span class="p">[</span><span class="s1">&#39;_metadata&#39;</span><span class="p">]</span>
+    <span class="n">required_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;created_at&#39;</span><span class="p">,</span> <span class="s1">&#39;version&#39;</span><span class="p">,</span> <span class="s1">&#39;total_events&#39;</span><span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">required_fields</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">field</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">metadata</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Missing metadata field: </span><span class="si">{</span><span class="n">field</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="c1"># Validate event structure</span>
+    <span class="n">total_events</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">category</span><span class="p">,</span> <span class="n">events</span> <span class="ow">in</span> <span class="n">profile</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">category</span> <span class="o">==</span> <span class="s1">&#39;_metadata&#39;</span><span class="p">:</span>
+            <span class="k">continue</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Category </span><span class="si">{</span><span class="n">category</span><span class="si">}</span><span class="s2"> is not a list&quot;</span>
+
+        <span class="n">total_events</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s1">&#39;timestamp&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">event</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Event missing timestamp in </span><span class="si">{</span><span class="n">category</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="c1"># Verify event count</span>
+    <span class="k">if</span> <span class="n">total_events</span> <span class="o">!=</span> <span class="n">metadata</span><span class="p">[</span><span class="s1">&#39;total_events&#39;</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Event count mismatch&quot;</span>
+
+    <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;Profile is valid&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="best-practices">
+<h2>Best Practices<a class="headerlink" href="#best-practices" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt><strong>Data Management:</strong></dt><dd><ul class="simple">
+<li><p>Regularly archive old profile files</p></li>
+<li><p>Use descriptive filenames and directories</p></li>
+<li><p>Implement log rotation for high-volume analysis</p></li>
+</ul>
+</dd>
+<dt><strong>Performance:</strong></dt><dd><ul class="simple">
+<li><p>Filter events in real-time when possible</p></li>
+<li><p>Use streaming processing for large profiles</p></li>
+<li><p>Consider data compression for storage</p></li>
+</ul>
+</dd>
+<dt><strong>Security:</strong></dt><dd><ul class="simple">
+<li><p>Sanitize profile data before sharing</p></li>
+<li><p>Remove sensitive information from logs</p></li>
+<li><p>Encrypt stored analysis results</p></li>
+</ul>
+</dd>
+<dt><strong>Integration:</strong></dt><dd><ul class="simple">
+<li><p>Standardize on JSON processing libraries</p></li>
+<li><p>Implement error handling for malformed data</p></li>
+<li><p>Use schema validation for automated processing</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="troubleshooting-output-issues">
+<h2>Troubleshooting Output Issues<a class="headerlink" href="#troubleshooting-output-issues" title="Link to this heading"></a></h2>
+<p><strong>Common Problems:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Empty JSON profiles</strong> - Verify hooks are enabled</p></li>
+<li><p><strong>Large file sizes</strong> - Use selective hook configuration</p></li>
+<li><p><strong>Missing network captures</strong> - Check friTap configuration</p></li>
+<li><p><strong>Incomplete events</strong> - Ensure app ran long enough for analysis</p></li>
+</ol>
+<p><strong>Debug Steps:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Enable verbose output</span>
+ammm<span class="w"> </span>-v<span class="w"> </span>--hooks-crypto<span class="w"> </span>com.example.app
+
+<span class="c1"># Check file permissions</span>
+ls<span class="w"> </span>-la<span class="w"> </span>profile_*.json
+
+<span class="c1"># Validate JSON syntax</span>
+python3<span class="w"> </span>-m<span class="w"> </span>json.tool<span class="w"> </span>profile_example.json
+</pre></div>
+</div>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Learn about the Python API: <a class="reference internal" href="../api/python-api.html"><span class="doc">Python API Reference</span></a></p></li>
+<li><p>Explore development workflows: <a class="reference internal" href="../development/index.html"><span class="doc">Development Guide</span></a></p></li>
+<li><p>Check troubleshooting guide: <span class="xref std std-doc">../troubleshooting</span></p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="hook-configuration.html" class="btn btn-neutral float-left" title="Hook Configuration Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../api/index.html" class="btn btn-neutral float-right" title="API Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Daniel Baier, Jan-Niclas Hilgert.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

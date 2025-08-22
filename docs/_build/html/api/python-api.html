@@ -1,0 +1,1321 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Python API Reference &mdash; SanDroid - Dexray Intercept 0.3.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f7af4a0e" />
+
+  
+    <link rel="canonical" href="https://your-username.github.io/Sandroid_Dexray-Intercept/api/python-api.html" />
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=426446dc"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="TypeScript API Reference" href="typescript-api.html" />
+    <link rel="prev" title="API Reference" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SanDroid - Dexray Intercept
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user-guide/index.html">User Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Python API Reference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#core-classes">Core Classes</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#appprofiler">AppProfiler</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#profiledata">ProfileData</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#event-classes">Event Classes</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#base-event">Base Event</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cryptoevent">CryptoEvent</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#networkevent">NetworkEvent</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#parsing-and-processing">Parsing and Processing</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#event-parsers">Event Parsers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#profile-collection">Profile Collection</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#hook-management">Hook Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#hookmanager">HookManager</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#frida-integration">Frida Integration</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#instrumentationservice">InstrumentationService</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#utility-functions">Utility Functions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#device-management">Device Management</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#command-line-integration">Command Line Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#advanced-usage-patterns">Advanced Usage Patterns</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#real-time-event-processing">Real-time Event Processing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#custom-event-types">Custom Event Types</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#batch-processing">Batch Processing</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#error-handling">Error Handling</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#exception-classes">Exception Classes</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#best-practices">Best Practices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#integration-examples">Integration Examples</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="typescript-api.html">TypeScript API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#architecture-integration">Architecture Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#development-workflow">Development Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#quick-examples">Quick Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#typescript-compilation">TypeScript Compilation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#api-compatibility">API Compatibility</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#getting-started">Getting Started</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/index.html">Development Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SanDroid - Dexray Intercept</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">Python API Reference</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/python-api.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="python-api-reference">
+<h1>Python API Reference<a class="headerlink" href="#python-api-reference" title="Link to this heading"></a></h1>
+<p>This section documents the Python API for Dexray Intercept, enabling programmatic control and analysis capabilities.</p>
+<section id="core-classes">
+<h2>Core Classes<a class="headerlink" href="#core-classes" title="Link to this heading"></a></h2>
+<section id="appprofiler">
+<h3>AppProfiler<a class="headerlink" href="#appprofiler" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dexray_intercept.</span></span><span class="sig-name descname"><span class="pre">AppProfiler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">process</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'CMD'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">deactivate_unlink</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path_filters</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hook_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable_stacktrace</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable_fritap</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fritap_output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'./fritap_output'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spawn_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_scripts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler" title="Link to this definition"></a></dt>
+<dd><p>Main application profiler class.</p>
+<p>This class orchestrates the profiling process by coordinating between:
+- InstrumentationService: Manages Frida script loading and communication
+- ProfileCollector: Handles event collection and processing
+- HookManager: Manages hook configuration</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.set_process_session">
+<span class="sig-name descname"><span class="pre">set_process_session</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">process_session</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.set_process_session"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.set_process_session" title="Link to this definition"></a></dt>
+<dd><p>Update the process session after fritap spawns the target</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.send_interrupt_to_fritap">
+<span class="sig-name descname"><span class="pre">send_interrupt_to_fritap</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.send_interrupt_to_fritap"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.send_interrupt_to_fritap" title="Link to this definition"></a></dt>
+<dd><p>Send SIGINT (Ctrl+C) to fritap process</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.wait_for_fritap">
+<span class="sig-name descname"><span class="pre">wait_for_fritap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.wait_for_fritap"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.wait_for_fritap" title="Link to this definition"></a></dt>
+<dd><p>Wait for fritap to finish</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>timeout</strong> – Maximum time to wait in seconds (None for indefinite)</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if fritap finished, False if timeout occurred</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.start_profiling">
+<span class="sig-name descname"><span class="pre">start_profiling</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">app_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">frida.core.Script</span></span></span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.start_profiling"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.start_profiling" title="Link to this definition"></a></dt>
+<dd><p>Start the profiling process</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.stop_profiling">
+<span class="sig-name descname"><span class="pre">stop_profiling</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.stop_profiling"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.stop_profiling" title="Link to this definition"></a></dt>
+<dd><p>Stop the profiling process</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.enable_hook">
+<span class="sig-name descname"><span class="pre">enable_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">enabled</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.enable_hook"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.enable_hook" title="Link to this definition"></a></dt>
+<dd><p>Enable or disable a specific hook at runtime</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.get_enabled_hooks">
+<span class="sig-name descname"><span class="pre">get_enabled_hooks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.get_enabled_hooks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.get_enabled_hooks" title="Link to this definition"></a></dt>
+<dd><p>Return list of currently enabled hooks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.enable_all_hooks">
+<span class="sig-name descname"><span class="pre">enable_all_hooks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.enable_all_hooks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.enable_all_hooks" title="Link to this definition"></a></dt>
+<dd><p>Enable all available hooks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.enable_hook_group">
+<span class="sig-name descname"><span class="pre">enable_hook_group</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.enable_hook_group"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.enable_hook_group" title="Link to this definition"></a></dt>
+<dd><p>Enable a group of related hooks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.get_profile_data">
+<span class="sig-name descname"><span class="pre">get_profile_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#dexray_intercept.models.profile.ProfileData" title="dexray_intercept.models.profile.ProfileData"><span class="pre">ProfileData</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.get_profile_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.get_profile_data" title="Link to this definition"></a></dt>
+<dd><p>Get the collected profile data</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.get_profiling_log_as_json">
+<span class="sig-name descname"><span class="pre">get_profiling_log_as_json</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.get_profiling_log_as_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.get_profiling_log_as_json" title="Link to this definition"></a></dt>
+<dd><p>Get profile data as JSON string</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.write_profiling_log">
+<span class="sig-name descname"><span class="pre">write_profiling_log</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'profile.json'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.write_profiling_log"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.write_profiling_log" title="Link to this definition"></a></dt>
+<dd><p>Write profile data to file</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.get_event_count">
+<span class="sig-name descname"><span class="pre">get_event_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">category</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.get_event_count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.get_event_count" title="Link to this definition"></a></dt>
+<dd><p>Get event count for category or total</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.get_categories">
+<span class="sig-name descname"><span class="pre">get_categories</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.get_categories"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.get_categories" title="Link to this definition"></a></dt>
+<dd><p>Get all categories with events</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.instrument">
+<span class="sig-name descname"><span class="pre">instrument</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">frida.core.Script</span></span></span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.instrument"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.instrument" title="Link to this definition"></a></dt>
+<dd><p>Legacy method - use start_profiling() instead</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.finish_app_profiling">
+<span class="sig-name descname"><span class="pre">finish_app_profiling</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.finish_app_profiling"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.finish_app_profiling" title="Link to this definition"></a></dt>
+<dd><p>Legacy method - use stop_profiling() instead</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.get_frida_script">
+<span class="sig-name descname"><span class="pre">get_frida_script</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.get_frida_script"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.get_frida_script" title="Link to this definition"></a></dt>
+<dd><p>Get the path to the Frida script</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.update_script">
+<span class="sig-name descname"><span class="pre">update_script</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">script</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.update_script"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.update_script" title="Link to this definition"></a></dt>
+<dd><p>Update script reference (for compatibility)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.AppProfiler.get_stats">
+<span class="sig-name descname"><span class="pre">get_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/appProfiling.html#AppProfiler.get_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.AppProfiler.get_stats" title="Link to this definition"></a></dt>
+<dd><p>Get profiling statistics</p>
+</dd></dl>
+
+</dd></dl>
+
+<p>The main orchestrator class that coordinates Frida instrumentation, event collection, and profile generation.</p>
+<p><strong>Constructor Parameters:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">AppProfiler</span><span class="p">(</span>
+    <span class="n">process</span><span class="p">,</span>                    <span class="c1"># Frida process session</span>
+    <span class="n">verbose_mode</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>         <span class="c1"># Enable verbose output</span>
+    <span class="n">output_format</span><span class="o">=</span><span class="s2">&quot;CMD&quot;</span><span class="p">,</span>        <span class="c1"># Output format (&quot;CMD&quot; or &quot;JSON&quot;)</span>
+    <span class="n">base_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>            <span class="c1"># Base path for file dumps</span>
+    <span class="n">deactivate_unlink</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>   <span class="c1"># Disable file unlinking</span>
+    <span class="n">path_filters</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>         <span class="c1"># Path filters for filesystem events</span>
+    <span class="n">hook_config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>          <span class="c1"># Hook configuration dict</span>
+    <span class="n">enable_stacktrace</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>   <span class="c1"># Enable stack traces</span>
+    <span class="n">enable_fritap</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>       <span class="c1"># Enable friTap integration</span>
+    <span class="n">fritap_output_dir</span><span class="o">=</span><span class="s2">&quot;./fritap_output&quot;</span><span class="p">,</span>  <span class="c1"># friTap output directory</span>
+    <span class="n">target_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>          <span class="c1"># Target app name</span>
+    <span class="n">spawn_mode</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>          <span class="c1"># Whether target was spawned</span>
+    <span class="n">custom_scripts</span><span class="o">=</span><span class="kc">None</span>        <span class="c1"># List of custom script paths</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Basic Usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept</span><span class="w"> </span><span class="kn">import</span> <span class="n">AppProfiler</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">frida</span>
+
+<span class="c1"># Connect to device and attach to app</span>
+<span class="n">device</span> <span class="o">=</span> <span class="n">frida</span><span class="o">.</span><span class="n">get_usb_device</span><span class="p">()</span>
+<span class="n">session</span> <span class="o">=</span> <span class="n">device</span><span class="o">.</span><span class="n">attach</span><span class="p">(</span><span class="s2">&quot;com.example.app&quot;</span><span class="p">)</span>
+
+<span class="c1"># Create profiler with crypto and network monitoring</span>
+<span class="n">profiler</span> <span class="o">=</span> <span class="n">AppProfiler</span><span class="p">(</span>
+    <span class="n">session</span><span class="p">,</span>
+    <span class="n">hook_config</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;aes_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s1">&#39;web_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s1">&#39;bypass_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span>
+    <span class="p">},</span>
+    <span class="n">verbose_mode</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+
+<span class="c1"># Start profiling</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">profiler</span><span class="o">.</span><span class="n">start_profiling</span><span class="p">(</span><span class="s2">&quot;com.example.app&quot;</span><span class="p">)</span>
+
+<span class="c1"># Let app run and collect events...</span>
+<span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Press Enter to stop...&quot;</span><span class="p">)</span>
+
+<span class="c1"># Stop and get results</span>
+<span class="n">profiler</span><span class="o">.</span><span class="n">stop_profiling</span><span class="p">()</span>
+<span class="n">profile_data</span> <span class="o">=</span> <span class="n">profiler</span><span class="o">.</span><span class="n">get_profile_data</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><strong>Key Methods:</strong></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="start_profiling">
+<span class="sig-name descname"><span class="pre">start_profiling</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">app_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#start_profiling" title="Link to this definition"></a></dt>
+<dd><p>Start the profiling process and load Frida scripts.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>app_name</strong> – Name of target application</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Loaded Frida script instance</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>frida.core.Script</p>
+</dd>
+</dl>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">script</span> <span class="o">=</span> <span class="n">profiler</span><span class="o">.</span><span class="n">start_profiling</span><span class="p">(</span><span class="s2">&quot;com.banking.app&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stop_profiling">
+<span class="sig-name descname"><span class="pre">stop_profiling</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stop_profiling" title="Link to this definition"></a></dt>
+<dd><p>Stop profiling and cleanup resources including friTap processes.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">profiler</span><span class="o">.</span><span class="n">stop_profiling</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="get_profile_data">
+<span class="sig-name descname"><span class="pre">get_profile_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#get_profile_data" title="Link to this definition"></a></dt>
+<dd><p>Get the collected profile data object.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Profile data containing all events</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#dexray_intercept.models.profile.ProfileData" title="dexray_intercept.models.profile.ProfileData">ProfileData</a></p>
+</dd>
+</dl>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span> <span class="o">=</span> <span class="n">profiler</span><span class="o">.</span><span class="n">get_profile_data</span><span class="p">()</span>
+<span class="n">crypto_events</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get_events</span><span class="p">(</span><span class="s1">&#39;CRYPTO_AES&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="write_profiling_log">
+<span class="sig-name descname"><span class="pre">write_profiling_log</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'profile.json'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#write_profiling_log" title="Link to this definition"></a></dt>
+<dd><p>Write profile data to JSON file with timestamp.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>filename</strong> – Base filename for output</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Generated filename with timestamp</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">output_file</span> <span class="o">=</span> <span class="n">profiler</span><span class="o">.</span><span class="n">write_profiling_log</span><span class="p">(</span><span class="s2">&quot;banking_analysis&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Profile saved to: </span><span class="si">{</span><span class="n">output_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<p><strong>Hook Management:</strong></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="enable_hook">
+<span class="sig-name descname"><span class="pre">enable_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enabled</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#enable_hook" title="Link to this definition"></a></dt>
+<dd><p>Enable or disable a specific hook at runtime.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hook_name</strong> – Name of hook to control</p></li>
+<li><p><strong>enabled</strong> – Whether to enable (True) or disable (False)</p></li>
+</ul>
+</dd>
+</dl>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Enable AES hooks during runtime</span>
+<span class="n">profiler</span><span class="o">.</span><span class="n">enable_hook</span><span class="p">(</span><span class="s1">&#39;aes_hooks&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Disable web hooks</span>
+<span class="n">profiler</span><span class="o">.</span><span class="n">enable_hook</span><span class="p">(</span><span class="s1">&#39;web_hooks&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="get_enabled_hooks">
+<span class="sig-name descname"><span class="pre">get_enabled_hooks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#get_enabled_hooks" title="Link to this definition"></a></dt>
+<dd><p>Get list of currently enabled hooks.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of enabled hook names</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>List[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>]</p>
+</dd>
+</dl>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">enabled</span> <span class="o">=</span> <span class="n">profiler</span><span class="o">.</span><span class="n">get_enabled_hooks</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Active hooks: </span><span class="si">{</span><span class="n">enabled</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="enable_all_hooks">
+<span class="sig-name descname"><span class="pre">enable_all_hooks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#enable_all_hooks" title="Link to this definition"></a></dt>
+<dd><p>Enable all available hook categories.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">profiler</span><span class="o">.</span><span class="n">enable_all_hooks</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</section>
+<section id="profiledata">
+<h3>ProfileData<a class="headerlink" href="#profiledata" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="dexray_intercept.models.profile.ProfileData">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dexray_intercept.models.profile.</span></span><span class="sig-name descname"><span class="pre">ProfileData</span></span><a class="reference internal" href="../_modules/dexray_intercept/models/profile.html#ProfileData"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.profile.ProfileData" title="Link to this definition"></a></dt>
+<dd><p>Container for profile data with events organized by category</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.profile.ProfileData.add_event">
+<span class="sig-name descname"><span class="pre">add_event</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">category</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">event</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#dexray_intercept.models.events.Event" title="dexray_intercept.models.events.Event"><span class="pre">Event</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/models/profile.html#ProfileData.add_event"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.profile.ProfileData.add_event" title="Link to this definition"></a></dt>
+<dd><p>Add an event to the specified category</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.profile.ProfileData.get_events">
+<span class="sig-name descname"><span class="pre">get_events</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">category</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#dexray_intercept.models.events.Event" title="dexray_intercept.models.events.Event"><span class="pre">Event</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/models/profile.html#ProfileData.get_events"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.profile.ProfileData.get_events" title="Link to this definition"></a></dt>
+<dd><p>Get all events for a category</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.profile.ProfileData.get_categories">
+<span class="sig-name descname"><span class="pre">get_categories</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/models/profile.html#ProfileData.get_categories"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.profile.ProfileData.get_categories" title="Link to this definition"></a></dt>
+<dd><p>Get all available categories</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.profile.ProfileData.get_event_count">
+<span class="sig-name descname"><span class="pre">get_event_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">category</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/models/profile.html#ProfileData.get_event_count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.profile.ProfileData.get_event_count" title="Link to this definition"></a></dt>
+<dd><p>Get event count for a category or total</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.profile.ProfileData.remove_empty_categories">
+<span class="sig-name descname"><span class="pre">remove_empty_categories</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/models/profile.html#ProfileData.remove_empty_categories"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.profile.ProfileData.remove_empty_categories" title="Link to this definition"></a></dt>
+<dd><p>Remove categories with no events</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.profile.ProfileData.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/models/profile.html#ProfileData.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.profile.ProfileData.to_dict" title="Link to this definition"></a></dt>
+<dd><p>Convert profile data to dictionary for serialization</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.profile.ProfileData.to_json">
+<span class="sig-name descname"><span class="pre">to_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">indent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/models/profile.html#ProfileData.to_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.profile.ProfileData.to_json" title="Link to this definition"></a></dt>
+<dd><p>Convert profile data to JSON string</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.profile.ProfileData.write_to_file">
+<span class="sig-name descname"><span class="pre">write_to_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/models/profile.html#ProfileData.write_to_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.profile.ProfileData.write_to_file" title="Link to this definition"></a></dt>
+<dd><p>Write profile data to JSON file</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.profile.ProfileData.add_metadata">
+<span class="sig-name descname"><span class="pre">add_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/models/profile.html#ProfileData.add_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.profile.ProfileData.add_metadata" title="Link to this definition"></a></dt>
+<dd><p>Add metadata to the profile</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.profile.ProfileData.get_summary">
+<span class="sig-name descname"><span class="pre">get_summary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/models/profile.html#ProfileData.get_summary"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.profile.ProfileData.get_summary" title="Link to this definition"></a></dt>
+<dd><p>Get a summary of the profile data</p>
+</dd></dl>
+
+</dd></dl>
+
+<p>Container class for organizing collected events by category with metadata.</p>
+<p><strong>Basic Usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Get profile data from profiler</span>
+<span class="n">profile_data</span> <span class="o">=</span> <span class="n">profiler</span><span class="o">.</span><span class="n">get_profile_data</span><span class="p">()</span>
+
+<span class="c1"># Access events by category</span>
+<span class="n">crypto_events</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">get_events</span><span class="p">(</span><span class="s1">&#39;CRYPTO_AES&#39;</span><span class="p">)</span>
+<span class="n">network_events</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">get_events</span><span class="p">(</span><span class="s1">&#39;WEB&#39;</span><span class="p">)</span>
+
+<span class="c1"># Get metadata</span>
+<span class="n">total_events</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">get_event_count</span><span class="p">()</span>
+<span class="n">categories</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">get_categories</span><span class="p">()</span>
+
+<span class="c1"># Convert to JSON</span>
+<span class="n">json_string</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">to_json</span><span class="p">()</span>
+
+<span class="c1"># Save to file</span>
+<span class="n">filename</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">write_to_file</span><span class="p">(</span><span class="s2">&quot;analysis_results.json&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Key Methods:</strong></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="get_events">
+<span class="sig-name descname"><span class="pre">get_events</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">category</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#get_events" title="Link to this definition"></a></dt>
+<dd><p>Get all events for a specific category.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>category</strong> – Event category name (e.g., ‘CRYPTO_AES’, ‘WEB’)</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of events in category</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List[<a class="reference internal" href="#dexray_intercept.models.events.Event" title="dexray_intercept.models.events.Event">Event</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="get_categories">
+<span class="sig-name descname"><span class="pre">get_categories</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#get_categories" title="Link to this definition"></a></dt>
+<dd><p>Get all available event categories.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of category names</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>List[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="get_event_count">
+<span class="sig-name descname"><span class="pre">get_event_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">category</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#get_event_count" title="Link to this definition"></a></dt>
+<dd><p>Get event count for category or total.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>category</strong> – Specific category or None for total</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Number of events</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="to_json">
+<span class="sig-name descname"><span class="pre">to_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">indent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#to_json" title="Link to this definition"></a></dt>
+<dd><p>Convert profile data to JSON string.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>indent</strong> – JSON indentation level</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>JSON representation</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="write_to_file">
+<span class="sig-name descname"><span class="pre">write_to_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#write_to_file" title="Link to this definition"></a></dt>
+<dd><p>Write profile data to timestamped JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>filename</strong> – Base filename</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Generated filename with timestamp</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+<section id="event-classes">
+<h2>Event Classes<a class="headerlink" href="#event-classes" title="Link to this heading"></a></h2>
+<section id="base-event">
+<h3>Base Event<a class="headerlink" href="#base-event" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="dexray_intercept.models.events.Event">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dexray_intercept.models.events.</span></span><span class="sig-name descname"><span class="pre">Event</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">event_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">timestamp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/models/events.html#Event"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.events.Event" title="Link to this definition"></a></dt>
+<dd><p>Base class for all security events</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.events.Event.add_metadata">
+<span class="sig-name descname"><span class="pre">add_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/models/events.html#Event.add_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.events.Event.add_metadata" title="Link to this definition"></a></dt>
+<dd><p>Add metadata to the event</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.events.Event.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/models/events.html#Event.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.events.Event.to_dict" title="Link to this definition"></a></dt>
+<dd><p>Convert event to dictionary for serialization</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.events.Event.get_event_data">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_event_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/models/events.html#Event.get_event_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.events.Event.get_event_data" title="Link to this definition"></a></dt>
+<dd><p>Get event-specific data</p>
+</dd></dl>
+
+</dd></dl>
+
+<p>Base class for all event types providing common functionality.</p>
+<dl class="simple">
+<dt><strong>Common Properties:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">event_type</span></code> - Specific event type identifier</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">timestamp</span></code> - ISO 8601 timestamp</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">metadata</span></code> - Additional metadata dictionary</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">crypto_events</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Event: </span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">event_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Time: </span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">timestamp</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Data: </span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">get_event_data</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="cryptoevent">
+<h3>CryptoEvent<a class="headerlink" href="#cryptoevent" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="dexray_intercept.models.events.CryptoEvent">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dexray_intercept.models.events.</span></span><span class="sig-name descname"><span class="pre">CryptoEvent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">event_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">algorithm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timestamp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/models/events.html#CryptoEvent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.events.CryptoEvent" title="Link to this definition"></a></dt>
+<dd><p>Cryptographic operation event</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.events.CryptoEvent.get_event_data">
+<span class="sig-name descname"><span class="pre">get_event_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/models/events.html#CryptoEvent.get_event_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.events.CryptoEvent.get_event_data" title="Link to this definition"></a></dt>
+<dd><p>Get event-specific data</p>
+</dd></dl>
+
+</dd></dl>
+
+<p>Specialized event for cryptographic operations.</p>
+<dl class="simple">
+<dt><strong>Properties:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">algorithm</span></code> - Cryptographic algorithm used</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">operation_mode</span></code> - Encryption/decryption mode</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">key_hex</span></code> - Hexadecimal key representation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">iv_hex</span></code> - Initialization vector</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">plaintext</span></code> - Extracted plaintext (when available)</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">crypto_events</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">get_events</span><span class="p">(</span><span class="s1">&#39;CRYPTO_AES&#39;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">crypto_events</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">algorithm</span> <span class="o">==</span> <span class="s1">&#39;AES&#39;</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;AES operation: </span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">operation_mode_desc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Key length: </span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">key_length</span><span class="si">}</span><span class="s2"> bytes&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">plaintext</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plaintext: </span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">plaintext</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="networkevent">
+<h3>NetworkEvent<a class="headerlink" href="#networkevent" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="dexray_intercept.models.events.NetworkEvent">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dexray_intercept.models.events.</span></span><span class="sig-name descname"><span class="pre">NetworkEvent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">event_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">timestamp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/models/events.html#NetworkEvent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.events.NetworkEvent" title="Link to this definition"></a></dt>
+<dd><p>Network operation event</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.models.events.NetworkEvent.get_event_data">
+<span class="sig-name descname"><span class="pre">get_event_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/models/events.html#NetworkEvent.get_event_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.models.events.NetworkEvent.get_event_data" title="Link to this definition"></a></dt>
+<dd><p>Get event-specific data</p>
+</dd></dl>
+
+</dd></dl>
+
+<p>Event for network communications.</p>
+<dl class="simple">
+<dt><strong>Properties:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">url</span></code> - Request URL</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">method</span></code> - HTTP method</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">headers</span></code> - Request/response headers</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">body_preview</span></code> - Preview of request/response body</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">library</span></code> - Network library used (OkHttp, Retrofit, etc.)</p></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">network_events</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">get_events</span><span class="p">(</span><span class="s1">&#39;WEB&#39;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">network_events</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">url</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">method</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">url</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">headers</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Headers: </span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">headers</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="parsing-and-processing">
+<h2>Parsing and Processing<a class="headerlink" href="#parsing-and-processing" title="Link to this heading"></a></h2>
+<section id="event-parsers">
+<h3>Event Parsers<a class="headerlink" href="#event-parsers" title="Link to this heading"></a></h3>
+<p>Parsers convert raw Frida messages into structured Event objects.</p>
+<p><strong>Parser Factory:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.parsers.factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">parser_factory</span>
+
+<span class="c1"># Get parser for category</span>
+<span class="n">crypto_parser</span> <span class="o">=</span> <span class="n">parser_factory</span><span class="o">.</span><span class="n">get_parser</span><span class="p">(</span><span class="s1">&#39;CRYPTO_AES&#39;</span><span class="p">)</span>
+
+<span class="c1"># Parse raw event data</span>
+<span class="n">event</span> <span class="o">=</span> <span class="n">crypto_parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">raw_json_string</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Custom Parsers:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.parsers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseParser</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.models.events</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CustomParser</span><span class="p">(</span><span class="n">BaseParser</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">parse_json_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">):</span>
+        <span class="c1"># Create custom event from data</span>
+        <span class="n">event</span> <span class="o">=</span> <span class="n">CustomEvent</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;event_type&#39;</span><span class="p">],</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">custom_field</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;custom_field&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">event</span>
+
+<span class="c1"># Register custom parser</span>
+<span class="n">parser_factory</span><span class="o">.</span><span class="n">register_parser</span><span class="p">(</span><span class="s1">&#39;CUSTOM_CATEGORY&#39;</span><span class="p">,</span> <span class="n">CustomParser</span><span class="p">())</span>
+</pre></div>
+</div>
+</section>
+<section id="profile-collection">
+<h3>Profile Collection<a class="headerlink" href="#profile-collection" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="dexray_intercept.services.profile_collector.ProfileCollector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dexray_intercept.services.profile_collector.</span></span><span class="sig-name descname"><span class="pre">ProfileCollector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'CMD'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable_stacktrace</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path_filters</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/profile_collector.html#ProfileCollector"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.profile_collector.ProfileCollector" title="Link to this definition"></a></dt>
+<dd><p>Service for collecting and processing profile events</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.profile_collector.ProfileCollector.process_frida_message">
+<span class="sig-name descname"><span class="pre">process_frida_message</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/profile_collector.html#ProfileCollector.process_frida_message"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.profile_collector.ProfileCollector.process_frida_message" title="Link to this definition"></a></dt>
+<dd><p>Process a message from Frida script</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.profile_collector.ProfileCollector.get_profile_data">
+<span class="sig-name descname"><span class="pre">get_profile_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#dexray_intercept.models.profile.ProfileData" title="dexray_intercept.models.profile.ProfileData"><span class="pre">ProfileData</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/profile_collector.html#ProfileCollector.get_profile_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.profile_collector.ProfileCollector.get_profile_data" title="Link to this definition"></a></dt>
+<dd><p>Get the collected profile data</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.profile_collector.ProfileCollector.get_profile_json">
+<span class="sig-name descname"><span class="pre">get_profile_json</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/profile_collector.html#ProfileCollector.get_profile_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.profile_collector.ProfileCollector.get_profile_json" title="Link to this definition"></a></dt>
+<dd><p>Get profile data as JSON string</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.profile_collector.ProfileCollector.write_profile_to_file">
+<span class="sig-name descname"><span class="pre">write_profile_to_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'profile.json'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/profile_collector.html#ProfileCollector.write_profile_to_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.profile_collector.ProfileCollector.write_profile_to_file" title="Link to this definition"></a></dt>
+<dd><p>Write profile data to file</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.profile_collector.ProfileCollector.get_event_count">
+<span class="sig-name descname"><span class="pre">get_event_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">category</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/profile_collector.html#ProfileCollector.get_event_count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.profile_collector.ProfileCollector.get_event_count" title="Link to this definition"></a></dt>
+<dd><p>Get event count for category or total</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.profile_collector.ProfileCollector.get_categories">
+<span class="sig-name descname"><span class="pre">get_categories</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/profile_collector.html#ProfileCollector.get_categories"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.profile_collector.ProfileCollector.get_categories" title="Link to this definition"></a></dt>
+<dd><p>Get all categories with events</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.profile_collector.ProfileCollector.clear_profile_data">
+<span class="sig-name descname"><span class="pre">clear_profile_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/profile_collector.html#ProfileCollector.clear_profile_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.profile_collector.ProfileCollector.clear_profile_data" title="Link to this definition"></a></dt>
+<dd><p>Clear collected profile data</p>
+</dd></dl>
+
+</dd></dl>
+
+<p>Handles event collection and processing from Frida messages.</p>
+<p><strong>Usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.services.profile_collector</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProfileCollector</span>
+
+<span class="n">collector</span> <span class="o">=</span> <span class="n">ProfileCollector</span><span class="p">(</span>
+    <span class="n">output_format</span><span class="o">=</span><span class="s2">&quot;JSON&quot;</span><span class="p">,</span>
+    <span class="n">verbose_mode</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_stacktrace</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+
+<span class="c1"># Process Frida message</span>
+<span class="n">success</span> <span class="o">=</span> <span class="n">collector</span><span class="o">.</span><span class="n">process_frida_message</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+<span class="c1"># Get collected data</span>
+<span class="n">profile_data</span> <span class="o">=</span> <span class="n">collector</span><span class="o">.</span><span class="n">get_profile_data</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="hook-management">
+<h2>Hook Management<a class="headerlink" href="#hook-management" title="Link to this heading"></a></h2>
+<section id="hookmanager">
+<h3>HookManager<a class="headerlink" href="#hookmanager" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dexray_intercept.services.hook_manager.</span></span><span class="sig-name descname"><span class="pre">HookManager</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">initial_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager" title="Link to this definition"></a></dt>
+<dd><p>Manages hook configuration and runtime control</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager.enable_hook">
+<span class="sig-name descname"><span class="pre">enable_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">enabled</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager.enable_hook"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager.enable_hook" title="Link to this definition"></a></dt>
+<dd><p>Enable or disable a specific hook</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager.is_hook_enabled">
+<span class="sig-name descname"><span class="pre">is_hook_enabled</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager.is_hook_enabled"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager.is_hook_enabled" title="Link to this definition"></a></dt>
+<dd><p>Check if a hook is enabled</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager.get_enabled_hooks">
+<span class="sig-name descname"><span class="pre">get_enabled_hooks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager.get_enabled_hooks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager.get_enabled_hooks" title="Link to this definition"></a></dt>
+<dd><p>Return list of currently enabled hooks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager.get_disabled_hooks">
+<span class="sig-name descname"><span class="pre">get_disabled_hooks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager.get_disabled_hooks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager.get_disabled_hooks" title="Link to this definition"></a></dt>
+<dd><p>Return list of currently disabled hooks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager.enable_all_hooks">
+<span class="sig-name descname"><span class="pre">enable_all_hooks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager.enable_all_hooks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager.enable_all_hooks" title="Link to this definition"></a></dt>
+<dd><p>Enable all available hooks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager.disable_all_hooks">
+<span class="sig-name descname"><span class="pre">disable_all_hooks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager.disable_all_hooks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager.disable_all_hooks" title="Link to this definition"></a></dt>
+<dd><p>Disable all hooks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager.enable_hook_group">
+<span class="sig-name descname"><span class="pre">enable_hook_group</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager.enable_hook_group"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager.enable_hook_group" title="Link to this definition"></a></dt>
+<dd><p>Enable a group of related hooks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager.get_hook_config">
+<span class="sig-name descname"><span class="pre">get_hook_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager.get_hook_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager.get_hook_config" title="Link to this definition"></a></dt>
+<dd><p>Get current hook configuration</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager.update_config">
+<span class="sig-name descname"><span class="pre">update_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager.update_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager.update_config" title="Link to this definition"></a></dt>
+<dd><p>Update hook configuration with new values</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager.get_available_hooks">
+<span class="sig-name descname"><span class="pre">get_available_hooks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager.get_available_hooks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager.get_available_hooks" title="Link to this definition"></a></dt>
+<dd><p>Get list of all available hooks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.hook_manager.HookManager.get_hook_stats">
+<span class="sig-name descname"><span class="pre">get_hook_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/hook_manager.html#HookManager.get_hook_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.hook_manager.HookManager.get_hook_stats" title="Link to this definition"></a></dt>
+<dd><p>Get statistics about hook configuration</p>
+</dd></dl>
+
+</dd></dl>
+
+<p>Manages hook configuration and state.</p>
+<p><strong>Usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.services.hook_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">HookManager</span>
+
+<span class="c1"># Create with initial config</span>
+<span class="n">hook_config</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;aes_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s1">&#39;web_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s1">&#39;bypass_hooks&#39;</span><span class="p">:</span> <span class="kc">False</span>
+<span class="p">}</span>
+
+<span class="n">manager</span> <span class="o">=</span> <span class="n">HookManager</span><span class="p">(</span><span class="n">hook_config</span><span class="p">)</span>
+
+<span class="c1"># Runtime management</span>
+<span class="n">manager</span><span class="o">.</span><span class="n">enable_hook</span><span class="p">(</span><span class="s1">&#39;bypass_hooks&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+<span class="n">enabled_hooks</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">get_enabled_hooks</span><span class="p">()</span>
+
+<span class="c1"># Get full configuration</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">get_hook_config</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="frida-integration">
+<h2>Frida Integration<a class="headerlink" href="#frida-integration" title="Link to this heading"></a></h2>
+<section id="instrumentationservice">
+<h3>InstrumentationService<a class="headerlink" href="#instrumentationservice" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="dexray_intercept.services.instrumentation.InstrumentationService">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dexray_intercept.services.instrumentation.</span></span><span class="sig-name descname"><span class="pre">InstrumentationService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">process</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frida_agent_script</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'profiling.js'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_scripts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/instrumentation.html#InstrumentationService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.instrumentation.InstrumentationService" title="Link to this definition"></a></dt>
+<dd><p>Service for managing Frida instrumentation</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.instrumentation.InstrumentationService.load_script">
+<span class="sig-name descname"><span class="pre">load_script</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">frida.core.Script</span></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/instrumentation.html#InstrumentationService.load_script"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.instrumentation.InstrumentationService.load_script" title="Link to this definition"></a></dt>
+<dd><p>Load and create the Frida script</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.instrumentation.InstrumentationService.set_message_handler">
+<span class="sig-name descname"><span class="pre">set_message_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">handler</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/instrumentation.html#InstrumentationService.set_message_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.instrumentation.InstrumentationService.set_message_handler" title="Link to this definition"></a></dt>
+<dd><p>Set the message handler for script communication</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.instrumentation.InstrumentationService.send_message">
+<span class="sig-name descname"><span class="pre">send_message</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><span class="pre">dict</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/instrumentation.html#InstrumentationService.send_message"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.instrumentation.InstrumentationService.send_message" title="Link to this definition"></a></dt>
+<dd><p>Send a message to the Frida script</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.instrumentation.InstrumentationService.unload_script">
+<span class="sig-name descname"><span class="pre">unload_script</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/instrumentation.html#InstrumentationService.unload_script"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.instrumentation.InstrumentationService.unload_script" title="Link to this definition"></a></dt>
+<dd><p>Unload the Frida script and all custom scripts</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.instrumentation.InstrumentationService.is_script_loaded">
+<span class="sig-name descname"><span class="pre">is_script_loaded</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/instrumentation.html#InstrumentationService.is_script_loaded"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.instrumentation.InstrumentationService.is_script_loaded" title="Link to this definition"></a></dt>
+<dd><p>Check if script is loaded</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.instrumentation.InstrumentationService.get_script_path">
+<span class="sig-name descname"><span class="pre">get_script_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../_modules/dexray_intercept/services/instrumentation.html#InstrumentationService.get_script_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.instrumentation.InstrumentationService.get_script_path" title="Link to this definition"></a></dt>
+<dd><p>Get the script path (public method for compatibility)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dexray_intercept.services.instrumentation.InstrumentationService.restart_script">
+<span class="sig-name descname"><span class="pre">restart_script</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/dexray_intercept/services/instrumentation.html#InstrumentationService.restart_script"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.instrumentation.InstrumentationService.restart_script" title="Link to this definition"></a></dt>
+<dd><p>Restart the Frida script</p>
+</dd></dl>
+
+</dd></dl>
+
+<p>Manages Frida script loading and communication.</p>
+<p><strong>Usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.services.instrumentation</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstrumentationService</span>
+
+<span class="n">service</span> <span class="o">=</span> <span class="n">InstrumentationService</span><span class="p">(</span>
+    <span class="n">process_session</span><span class="p">,</span>
+    <span class="n">custom_scripts</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;./my_hooks.js&#39;</span><span class="p">]</span>
+<span class="p">)</span>
+
+<span class="c1"># Set message handler</span>
+<span class="n">service</span><span class="o">.</span><span class="n">set_message_handler</span><span class="p">(</span><span class="n">message_callback</span><span class="p">)</span>
+
+<span class="c1"># Load and start script</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">load_script</span><span class="p">()</span>
+
+<span class="c1"># Send message to script</span>
+<span class="n">service</span><span class="o">.</span><span class="n">send_message</span><span class="p">({</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;config&#39;</span><span class="p">,</span> <span class="s1">&#39;data&#39;</span><span class="p">:</span> <span class="n">config</span><span class="p">})</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="utility-functions">
+<h2>Utility Functions<a class="headerlink" href="#utility-functions" title="Link to this heading"></a></h2>
+<section id="device-management">
+<h3>Device Management<a class="headerlink" href="#device-management" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.services.instrumentation</span><span class="w"> </span><span class="kn">import</span> <span class="n">setup_frida_device</span>
+
+<span class="c1"># Connect to USB device</span>
+<span class="n">device</span> <span class="o">=</span> <span class="n">setup_frida_device</span><span class="p">()</span>
+
+<span class="c1"># Connect to remote device</span>
+<span class="n">device</span> <span class="o">=</span> <span class="n">setup_frida_device</span><span class="p">(</span><span class="s2">&quot;192.168.1.100:27042&quot;</span><span class="p">)</span>
+
+<span class="c1"># Enable spawn gating</span>
+<span class="n">device</span> <span class="o">=</span> <span class="n">setup_frida_device</span><span class="p">(</span><span class="n">enable_spawn_gating</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="command-line-integration">
+<h3>Command Line Integration<a class="headerlink" href="#command-line-integration" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.ammm</span><span class="w"> </span><span class="kn">import</span> <span class="n">parse_hook_config</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">argparse</span><span class="w"> </span><span class="kn">import</span> <span class="n">Namespace</span>
+
+<span class="c1"># Parse CLI arguments to hook config</span>
+<span class="n">args</span> <span class="o">=</span> <span class="n">Namespace</span><span class="p">()</span>
+<span class="n">args</span><span class="o">.</span><span class="n">hooks_crypto</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">args</span><span class="o">.</span><span class="n">enable_bypass</span> <span class="o">=</span> <span class="kc">True</span>
+
+<span class="n">hook_config</span> <span class="o">=</span> <span class="n">parse_hook_config</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+<span class="c1"># Result: {&#39;aes_hooks&#39;: True, &#39;encodings_hooks&#39;: True, &#39;keystore_hooks&#39;: True, &#39;bypass_hooks&#39;: True}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="advanced-usage-patterns">
+<h2>Advanced Usage Patterns<a class="headerlink" href="#advanced-usage-patterns" title="Link to this heading"></a></h2>
+<section id="real-time-event-processing">
+<h3>Real-time Event Processing<a class="headerlink" href="#real-time-event-processing" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">RealTimeAnalyzer</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">alerts</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">message_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="n">payload</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;payload&#39;</span><span class="p">,</span> <span class="p">{})</span>
+
+        <span class="c1"># Real-time analysis</span>
+        <span class="k">if</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;profileType&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;CRYPTO_AES&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">analyze_crypto_event</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;profileType&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;BYPASS_DETECTION&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">analyze_bypass_event</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">analyze_crypto_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">payload</span><span class="p">):</span>
+        <span class="c1"># Check for weak encryption</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;profileContent&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">if</span> <span class="n">content</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key_length&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">16</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">alerts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;Weak encryption detected&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">analyze_bypass_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">payload</span><span class="p">):</span>
+        <span class="c1"># Alert on evasion attempts</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;profileContent&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">if</span> <span class="n">content</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bypass_category&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;root_detection&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">alerts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;Root detection evasion detected&quot;</span><span class="p">)</span>
+
+<span class="c1"># Usage</span>
+<span class="n">analyzer</span> <span class="o">=</span> <span class="n">RealTimeAnalyzer</span><span class="p">()</span>
+<span class="n">profiler</span> <span class="o">=</span> <span class="n">AppProfiler</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+<span class="n">profiler</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">set_message_handler</span><span class="p">(</span><span class="n">analyzer</span><span class="o">.</span><span class="n">message_handler</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="custom-event-types">
+<h3>Custom Event Types<a class="headerlink" href="#custom-event-types" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.models.events</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CustomEvent</span><span class="p">(</span><span class="n">Event</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event_type</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">event_type</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">custom_data</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_event_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">get_event_data</span><span class="p">()</span>
+        <span class="n">data</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">custom_data</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">data</span>
+
+<span class="c1"># Custom processor</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CustomProfileCollector</span><span class="p">(</span><span class="n">ProfileCollector</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_handle_custom_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">):</span>
+        <span class="n">event</span> <span class="o">=</span> <span class="n">CustomEvent</span><span class="p">(</span><span class="s2">&quot;custom.event&quot;</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">custom_data</span> <span class="o">=</span> <span class="n">content</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="s2">&quot;CUSTOM&quot;</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+</pre></div>
+</div>
+</section>
+<section id="batch-processing">
+<h3>Batch Processing<a class="headerlink" href="#batch-processing" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">glob</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">analyze_profile_batch</span><span class="p">(</span><span class="n">profile_pattern</span><span class="p">):</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">profile_path</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">profile_pattern</span><span class="p">):</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">profile_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">profile</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+        <span class="c1"># Analyze profile</span>
+        <span class="n">results</span><span class="p">[</span><span class="n">profile_path</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;total_events&#39;</span><span class="p">:</span> <span class="n">profile</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;_metadata&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;total_events&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="s1">&#39;crypto_events&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">profile</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;CRYPTO_AES&#39;</span><span class="p">,</span> <span class="p">[])),</span>
+            <span class="s1">&#39;network_events&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">profile</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;WEB&#39;</span><span class="p">,</span> <span class="p">[])),</span>
+            <span class="s1">&#39;bypass_events&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">profile</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;BYPASS_DETECTION&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">results</span>
+
+<span class="c1"># Usage</span>
+<span class="n">batch_results</span> <span class="o">=</span> <span class="n">analyze_profile_batch</span><span class="p">(</span><span class="s2">&quot;./analysis_*/profile_*.json&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="error-handling">
+<h2>Error Handling<a class="headerlink" href="#error-handling" title="Link to this heading"></a></h2>
+<section id="exception-classes">
+<h3>Exception Classes<a class="headerlink" href="#exception-classes" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="dexray_intercept.services.instrumentation.FridaBasedException">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dexray_intercept.services.instrumentation.</span></span><span class="sig-name descname"><span class="pre">FridaBasedException</span></span><a class="reference internal" href="../_modules/dexray_intercept/services/instrumentation.html#FridaBasedException"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dexray_intercept.services.instrumentation.FridaBasedException" title="Link to this definition"></a></dt>
+<dd><p>Custom exception for Frida-related errors</p>
+</dd></dl>
+
+<p>Custom exception for Frida-related errors.</p>
+<p><strong>Common Error Scenarios:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept</span><span class="w"> </span><span class="kn">import</span> <span class="n">AppProfiler</span><span class="p">,</span> <span class="n">FridaBasedException</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">frida</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="n">frida</span><span class="o">.</span><span class="n">get_usb_device</span><span class="p">()</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">device</span><span class="o">.</span><span class="n">attach</span><span class="p">(</span><span class="s2">&quot;com.example.app&quot;</span><span class="p">)</span>
+    <span class="n">profiler</span> <span class="o">=</span> <span class="n">AppProfiler</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+    <span class="n">profiler</span><span class="o">.</span><span class="n">start_profiling</span><span class="p">()</span>
+
+<span class="k">except</span> <span class="n">frida</span><span class="o">.</span><span class="n">ProcessNotFoundError</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Target app not found or not running&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">frida</span><span class="o">.</span><span class="n">TransportError</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Connection to device lost&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">FridaBasedException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Frida instrumentation error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unexpected error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="best-practices">
+<h2>Best Practices<a class="headerlink" href="#best-practices" title="Link to this heading"></a></h2>
+<p><strong>Resource Management:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Always cleanup resources</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">profiler</span> <span class="o">=</span> <span class="n">AppProfiler</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+    <span class="n">profiler</span><span class="o">.</span><span class="n">start_profiling</span><span class="p">()</span>
+    <span class="c1"># ... analysis code ...</span>
+<span class="k">finally</span><span class="p">:</span>
+    <span class="n">profiler</span><span class="o">.</span><span class="n">stop_profiling</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><strong>Performance Optimization:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Use selective hooks for better performance</span>
+<span class="n">hook_config</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;aes_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>        <span class="c1"># Only what you need</span>
+    <span class="s1">&#39;web_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="c1"># &#39;hooks_all&#39;: False     # Avoid unless necessary</span>
+<span class="p">}</span>
+
+<span class="c1"># Process events efficiently</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">efficient_message_handler</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;payload&#39;</span><span class="p">,</span> <span class="p">{})</span>
+
+    <span class="c1"># Quick filtering</span>
+    <span class="k">if</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;profileType&#39;</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;CRYPTO_AES&#39;</span><span class="p">,</span> <span class="s1">&#39;WEB&#39;</span><span class="p">]:</span>
+        <span class="k">return</span>
+
+    <span class="c1"># Process only relevant events</span>
+    <span class="n">process_relevant_event</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Threading Considerations:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">queue</span><span class="w"> </span><span class="kn">import</span> <span class="n">Queue</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ThreadSafeAnalyzer</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">event_queue</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">processing_thread</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">process_events</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">processing_thread</span><span class="o">.</span><span class="n">daemon</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">processing_thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">message_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="c1"># Add to queue for background processing</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">event_queue</span><span class="o">.</span><span class="n">put</span><span class="p">((</span><span class="n">message</span><span class="p">,</span> <span class="n">data</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_events</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">message</span><span class="p">,</span> <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_queue</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+            <span class="c1"># Process in background thread</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">analyze_event</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">event_queue</span><span class="o">.</span><span class="n">task_done</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="integration-examples">
+<h2>Integration Examples<a class="headerlink" href="#integration-examples" title="Link to this heading"></a></h2>
+<p><strong>Threat Intelligence Integration:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">ThreatIntelIntegrator</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ti_api_key</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ti_api</span> <span class="o">=</span> <span class="n">ThreatIntelAPI</span><span class="p">(</span><span class="n">ti_api_key</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">analyze_profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">profile_data</span><span class="p">):</span>
+        <span class="c1"># Extract IOCs</span>
+        <span class="n">iocs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract_iocs</span><span class="p">(</span><span class="n">profile_data</span><span class="p">)</span>
+
+        <span class="c1"># Check against threat intelligence</span>
+        <span class="k">for</span> <span class="n">ioc</span> <span class="ow">in</span> <span class="n">iocs</span><span class="p">[</span><span class="s1">&#39;domains&#39;</span><span class="p">]:</span>
+            <span class="n">threat_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ti_api</span><span class="o">.</span><span class="n">check_domain</span><span class="p">(</span><span class="n">ioc</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">threat_info</span><span class="o">.</span><span class="n">is_malicious</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Malicious domain detected: </span><span class="si">{</span><span class="n">ioc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">extract_iocs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">profile_data</span><span class="p">):</span>
+        <span class="n">iocs</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;domains&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;ips&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;urls&#39;</span><span class="p">:</span> <span class="p">[]}</span>
+
+        <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">get_events</span><span class="p">(</span><span class="s1">&#39;WEB&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="s1">&#39;url&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">event</span><span class="o">.</span><span class="n">url</span><span class="p">:</span>
+                <span class="n">iocs</span><span class="p">[</span><span class="s1">&#39;urls&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">url</span><span class="p">)</span>
+                <span class="c1"># Extract domain from URL</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">urlparse</span>
+                <span class="n">domain</span> <span class="o">=</span> <span class="n">urlparse</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">url</span><span class="p">)</span><span class="o">.</span><span class="n">netloc</span>
+                <span class="n">iocs</span><span class="p">[</span><span class="s1">&#39;domains&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">iocs</span>
+</pre></div>
+</div>
+<p><strong>SIEM Integration:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">syslog</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">SIEMIntegrator</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">syslog</span><span class="o">.</span><span class="n">openlog</span><span class="p">(</span><span class="s2">&quot;dexray-intercept&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">send_alert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="n">severity</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_severity</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">format_siem_message</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+        <span class="n">syslog</span><span class="o">.</span><span class="n">syslog</span><span class="p">(</span><span class="n">severity</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_severity</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="s1">&#39;bypass_category&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">syslog</span><span class="o">.</span><span class="n">LOG_CRIT</span>  <span class="c1"># Critical for bypass attempts</span>
+        <span class="k">elif</span> <span class="n">event</span><span class="o">.</span><span class="n">event_type</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;crypto&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">syslog</span><span class="o">.</span><span class="n">LOG_WARNING</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">syslog</span><span class="o">.</span><span class="n">LOG_INFO</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">format_siem_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;dexray_event=</span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">event_type</span><span class="si">}</span><span class="s2"> timestamp=</span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">timestamp</span><span class="si">}</span><span class="s2"> data=</span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">get_event_data</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Explore TypeScript API for custom hooks: <a class="reference internal" href="typescript-api.html"><span class="doc">TypeScript API Reference</span></a></p></li>
+<li><p>Learn about development workflows: <a class="reference internal" href="../development/index.html"><span class="doc">Development Guide</span></a></p></li>
+<li><p>See practical examples in the user guide: <a class="reference internal" href="../user-guide/index.html"><span class="doc">User Guide</span></a></p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="API Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="typescript-api.html" class="btn btn-neutral float-right" title="TypeScript API Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Daniel Baier, Jan-Niclas Hilgert.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -20,7 +20,7 @@ samples/*
 logs_.*
 logs*
 *.md
-docs/_build/
+#docs/_build/
 
 samples/unpacking/apktool_out/
 profile_*.json

@@ -1,0 +1,623 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Command Line Usage &mdash; SanDroid - Dexray Intercept 0.3.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f7af4a0e" />
+
+  
+    <link rel="canonical" href="https://your-username.github.io/Sandroid_Dexray-Intercept/user-guide/cli-usage.html" />
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=426446dc"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Hook Configuration Guide" href="hook-configuration.html" />
+    <link rel="prev" title="User Guide" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SanDroid - Dexray Intercept
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">User Guide</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Command Line Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#basic-syntax">Basic Syntax</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#core-options">Core Options</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#target-and-connection">Target and Connection</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#device-and-server-management">Device and Server Management</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#output-and-debugging">Output and Debugging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#network-analysis">Network Analysis</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#custom-scripts">Custom Scripts</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#hook-selection">Hook Selection</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#hook-groups">Hook Groups</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#individual-hooks">Individual Hooks</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#basic-analysis">Basic Analysis</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#comprehensive-analysis">Comprehensive Analysis</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id1">Network Analysis</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#custom-analysis">Custom Analysis</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#remote-analysis">Remote Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#performance-considerations">Performance Considerations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#error-handling">Error Handling</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="hook-configuration.html">Hook Configuration Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="output-formats.html">Output Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#key-concepts">Key Concepts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#workflow">Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#getting-help">Getting Help</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/index.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/index.html">Development Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SanDroid - Dexray Intercept</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">User Guide</a></li>
+      <li class="breadcrumb-item active">Command Line Usage</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/user-guide/cli-usage.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="command-line-usage">
+<h1>Command Line Usage<a class="headerlink" href="#command-line-usage" title="Link to this heading"></a></h1>
+<p>The <code class="docutils literal notranslate"><span class="pre">ammm</span></code> command is the primary interface for Dexray Intercept. This section covers all command-line options and usage patterns.</p>
+<section id="basic-syntax">
+<h2>Basic Syntax<a class="headerlink" href="#basic-syntax" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span><span class="w"> </span>&lt;target&gt;
+</pre></div>
+</div>
+<dl class="simple">
+<dt>Where <code class="docutils literal notranslate"><span class="pre">&lt;target&gt;</span></code> can be:</dt><dd><ul class="simple">
+<li><p><strong>Package name</strong>: <code class="docutils literal notranslate"><span class="pre">com.example.app</span></code></p></li>
+<li><p><strong>Process ID</strong>: <code class="docutils literal notranslate"><span class="pre">1234</span></code></p></li>
+<li><p><strong>App name</strong>: <code class="docutils literal notranslate"><span class="pre">&quot;My</span> <span class="pre">Banking</span> <span class="pre">App&quot;</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="core-options">
+<h2>Core Options<a class="headerlink" href="#core-options" title="Link to this heading"></a></h2>
+<section id="target-and-connection">
+<h3>Target and Connection<a class="headerlink" href="#target-and-connection" title="Link to this heading"></a></h3>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-arg-target">
+<span class="sig-name descname"><span class="pre">&lt;target&gt;</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-arg-target" title="Link to this definition"></a></dt>
+<dd><p><strong>Required.</strong> The target application to analyze.</p>
+<p>Examples:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>com.banking.app<span class="w">          </span><span class="c1"># Package name</span>
+ammm<span class="w"> </span><span class="m">1234</span><span class="w">                     </span><span class="c1"># Process ID</span>
+ammm<span class="w"> </span><span class="s2">&quot;Banking App&quot;</span><span class="w">            </span><span class="c1"># App display name</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-s">
+<span id="cmdoption-spawn"></span><span class="sig-name descname"><span class="pre">-s</span></span><span class="sig-prename descclassname"></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--spawn</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-s" title="Link to this definition"></a></dt>
+<dd><p>Spawn the application instead of attaching to a running process.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>-s<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Spawning gives you control from app startup, useful for analyzing initialization behavior.</p>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-fg">
+<span id="cmdoption-foreground"></span><span class="sig-name descname"><span class="pre">-fg</span></span><span class="sig-prename descclassname"></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--foreground</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-fg" title="Link to this definition"></a></dt>
+<dd><p>Attach to the currently foreground (visible) application.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>-fg
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-H">
+<span id="cmdoption-host"></span><span class="sig-name descname"><span class="pre">-H</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;ip:port&gt;</span></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--host</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;ip:port&gt;</span></span><a class="headerlink" href="#cmdoption-H" title="Link to this definition"></a></dt>
+<dd><p>Connect to a remote Frida device.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>-H<span class="w"> </span><span class="m">192</span>.168.1.100:27042<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+</section>
+<section id="device-and-server-management">
+<h3>Device and Server Management<a class="headerlink" href="#device-and-server-management" title="Link to this heading"></a></h3>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-f">
+<span id="cmdoption-frida"></span><span class="sig-name descname"><span class="pre">-f</span></span><span class="sig-prename descclassname"></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--frida</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-f" title="Link to this definition"></a></dt>
+<dd><p>Install and run frida-server on the target device.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>-f<span class="w">  </span><span class="c1"># Install frida-server and exit</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable_spawn_gating">
+<span class="sig-name descname"><span class="pre">--enable_spawn_gating</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable_spawn_gating" title="Link to this definition"></a></dt>
+<dd><p>Enable spawn gating to catch newly spawned processes.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--enable_spawn_gating<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>This may catch unrelated processes spawned during analysis.</p>
+</div>
+</dd></dl>
+
+</section>
+<section id="output-and-debugging">
+<h3>Output and Debugging<a class="headerlink" href="#output-and-debugging" title="Link to this heading"></a></h3>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-v">
+<span id="cmdoption-verbose"></span><span class="sig-name descname"><span class="pre">-v</span></span><span class="sig-prename descclassname"></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--verbose</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-v" title="Link to this definition"></a></dt>
+<dd><p>Enable verbose output for detailed debugging information.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>-v<span class="w"> </span>--hooks-crypto<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-st">
+<span id="cmdoption-enable-full-stacktrace"></span><span class="sig-name descname"><span class="pre">-st</span></span><span class="sig-prename descclassname"></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--enable-full-stacktrace</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-st" title="Link to this definition"></a></dt>
+<dd><p>Enable full stack traces showing call origins in binary code.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>-st<span class="w"> </span>--hooks-crypto<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+</section>
+<section id="network-analysis">
+<h3>Network Analysis<a class="headerlink" href="#network-analysis" title="Link to this heading"></a></h3>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-fritap">
+<span class="sig-name descname"><span class="pre">--enable-fritap</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-fritap" title="Link to this definition"></a></dt>
+<dd><p>Enable friTap for TLS key extraction and traffic capture.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--enable-fritap<span class="w"> </span>--hooks-network<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-fritap-output-dir">
+<span class="sig-name descname"><span class="pre">--fritap-output-dir</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;directory&gt;</span></span><a class="headerlink" href="#cmdoption-fritap-output-dir" title="Link to this definition"></a></dt>
+<dd><p>Specify directory for friTap output files (default: <code class="docutils literal notranslate"><span class="pre">./fritap_output</span></code>).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--enable-fritap<span class="w"> </span>--fritap-output-dir<span class="w"> </span>./network_logs<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+</section>
+<section id="custom-scripts">
+<h3>Custom Scripts<a class="headerlink" href="#custom-scripts" title="Link to this heading"></a></h3>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-custom-script">
+<span class="sig-name descname"><span class="pre">--custom-script</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;path&gt;</span></span><a class="headerlink" href="#cmdoption-custom-script" title="Link to this definition"></a></dt>
+<dd><p>Load custom Frida script alongside built-in hooks. Can be used multiple times.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Single custom script</span>
+ammm<span class="w"> </span>--custom-script<span class="w"> </span>./my_hooks.js<span class="w"> </span>com.example.app
+
+<span class="c1"># Multiple custom scripts</span>
+ammm<span class="w"> </span>--custom-script<span class="w"> </span>./script1.js<span class="w"> </span>--custom-script<span class="w"> </span>./script2.js<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+</section>
+</section>
+<section id="hook-selection">
+<h2>Hook Selection<a class="headerlink" href="#hook-selection" title="Link to this heading"></a></h2>
+<section id="hook-groups">
+<h3>Hook Groups<a class="headerlink" href="#hook-groups" title="Link to this heading"></a></h3>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-hooks-all">
+<span class="sig-name descname"><span class="pre">--hooks-all</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-hooks-all" title="Link to this definition"></a></dt>
+<dd><p>Enable all available hooks for comprehensive analysis.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--hooks-all<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-hooks-crypto">
+<span class="sig-name descname"><span class="pre">--hooks-crypto</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-hooks-crypto" title="Link to this definition"></a></dt>
+<dd><p>Enable cryptographic hooks (AES, encodings, keystore).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--hooks-crypto<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-hooks-network">
+<span class="sig-name descname"><span class="pre">--hooks-network</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-hooks-network" title="Link to this definition"></a></dt>
+<dd><p>Enable network communication hooks (web traffic, sockets).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--hooks-network<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-hooks-filesystem">
+<span class="sig-name descname"><span class="pre">--hooks-filesystem</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-hooks-filesystem" title="Link to this definition"></a></dt>
+<dd><p>Enable file system hooks (file operations, database access).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--hooks-filesystem<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-hooks-ipc">
+<span class="sig-name descname"><span class="pre">--hooks-ipc</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-hooks-ipc" title="Link to this definition"></a></dt>
+<dd><p>Enable Inter-Process Communication hooks (intents, broadcasts, binder, shared preferences).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--hooks-ipc<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-hooks-process">
+<span class="sig-name descname"><span class="pre">--hooks-process</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-hooks-process" title="Link to this definition"></a></dt>
+<dd><p>Enable process monitoring hooks (native libraries, runtime, DEX unpacking).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--hooks-process<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-hooks-services">
+<span class="sig-name descname"><span class="pre">--hooks-services</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-hooks-services" title="Link to this definition"></a></dt>
+<dd><p>Enable system service hooks (bluetooth, camera, clipboard, location, telephony).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--hooks-services<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-hooks-bypass">
+<span class="sig-name descname"><span class="pre">--hooks-bypass</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-hooks-bypass" title="Link to this definition"></a></dt>
+<dd><p>Enable anti-analysis bypass hooks (root, frida, debugger, emulator detection).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ammm<span class="w"> </span>--hooks-bypass<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</dd></dl>
+
+</section>
+<section id="individual-hooks">
+<h3>Individual Hooks<a class="headerlink" href="#individual-hooks" title="Link to this heading"></a></h3>
+<p>For fine-grained control, you can enable specific individual hooks:</p>
+<p><strong>Cryptographic Hooks</strong></p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-aes">
+<span class="sig-name descname"><span class="pre">--enable-aes</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-aes" title="Link to this definition"></a></dt>
+<dd><p>Enable AES encryption/decryption monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-keystore">
+<span class="sig-name descname"><span class="pre">--enable-keystore</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-keystore" title="Link to this definition"></a></dt>
+<dd><p>Enable Android keystore operation monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-encodings">
+<span class="sig-name descname"><span class="pre">--enable-encodings</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-encodings" title="Link to this definition"></a></dt>
+<dd><p>Enable encoding/decoding operation monitoring.</p>
+</dd></dl>
+
+<p><strong>Network Hooks</strong></p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-web">
+<span class="sig-name descname"><span class="pre">--enable-web</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-web" title="Link to this definition"></a></dt>
+<dd><p>Enable web traffic monitoring (HTTP/HTTPS, Retrofit, Volley, WebSockets).</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-sockets">
+<span class="sig-name descname"><span class="pre">--enable-sockets</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-sockets" title="Link to this definition"></a></dt>
+<dd><p>Enable raw socket communication monitoring.</p>
+</dd></dl>
+
+<p><strong>File System Hooks</strong></p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-filesystem">
+<span class="sig-name descname"><span class="pre">--enable-filesystem</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-filesystem" title="Link to this definition"></a></dt>
+<dd><p>Enable file system operation monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-database">
+<span class="sig-name descname"><span class="pre">--enable-database</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-database" title="Link to this definition"></a></dt>
+<dd><p>Enable database operation monitoring.</p>
+</dd></dl>
+
+<p><strong>Process Hooks</strong></p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-dex-unpacking">
+<span class="sig-name descname"><span class="pre">--enable-dex-unpacking</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-dex-unpacking" title="Link to this definition"></a></dt>
+<dd><p>Enable DEX unpacking detection.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-java-dex">
+<span class="sig-name descname"><span class="pre">--enable-java-dex</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-java-dex" title="Link to this definition"></a></dt>
+<dd><p>Enable Java DEX loading hooks.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>This hook may crash certain applications.</p>
+</div>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-native-libs">
+<span class="sig-name descname"><span class="pre">--enable-native-libs</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-native-libs" title="Link to this definition"></a></dt>
+<dd><p>Enable native library loading monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-process">
+<span class="sig-name descname"><span class="pre">--enable-process</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-process" title="Link to this definition"></a></dt>
+<dd><p>Enable process creation monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-runtime">
+<span class="sig-name descname"><span class="pre">--enable-runtime</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-runtime" title="Link to this definition"></a></dt>
+<dd><p>Enable runtime operation monitoring.</p>
+</dd></dl>
+
+<p><strong>IPC Hooks</strong></p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-shared-prefs">
+<span class="sig-name descname"><span class="pre">--enable-shared-prefs</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-shared-prefs" title="Link to this definition"></a></dt>
+<dd><p>Enable shared preferences monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-binder">
+<span class="sig-name descname"><span class="pre">--enable-binder</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-binder" title="Link to this definition"></a></dt>
+<dd><p>Enable binder communication monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-intents">
+<span class="sig-name descname"><span class="pre">--enable-intents</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-intents" title="Link to this definition"></a></dt>
+<dd><p>Enable intent passing monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-broadcasts">
+<span class="sig-name descname"><span class="pre">--enable-broadcasts</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-broadcasts" title="Link to this definition"></a></dt>
+<dd><p>Enable broadcast receiver monitoring.</p>
+</dd></dl>
+
+<p><strong>Service Hooks</strong></p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-bluetooth">
+<span class="sig-name descname"><span class="pre">--enable-bluetooth</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-bluetooth" title="Link to this definition"></a></dt>
+<dd><p>Enable Bluetooth API monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-camera">
+<span class="sig-name descname"><span class="pre">--enable-camera</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-camera" title="Link to this definition"></a></dt>
+<dd><p>Enable camera usage monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-clipboard">
+<span class="sig-name descname"><span class="pre">--enable-clipboard</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-clipboard" title="Link to this definition"></a></dt>
+<dd><p>Enable clipboard access monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-location">
+<span class="sig-name descname"><span class="pre">--enable-location</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-location" title="Link to this definition"></a></dt>
+<dd><p>Enable location/GPS access monitoring.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-telephony">
+<span class="sig-name descname"><span class="pre">--enable-telephony</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-telephony" title="Link to this definition"></a></dt>
+<dd><p>Enable telephony API monitoring.</p>
+</dd></dl>
+
+<p><strong>Bypass Hooks</strong></p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-enable-bypass">
+<span class="sig-name descname"><span class="pre">--enable-bypass</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-enable-bypass" title="Link to this definition"></a></dt>
+<dd><p>Enable all anti-analysis bypass techniques.</p>
+</dd></dl>
+
+</section>
+</section>
+<section id="usage-examples">
+<h2>Usage Examples<a class="headerlink" href="#usage-examples" title="Link to this heading"></a></h2>
+<section id="basic-analysis">
+<h3>Basic Analysis<a class="headerlink" href="#basic-analysis" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Attach to running app with minimal monitoring</span>
+ammm<span class="w"> </span>com.example.app
+
+<span class="c1"># Spawn app with crypto monitoring</span>
+ammm<span class="w"> </span>-s<span class="w"> </span>--enable-aes<span class="w"> </span>com.banking.app
+</pre></div>
+</div>
+</section>
+<section id="comprehensive-analysis">
+<h3>Comprehensive Analysis<a class="headerlink" href="#comprehensive-analysis" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Full monitoring with anti-analysis bypass</span>
+ammm<span class="w"> </span>-s<span class="w"> </span>--hooks-all<span class="w"> </span>--hooks-bypass<span class="w"> </span>suspicious.malware
+
+<span class="c1"># Verbose analysis with stack traces</span>
+ammm<span class="w"> </span>-sv<span class="w"> </span>--enable-full-stacktrace<span class="w"> </span>--hooks-crypto<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</section>
+<section id="id1">
+<h3>Network Analysis<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Network monitoring with TLS key extraction</span>
+ammm<span class="w"> </span>-s<span class="w"> </span>--hooks-network<span class="w"> </span>--enable-fritap<span class="w"> </span>com.banking.app
+
+<span class="c1"># Custom network analysis directory</span>
+ammm<span class="w"> </span>--enable-fritap<span class="w"> </span>--fritap-output-dir<span class="w"> </span>./analysis_2024<span class="w"> </span>--hooks-network<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</section>
+<section id="custom-analysis">
+<h3>Custom Analysis<a class="headerlink" href="#custom-analysis" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Load custom hooks with built-in crypto monitoring</span>
+ammm<span class="w"> </span>--custom-script<span class="w"> </span>./my_analysis.js<span class="w"> </span>--hooks-crypto<span class="w"> </span>com.target.app
+
+<span class="c1"># Multiple custom scripts with comprehensive monitoring</span>
+ammm<span class="w"> </span>--custom-script<span class="w"> </span>./script1.js<span class="w"> </span>--custom-script<span class="w"> </span>./script2.js<span class="w"> </span>--hooks-all<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</section>
+<section id="remote-analysis">
+<h3>Remote Analysis<a class="headerlink" href="#remote-analysis" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Connect to remote device</span>
+ammm<span class="w"> </span>-H<span class="w"> </span><span class="m">192</span>.168.1.100:27042<span class="w"> </span>--hooks-crypto<span class="w"> </span>com.example.app
+
+<span class="c1"># Remote analysis with spawn gating</span>
+ammm<span class="w"> </span>-H<span class="w"> </span><span class="m">10</span>.0.0.5:27042<span class="w"> </span>--enable_spawn_gating<span class="w"> </span>--hooks-all<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</section>
+</section>
+<section id="performance-considerations">
+<h2>Performance Considerations<a class="headerlink" href="#performance-considerations" title="Link to this heading"></a></h2>
+<p><strong>Hook Selection Strategy</strong></p>
+<p>Start with minimal hooks and add categories as needed:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Start minimal</span>
+ammm<span class="w"> </span>--enable-web<span class="w"> </span>com.example.app
+
+<span class="c1"># Add crypto if needed</span>
+ammm<span class="w"> </span>--enable-web<span class="w"> </span>--enable-aes<span class="w"> </span>com.example.app
+
+<span class="c1"># Avoid --hooks-all unless necessary</span>
+ammm<span class="w"> </span>--hooks-crypto<span class="w"> </span>--hooks-network<span class="w"> </span>com.example.app<span class="w">  </span><span class="c1"># Preferred</span>
+ammm<span class="w"> </span>--hooks-all<span class="w"> </span>com.example.app<span class="w">                     </span><span class="c1"># Heavy</span>
+</pre></div>
+</div>
+<p><strong>Resource Usage</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--hooks-all</span></code> can significantly impact app performance</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--enable-full-stacktrace</span></code> adds overhead but provides valuable debugging info</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--verbose</span></code> generates substantial output for complex apps</p></li>
+</ul>
+<p><strong>Memory Considerations</strong></p>
+<ul class="simple">
+<li><p>Large apps with many events may require increased system memory</p></li>
+<li><p>friTap network captures can grow large for traffic-heavy applications</p></li>
+<li><p>Consider using specific hook categories rather than <code class="docutils literal notranslate"><span class="pre">--hooks-all</span></code></p></li>
+</ul>
+</section>
+<section id="error-handling">
+<h2>Error Handling<a class="headerlink" href="#error-handling" title="Link to this heading"></a></h2>
+<p>Common exit codes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">0</span></code> - Successful completion</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">1</span></code> - General error</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">2</span></code> - Frida connection error or invalid arguments</p></li>
+</ul>
+<p>For troubleshooting specific errors, see the <span class="xref std std-doc">../troubleshooting</span> section.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="User Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="hook-configuration.html" class="btn btn-neutral float-right" title="Hook Configuration Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Daniel Baier, Jan-Niclas Hilgert.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

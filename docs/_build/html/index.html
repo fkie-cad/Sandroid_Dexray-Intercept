@@ -1,0 +1,344 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SanDroid - Dexray Intercept Documentation &mdash; SanDroid - Dexray Intercept 0.3.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css?v=f7af4a0e" />
+
+  
+    <link rel="canonical" href="https://your-username.github.io/Sandroid_Dexray-Intercept/index.html" />
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=426446dc"></script>
+      <script src="_static/doctools.js?v=9a2dae69"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="_static/copybutton.js?v=30646c52"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Installation" href="installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="#" class="icon icon-home">
+            SanDroid - Dexray Intercept
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user-guide/index.html">User Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api/index.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="development/index.html">Development Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">SanDroid - Dexray Intercept</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">SanDroid - Dexray Intercept Documentation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="sandroid-dexray-intercept-documentation">
+<h1>SanDroid - Dexray Intercept Documentation<a class="headerlink" href="#sandroid-dexray-intercept-documentation" title="Link to this heading"></a></h1>
+<a class="reference external image-reference" href="https://github.com/fkie-cad/Sandroid_Dexray-Intercept"><img alt="Version" src="https://img.shields.io/badge/version-0.3.0.1-blue.svg" />
+</a>
+<a class="reference external image-reference" href="https://python.org"><img alt="Python Version" src="https://img.shields.io/badge/python-3.6+-brightgreen.svg" />
+</a>
+<a class="reference external image-reference" href="https://developer.android.com"><img alt="Platform" src="https://img.shields.io/badge/platform-Android-green.svg" />
+</a>
+<p>Welcome to the documentation for <strong>SanDroid - Dexray Intercept</strong>, a comprehensive Frida-based Android malware analysis tool designed to create runtime profiles that track application behavior in real-time.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>This tool is designed for <strong>defensive security analysis</strong> only. The samples directory contains actual malware.
+Use with extreme caution in isolated environments.</p>
+</div>
+<section id="what-is-dexray-intercept">
+<h2>What is Dexray Intercept?<a class="headerlink" href="#what-is-dexray-intercept" title="Link to this heading"></a></h2>
+<p>Dexray Intercept is part of the dynamic analysis sandbox SanDroid. It uses Frida dynamic instrumentation to:</p>
+<ul class="simple">
+<li><p><strong>Monitor Android app behavior</strong> in real-time during execution</p></li>
+<li><p><strong>Intercept and log</strong> cryptographic operations, network traffic, file system access, and IPC communications</p></li>
+<li><p><strong>Bypass common anti-analysis techniques</strong> including root, Frida, debugger, and emulator detection</p></li>
+<li><p><strong>Generate comprehensive JSON profiles</strong> for further analysis and threat intelligence</p></li>
+<li><p><strong>Support custom hooks</strong> for specialized analysis requirements</p></li>
+</ul>
+</section>
+<section id="key-features">
+<h2>Key Features<a class="headerlink" href="#key-features" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt>🔍 <strong>Comprehensive Monitoring</strong></dt><dd><ul class="simple">
+<li><p>Cryptographic operations (AES, encodings, keystore)</p></li>
+<li><p>Network communications (HTTP/HTTPS, WebSockets, sockets)</p></li>
+<li><p>File system and database operations</p></li>
+<li><p>Inter-process communication (intents, broadcasts, binder)</p></li>
+<li><p>System services (location, camera, telephony, clipboard)</p></li>
+<li><p>DEX unpacking and native library loading</p></li>
+</ul>
+</dd>
+<dt>🛡️ <strong>Anti-Analysis Bypass</strong></dt><dd><ul class="simple">
+<li><p>Root detection bypass</p></li>
+<li><p>Frida detection bypass</p></li>
+<li><p>Debugger detection bypass</p></li>
+<li><p>Emulator detection bypass</p></li>
+<li><p>Hook framework detection bypass</p></li>
+</ul>
+</dd>
+<dt>🔧 <strong>Advanced Capabilities</strong></dt><dd><ul class="simple">
+<li><p>TLS key extraction via integrated friTap</p></li>
+<li><p>Custom Frida script loading</p></li>
+<li><p>Selective hook configuration for performance</p></li>
+<li><p>Real-time terminal output with structured JSON logging</p></li>
+<li><p>Stack trace analysis for call origin tracking</p></li>
+</ul>
+</dd>
+<dt>📊 <strong>Output Formats</strong></dt><dd><ul class="simple">
+<li><p>Structured JSON profiles with metadata</p></li>
+<li><p>Real-time terminal logging</p></li>
+<li><p>Integration with threat intelligence platforms</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="quick-start">
+<h2>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Install the package</span>
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+
+<span class="c1"># Basic usage - attach to running app</span>
+ammm<span class="w"> </span>com.example.app
+
+<span class="c1"># Spawn app with crypto and network hooks</span>
+ammm<span class="w"> </span>-s<span class="w"> </span>--hooks-crypto<span class="w"> </span>--hooks-network<span class="w"> </span>com.example.app
+
+<span class="c1"># Comprehensive analysis with bypass hooks</span>
+ammm<span class="w"> </span>-s<span class="w"> </span>--hooks-all<span class="w"> </span>--hooks-bypass<span class="w"> </span>com.example.app
+
+<span class="c1"># Custom analysis with TLS extraction</span>
+ammm<span class="w"> </span>-s<span class="w"> </span>--enable-fritap<span class="w"> </span>--custom-script<span class="w"> </span>./my_hooks.js<span class="w"> </span>com.example.app
+</pre></div>
+</div>
+</section>
+<section id="architecture-overview">
+<h2>Architecture Overview<a class="headerlink" href="#architecture-overview" title="Link to this heading"></a></h2>
+<p>Dexray Intercept uses a <strong>dual-language architecture</strong>:</p>
+<dl class="simple">
+<dt><strong>Python Frontend</strong></dt><dd><ul class="simple">
+<li><p>CLI interface and argument parsing</p></li>
+<li><p>Frida session management and device connection</p></li>
+<li><p>Event processing and JSON profile generation</p></li>
+<li><p>Result analysis and output formatting</p></li>
+</ul>
+</dd>
+<dt><strong>TypeScript/JavaScript Backend</strong></dt><dd><ul class="simple">
+<li><p>Frida hooks written in TypeScript</p></li>
+<li><p>Compiled to JavaScript using <code class="docutils literal notranslate"><span class="pre">frida-compile</span></code></p></li>
+<li><p>Real-time instrumentation of Android applications</p></li>
+<li><p>Structured message passing to Python frontend</p></li>
+</ul>
+</dd>
+</dl>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#system-requirements">System Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#installation-steps">Installation Steps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#development-installation">Development Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#docker-installation-alternative">Docker Installation (Alternative)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#troubleshooting-installation">Troubleshooting Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#verification-steps">Verification Steps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#first-analysis">First Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#common-scenarios">Common Scenarios</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#understanding-the-output">Understanding the Output</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#hook-categories-reference">Hook Categories Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#stopping-analysis">Stopping Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="user-guide/index.html">User Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/cli-usage.html">Command Line Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/hook-configuration.html">Hook Configuration Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/output-formats.html">Output Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/index.html#key-concepts">Key Concepts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/index.html#workflow">Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/index.html#getting-help">Getting Help</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api/index.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/python-api.html">Python API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/typescript-api.html">TypeScript API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/index.html#architecture-integration">Architecture Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/index.html#development-workflow">Development Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/index.html#quick-examples">Quick Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/index.html#typescript-compilation">TypeScript Compilation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/index.html#api-compatibility">API Compatibility</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/index.html#getting-started">Getting Started</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="development/index.html">Development Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development/creating-hooks.html">Creating Custom Hooks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="development/index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="development/index.html#architecture-for-developers">Architecture for Developers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="development/index.html#development-environment-setup">Development Environment Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="development/index.html#development-workflow">Development Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="development/index.html#core-development-areas">Core Development Areas</a></li>
+<li class="toctree-l2"><a class="reference internal" href="development/index.html#testing-and-validation">Testing and Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="development/index.html#documentation-standards">Documentation Standards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="development/index.html#contributing-workflow">Contributing Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="development/index.html#quality-assurance">Quality Assurance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="development/index.html#common-development-tasks">Common Development Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="development/index.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+</div>
+</section>
+<section id="requirements">
+<h2>Requirements<a class="headerlink" href="#requirements" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt><strong>Runtime Requirements:</strong></dt><dd><ul class="simple">
+<li><p>Python 3.6 or higher</p></li>
+<li><p>Node.js (for TypeScript compilation)</p></li>
+<li><p>Rooted Android device or emulator</p></li>
+<li><p>frida-tools installed</p></li>
+</ul>
+</dd>
+<dt><strong>Development Requirements:</strong></dt><dd><ul class="simple">
+<li><p>TypeScript compiler</p></li>
+<li><p>frida-compile for hook compilation</p></li>
+<li><p>&#64;types/frida-gum for TypeScript definitions</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="contributing">
+<h2>Contributing<a class="headerlink" href="#contributing" title="Link to this heading"></a></h2>
+<p>Contributions are welcome! Please read our development guide for information on:</p>
+<ul class="simple">
+<li><p>Creating new hooks</p></li>
+<li><p>Adding parsers for new event types</p></li>
+<li><p>Extending the CLI interface</p></li>
+<li><p>Writing tests and documentation</p></li>
+</ul>
+</section>
+<section id="license">
+<h2>License<a class="headerlink" href="#license" title="Link to this heading"></a></h2>
+<p>This project is licensed under the MIT License. See the LICENSE file for details.</p>
+</section>
+<section id="support">
+<h2>Support<a class="headerlink" href="#support" title="Link to this heading"></a></h2>
+<p>For issues, questions, or contributions:</p>
+<ul class="simple">
+<li><p><strong>GitHub Issues</strong>: Report bugs and request features</p></li>
+<li><p><strong>Documentation</strong>: This comprehensive guide</p></li>
+<li><p><strong>Code Examples</strong>: See the user guide and API reference</p></li>
+</ul>
+</section>
+</section>
+<section id="indices-and-tables">
+<h1>Indices and Tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading"></a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="installation.html" class="btn btn-neutral float-right" title="Installation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Daniel Baier, Jan-Niclas Hilgert.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

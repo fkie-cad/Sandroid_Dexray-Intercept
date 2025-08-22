@@ -1,0 +1,463 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dexray_intercept.services.profile_collector &mdash; SanDroid - Dexray Intercept 0.3.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f7af4a0e" />
+
+  
+    <link rel="canonical" href="https://your-username.github.io/Sandroid_Dexray-Intercept/_modules/dexray_intercept/services/profile_collector.html" />
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=426446dc"></script>
+      <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../../_static/copybutton.js?v=30646c52"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            SanDroid - Dexray Intercept
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user-guide/index.html">User Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/index.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../development/index.html">Development Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">SanDroid - Dexray Intercept</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">dexray_intercept.services.profile_collector</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for dexray_intercept.services.profile_collector</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">colorama</span><span class="w"> </span><span class="kn">import</span> <span class="n">Fore</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">..models.profile</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProfileData</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..models.events</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span><span class="p">,</span> <span class="n">DEXEvent</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..parsers.factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">parser_factory</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..formatters.factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">formatter_factory</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..utils.android_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">getFilePath</span><span class="p">,</span> <span class="n">get_orig_path</span><span class="p">,</span> <span class="n">get_filename_from_path</span><span class="p">,</span> 
+    <span class="n">is_benign_dump</span><span class="p">,</span> <span class="n">pull_file_from_device</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="ProfileCollector">
+<a class="viewcode-back" href="../../../api/python-api.html#dexray_intercept.services.profile_collector.ProfileCollector">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ProfileCollector</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Service for collecting and processing profile events&quot;&quot;&quot;</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;CMD&quot;</span><span class="p">,</span> <span class="n">verbose_mode</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> 
+                 <span class="n">enable_stacktrace</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">path_filters</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">base_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">=</span> <span class="n">output_format</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span> <span class="o">=</span> <span class="n">verbose_mode</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">enable_stacktrace</span> <span class="o">=</span> <span class="n">enable_stacktrace</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">path_filters</span> <span class="o">=</span> <span class="n">path_filters</span> <span class="ow">or</span> <span class="p">[]</span>
+        
+        <span class="c1"># Profile data storage</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span> <span class="o">=</span> <span class="n">ProfileData</span><span class="p">()</span>
+        
+        <span class="c1"># DEX unpacking tracking</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dex_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">downloaded_origins</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">orig_file_location</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        
+        <span class="c1"># Output control</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">skip_output</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">startup</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">startup_unlink</span> <span class="o">=</span> <span class="kc">True</span>
+        
+        <span class="c1"># Setup paths for DEX dumps</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">..utils.android_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_unpacking_folder</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">benign_path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">malicious_path</span> <span class="o">=</span> <span class="n">create_unpacking_folder</span><span class="p">(</span><span class="n">base_path</span><span class="p">)</span>
+        
+        <span class="c1"># Get formatter</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">formatter</span> <span class="o">=</span> <span class="n">formatter_factory</span><span class="o">.</span><span class="n">get_formatter</span><span class="p">(</span>
+            <span class="n">output_format</span><span class="p">,</span> 
+            <span class="n">verbose_mode</span><span class="o">=</span><span class="n">verbose_mode</span>
+        <span class="p">)</span>
+    
+<div class="viewcode-block" id="ProfileCollector.process_frida_message">
+<a class="viewcode-back" href="../../../api/python-api.html#dexray_intercept.services.profile_collector.ProfileCollector.process_frida_message">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_frida_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Process a message from Frida script&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;error&#39;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                    <span class="n">error_msg</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;stack&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="p">))</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[-] Error in frida script: </span><span class="si">{</span><span class="n">error_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            
+            <span class="n">payload</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;payload&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">payload</span> <span class="ow">or</span> <span class="s2">&quot;profileType&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">payload</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            
+            <span class="n">profile_type</span> <span class="o">=</span> <span class="n">payload</span><span class="p">[</span><span class="s2">&quot;profileType&quot;</span><span class="p">]</span>
+            <span class="n">profile_content</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;profileContent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">timestamp</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;timestamp&quot;</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">())</span>
+            
+            <span class="c1"># Handle special console messages</span>
+            <span class="k">if</span> <span class="n">profile_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;console&quot;</span><span class="p">,</span> <span class="s2">&quot;console_dev&quot;</span><span class="p">]:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_handle_console_message</span><span class="p">(</span><span class="n">profile_content</span><span class="p">,</span> <span class="n">profile_type</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            
+            <span class="c1"># Handle custom script messages</span>
+            <span class="k">if</span> <span class="n">profile_type</span> <span class="o">==</span> <span class="s2">&quot;CUSTOM_SCRIPT&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_custom_script_message</span><span class="p">(</span><span class="n">profile_content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+            
+            <span class="c1"># Handle DEX loading specially</span>
+            <span class="k">if</span> <span class="n">profile_type</span> <span class="o">==</span> <span class="s2">&quot;DEX_LOADING&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_dex_loading</span><span class="p">(</span><span class="n">profile_content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+            
+            <span class="c1"># Process regular events</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_event</span><span class="p">(</span><span class="n">profile_type</span><span class="p">,</span> <span class="n">profile_content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+            
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[-] Error processing message: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span></div>
+
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_handle_console_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle console messages&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;creating local copy of unpacked file&quot;</span> <span class="ow">in</span> <span class="n">content</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">skip_output</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">return</span>
+        
+        <span class="k">if</span> <span class="s2">&quot;Unpacking detected!&quot;</span> <span class="ow">in</span> <span class="n">content</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">skip_output</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">return</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip_output</span><span class="p">:</span>
+            <span class="k">return</span>
+        
+        <span class="k">if</span> <span class="n">message_type</span> <span class="o">==</span> <span class="s2">&quot;console_dev&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[***] </span><span class="si">{</span><span class="n">content</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">message_type</span> <span class="o">==</span> <span class="s2">&quot;console&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">content</span> <span class="o">!=</span> <span class="s2">&quot;Unknown&quot;</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[***] </span><span class="si">{</span><span class="n">content</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_handle_custom_script_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle custom script messages&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Extract script name and message content</span>
+            <span class="n">script_name</span> <span class="o">=</span> <span class="n">content</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;script_name&#39;</span><span class="p">,</span> <span class="s1">&#39;unknown_script&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="s1">&#39;unknown_script&#39;</span>
+            <span class="n">message_content</span> <span class="o">=</span> <span class="n">content</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;message&#39;</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="n">content</span>
+            
+            <span class="c1"># Create custom script event</span>
+            <span class="n">event</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_custom_script_event</span><span class="p">(</span><span class="n">script_name</span><span class="p">,</span> <span class="n">message_content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+            
+            <span class="c1"># Add to profile data</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="s2">&quot;CUSTOM_SCRIPT&quot;</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+            
+            <span class="c1"># Display for CMD output with special formatting</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">==</span> <span class="s2">&quot;CMD&quot;</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[CUSTOM] </span><span class="si">{</span><span class="n">script_name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">message_content</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            
+            <span class="k">return</span> <span class="kc">True</span>
+            
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[-] Error handling custom script message: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_custom_script_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">script_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message_content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a custom script event&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">..models.events</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
+        
+        <span class="k">class</span><span class="w"> </span><span class="nc">CustomScriptEvent</span><span class="p">(</span><span class="n">Event</span><span class="p">):</span>
+            <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">script_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message_content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="s2">&quot;custom_script.message&quot;</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">script_name</span> <span class="o">=</span> <span class="n">script_name</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">message_content</span> <span class="o">=</span> <span class="n">message_content</span>
+            
+            <span class="k">def</span><span class="w"> </span><span class="nf">get_event_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                <span class="k">return</span> <span class="p">{</span>
+                    <span class="s2">&quot;script_name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">script_name</span><span class="p">,</span>
+                    <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">message_content</span><span class="p">,</span>
+                    <span class="s2">&quot;event_type&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_type</span>
+                <span class="p">}</span>
+        
+        <span class="k">return</span> <span class="n">CustomScriptEvent</span><span class="p">(</span><span class="n">script_name</span><span class="p">,</span> <span class="n">message_content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_handle_dex_loading</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle DEX loading events&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">content</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">dex_list</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dex_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="s2">&quot;dumped&quot;</span> <span class="ow">in</span> <span class="n">content</span><span class="p">:</span>
+            <span class="c1"># Handle file dumping</span>
+            <span class="n">file_path</span> <span class="o">=</span> <span class="n">getFilePath</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_dump_dex_file</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Regular DEX loading event</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">==</span> <span class="s2">&quot;CMD&quot;</span><span class="p">:</span>
+                <span class="c1"># Parse and display</span>
+                <span class="n">parser</span> <span class="o">=</span> <span class="n">parser_factory</span><span class="o">.</span><span class="n">get_parser</span><span class="p">(</span><span class="s2">&quot;DEX_LOADING&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">parser</span><span class="p">:</span>
+                    <span class="n">event</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">event</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatter</span><span class="p">:</span>
+                        <span class="n">formatted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatter</span><span class="o">.</span><span class="n">format_event</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">formatted</span><span class="p">:</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="n">formatted</span><span class="p">)</span>
+                
+                <span class="c1"># Add to profile data</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="s2">&quot;DEX_LOADING&quot;</span><span class="p">,</span> <span class="n">event</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_generic_event</span><span class="p">(</span><span class="s2">&quot;DEX_LOADING&quot;</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">))</span>
+            
+            <span class="k">if</span> <span class="s2">&quot;orig location&quot;</span> <span class="ow">in</span> <span class="n">content</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">orig_file_location</span> <span class="o">=</span> <span class="n">get_orig_path</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+            
+            <span class="k">return</span> <span class="kc">True</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_process_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">category</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Process a regular event&quot;&quot;&quot;</span>
+        <span class="c1"># Skip certain events based on filters</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_should_skip_event</span><span class="p">(</span><span class="n">category</span><span class="p">,</span> <span class="n">content</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        
+        <span class="c1"># Parse the event</span>
+        <span class="n">parser</span> <span class="o">=</span> <span class="n">parser_factory</span><span class="o">.</span><span class="n">get_parser</span><span class="p">(</span><span class="n">category</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">parser</span><span class="p">:</span>
+            <span class="n">event</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">event</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_generic_event</span><span class="p">(</span><span class="n">category</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">event</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        
+        <span class="c1"># Add to profile data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="n">category</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+        
+        <span class="c1"># Format and display for CMD output</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">==</span> <span class="s2">&quot;CMD&quot;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatter</span><span class="p">:</span>
+            <span class="n">formatted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatter</span><span class="o">.</span><span class="n">format_event</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">formatted</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">formatted</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="kc">True</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_should_skip_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">category</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">content</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Determine if event should be skipped&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip_output</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        
+        <span class="c1"># Skip certain file system events unless verbose</span>
+        <span class="k">if</span> <span class="n">category</span> <span class="o">==</span> <span class="s2">&quot;FILE_SYSTEM&quot;</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s2">&quot;stat&quot;</span> <span class="ow">in</span> <span class="n">content</span> <span class="ow">or</span> <span class="s2">&quot;/system/fonts/&quot;</span> <span class="ow">in</span> <span class="n">content</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+        
+        <span class="c1"># Apply path filters if configured</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_filters</span> <span class="ow">and</span> <span class="n">category</span> <span class="o">==</span> <span class="s2">&quot;FILE_SYSTEM&quot;</span><span class="p">:</span>
+            <span class="c1"># Simple path filtering logic</span>
+            <span class="k">for</span> <span class="n">path_filter</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_filters</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">path_filter</span> <span class="ow">in</span> <span class="n">content</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">return</span> <span class="kc">True</span>  <span class="c1"># Skip if no filters match</span>
+        
+        <span class="k">return</span> <span class="kc">False</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_generic_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">category</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Event</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a generic event for unknown categories&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">..models.events</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
+        
+        <span class="k">class</span><span class="w"> </span><span class="nc">GenericEvent</span><span class="p">(</span><span class="n">Event</span><span class="p">):</span>
+            <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">category</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">category</span><span class="si">}</span><span class="s2">::unknown&quot;</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">category</span> <span class="o">=</span> <span class="n">category</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="n">content</span>
+            
+            <span class="k">def</span><span class="w"> </span><span class="nf">get_event_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                <span class="k">return</span> <span class="p">{</span>
+                    <span class="s2">&quot;payload&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">content</span><span class="p">,</span>
+                    <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">category</span>
+                <span class="p">}</span>
+        
+        <span class="k">return</span> <span class="n">GenericEvent</span><span class="p">(</span><span class="n">category</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_dump_dex_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle DEX file dumping&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">file_path</span><span class="p">:</span>
+            <span class="k">return</span>
+        
+        <span class="n">file_name</span> <span class="o">=</span> <span class="n">get_filename_from_path</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+        
+        <span class="c1"># Check if already downloaded</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">orig_file_location</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">downloaded_origins</span><span class="p">:</span>
+            <span class="n">previously_downloaded</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">downloaded_origins</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">orig_file_location</span><span class="p">]</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">==</span> <span class="s2">&quot;CMD&quot;</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[*] File &#39;</span><span class="si">{</span><span class="n">file_name</span><span class="si">}</span><span class="s2">&#39; has already been dumped as </span><span class="si">{</span><span class="n">previously_downloaded</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+        
+        <span class="c1"># Determine if benign or malicious</span>
+        <span class="k">if</span> <span class="n">is_benign_dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">orig_file_location</span><span class="p">):</span>
+            <span class="n">dump_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">benign_path</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">file_name</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">pull_file_from_device</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="n">dump_path</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">==</span> <span class="s2">&quot;CMD&quot;</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">Fore</span><span class="o">.</span><span class="n">GREEN</span><span class="si">}</span><span class="s2">[*] Dumped benign DEX to: </span><span class="si">{</span><span class="n">dump_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">==</span> <span class="s2">&quot;CMD&quot;</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] Unpacking detected!&quot;</span><span class="p">)</span>
+            <span class="n">dump_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">malicious_path</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">file_name</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">pull_file_from_device</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="n">dump_path</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">==</span> <span class="s2">&quot;CMD&quot;</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">Fore</span><span class="o">.</span><span class="n">RED</span><span class="si">}</span><span class="s2">[*] Dumped DEX payload to: </span><span class="si">{</span><span class="n">dump_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="c1"># Record the download</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">downloaded_origins</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">orig_file_location</span><span class="p">]</span> <span class="o">=</span> <span class="n">file_name</span>
+        
+        <span class="c1"># Create DEX event for profile</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">..parsers.dex</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEXParser</span>
+        <span class="n">parser</span> <span class="o">=</span> <span class="n">DEXParser</span><span class="p">()</span>
+        <span class="n">event</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_dex_loading_list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dex_list</span><span class="p">)</span>
+        
+        <span class="n">dex_event</span> <span class="o">=</span> <span class="n">DEXEvent</span><span class="p">(</span><span class="s2">&quot;dex.unpacking&quot;</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="n">dex_event</span><span class="o">.</span><span class="n">unpacking</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">dex_event</span><span class="o">.</span><span class="n">dumped</span> <span class="o">=</span> <span class="n">dump_path</span>
+        <span class="n">dex_event</span><span class="o">.</span><span class="n">orig_location</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">orig_file_location</span>
+        
+        <span class="c1"># Copy parsed data</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">event</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">dex_event</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="n">dex_event</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">dex_event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="s2">&quot;DEX_LOADING&quot;</span><span class="p">,</span> <span class="n">dex_event</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dex_list</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+    
+<div class="viewcode-block" id="ProfileCollector.get_profile_data">
+<a class="viewcode-back" href="../../../api/python-api.html#dexray_intercept.services.profile_collector.ProfileCollector.get_profile_data">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_profile_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProfileData</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the collected profile data&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span></div>
+
+    
+<div class="viewcode-block" id="ProfileCollector.get_profile_json">
+<a class="viewcode-back" href="../../../api/python-api.html#dexray_intercept.services.profile_collector.ProfileCollector.get_profile_json">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_profile_json</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get profile data as JSON string&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span><span class="o">.</span><span class="n">to_json</span><span class="p">()</span></div>
+
+    
+<div class="viewcode-block" id="ProfileCollector.write_profile_to_file">
+<a class="viewcode-back" href="../../../api/python-api.html#dexray_intercept.services.profile_collector.ProfileCollector.write_profile_to_file">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">write_profile_to_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;profile.json&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write profile data to file&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span><span class="o">.</span><span class="n">write_to_file</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="ProfileCollector.get_event_count">
+<a class="viewcode-back" href="../../../api/python-api.html#dexray_intercept.services.profile_collector.ProfileCollector.get_event_count">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_event_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">category</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get event count for category or total&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span><span class="o">.</span><span class="n">get_event_count</span><span class="p">(</span><span class="n">category</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="ProfileCollector.get_categories">
+<a class="viewcode-back" href="../../../api/python-api.html#dexray_intercept.services.profile_collector.ProfileCollector.get_categories">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_categories</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get all categories with events&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span><span class="o">.</span><span class="n">get_categories</span><span class="p">()</span></div>
+
+    
+<div class="viewcode-block" id="ProfileCollector.clear_profile_data">
+<a class="viewcode-back" href="../../../api/python-api.html#dexray_intercept.services.profile_collector.ProfileCollector.clear_profile_data">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">clear_profile_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Clear collected profile data&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">profile_data</span> <span class="o">=</span> <span class="n">ProfileData</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dex_list</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">downloaded_origins</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Daniel Baier, Jan-Niclas Hilgert.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

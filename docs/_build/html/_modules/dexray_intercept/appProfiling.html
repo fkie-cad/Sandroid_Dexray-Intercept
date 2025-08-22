@@ -1,0 +1,732 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dexray_intercept.appProfiling &mdash; SanDroid - Dexray Intercept 0.3.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=f7af4a0e" />
+
+  
+    <link rel="canonical" href="https://your-username.github.io/Sandroid_Dexray-Intercept/_modules/dexray_intercept/appProfiling.html" />
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=426446dc"></script>
+      <script src="../../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../_static/copybutton.js?v=30646c52"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            SanDroid - Dexray Intercept
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user-guide/index.html">User Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/index.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../development/index.html">Development Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">SanDroid - Dexray Intercept</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">dexray_intercept.appProfiling</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for dexray_intercept.appProfiling</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">frida</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">signal</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.services.instrumentation</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstrumentationService</span><span class="p">,</span> <span class="n">FridaBasedException</span><span class="p">,</span> <span class="n">setup_frida_device</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.services.profile_collector</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProfileCollector</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.services.hook_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">HookManager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models.profile</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProfileData</span>
+
+
+<div class="viewcode-block" id="AppProfiler">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppProfiler</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Main application profiler class.</span>
+<span class="sd">    </span>
+<span class="sd">    This class orchestrates the profiling process by coordinating between:</span>
+<span class="sd">    - InstrumentationService: Manages Frida script loading and communication</span>
+<span class="sd">    - ProfileCollector: Handles event collection and processing</span>
+<span class="sd">    - HookManager: Manages hook configuration</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">process</span><span class="p">,</span> <span class="n">verbose_mode</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">output_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;CMD&quot;</span><span class="p">,</span> 
+                 <span class="n">base_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">deactivate_unlink</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> 
+                 <span class="n">path_filters</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">hook_config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> 
+                 <span class="n">enable_stacktrace</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">enable_fritap</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> 
+                 <span class="n">fritap_output_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;./fritap_output&quot;</span><span class="p">,</span> <span class="n">target_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> 
+                 <span class="n">spawn_mode</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">custom_scripts</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize the AppProfiler.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            process: Frida process object</span>
+<span class="sd">            verbose_mode: Enable verbose output</span>
+<span class="sd">            output_format: Output format (&quot;CMD&quot; or &quot;JSON&quot;)</span>
+<span class="sd">            base_path: Base path for file dumps</span>
+<span class="sd">            deactivate_unlink: Disable file unlinking</span>
+<span class="sd">            path_filters: Path filters for file system events</span>
+<span class="sd">            hook_config: Hook configuration dictionary</span>
+<span class="sd">            enable_stacktrace: Enable stack traces</span>
+<span class="sd">            enable_fritap: Enable fritap for TLS key extraction</span>
+<span class="sd">            fritap_output_dir: Directory for fritap output files</span>
+<span class="sd">            target_name: Target application name or package identifier</span>
+<span class="sd">            spawn_mode: Whether the target was spawned (True) or attached to (False)</span>
+<span class="sd">            custom_scripts: List of paths to custom Frida scripts to load</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">process</span> <span class="o">=</span> <span class="n">process</span>
+        
+        <span class="c1"># Handle fritap spawn mode where process might be None initially</span>
+        <span class="k">if</span> <span class="n">process</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">enable_fritap</span> <span class="ow">and</span> <span class="n">spawn_mode</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">verbose_mode</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] fritap spawn mode - process session will be set after fritap spawns target&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span> <span class="o">=</span> <span class="n">verbose_mode</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">=</span> <span class="n">output_format</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">deactivate_unlink</span> <span class="o">=</span> <span class="n">deactivate_unlink</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">enable_stacktrace</span> <span class="o">=</span> <span class="n">enable_stacktrace</span>
+        
+        <span class="c1"># Target and mode information</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target_name</span> <span class="o">=</span> <span class="n">target_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">spawn_mode</span> <span class="o">=</span> <span class="n">spawn_mode</span>
+        
+        <span class="c1"># Custom scripts configuration</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">custom_scripts</span> <span class="o">=</span> <span class="n">custom_scripts</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">custom_script_instances</span> <span class="o">=</span> <span class="p">[]</span>
+        
+        <span class="c1"># Fritap configuration</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">enable_fritap</span> <span class="o">=</span> <span class="n">enable_fritap</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fritap_output_dir</span> <span class="o">=</span> <span class="n">fritap_output_dir</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fritap_keylog_file</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_file</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_filename</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fritap_finished</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fritap_monitor_thread</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_shutdown_requested</span> <span class="o">=</span> <span class="kc">False</span>
+        
+        <span class="c1"># Check fritap availability early if enabled</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">enable_fritap</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_fritap_availability</span><span class="p">():</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[-] fritap not available, disabling fritap functionality&quot;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">enable_fritap</span> <span class="o">=</span> <span class="kc">False</span>
+        
+        <span class="c1"># Initialize services</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span> <span class="o">=</span> <span class="n">InstrumentationService</span><span class="p">(</span><span class="n">process</span><span class="p">,</span> <span class="n">custom_scripts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">custom_scripts</span><span class="p">)</span> <span class="k">if</span> <span class="n">process</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">profile_collector</span> <span class="o">=</span> <span class="n">ProfileCollector</span><span class="p">(</span>
+            <span class="n">output_format</span><span class="o">=</span><span class="n">output_format</span><span class="p">,</span>
+            <span class="n">verbose_mode</span><span class="o">=</span><span class="n">verbose_mode</span><span class="p">,</span>
+            <span class="n">enable_stacktrace</span><span class="o">=</span><span class="n">enable_stacktrace</span><span class="p">,</span>
+            <span class="n">path_filters</span><span class="o">=</span><span class="n">path_filters</span><span class="p">,</span>
+            <span class="n">base_path</span><span class="o">=</span><span class="n">base_path</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hook_manager</span> <span class="o">=</span> <span class="n">HookManager</span><span class="p">(</span><span class="n">hook_config</span><span class="p">)</span>
+        
+        <span class="c1"># Set up message handling (only if instrumentation service exists)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">set_message_handler</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_message_handler</span><span class="p">)</span>
+        
+        <span class="c1"># State tracking</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">startup</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">startup_unlink</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">path_filters_sent</span> <span class="o">=</span> <span class="kc">False</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_fritap_availability</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if fritap is installed and available&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">shutil</span><span class="o">.</span><span class="n">which</span><span class="p">(</span><span class="s1">&#39;fritap&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    
+<div class="viewcode-block" id="AppProfiler.set_process_session">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.set_process_session">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_process_session</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">process_session</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Update the process session after fritap spawns the target&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">process</span> <span class="o">=</span> <span class="n">process_session</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span> <span class="o">=</span> <span class="n">InstrumentationService</span><span class="p">(</span><span class="n">process_session</span><span class="p">,</span> <span class="n">custom_scripts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">custom_scripts</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">set_message_handler</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_message_handler</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">process</span> <span class="o">=</span> <span class="n">process_session</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] process session updated successfully&quot;</span><span class="p">)</span></div>
+
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_generate_fritap_filenames</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate fritap output filenames with correct signatures&quot;&quot;&quot;</span>
+        <span class="n">timestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y%m</span><span class="si">%d</span><span class="s2">_%H%M%S&quot;</span><span class="p">)</span>
+        <span class="n">keylog_file</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;dexray_tlskeys_</span><span class="si">{</span><span class="n">app_name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">timestamp</span><span class="si">}</span><span class="s2">.log&quot;</span>
+        <span class="n">pcap_file</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;dexray_unfiltered_traffic_</span><span class="si">{</span><span class="n">app_name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">timestamp</span><span class="si">}</span><span class="s2">.pcap&quot;</span>
+        <span class="k">return</span> <span class="n">keylog_file</span><span class="p">,</span> <span class="n">pcap_file</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_start_fritap</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Start fritap subprocess for TLS key extraction</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            PID of spawned process if fritap spawned the target, None otherwise</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">enable_fritap</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Create output directory if it doesn&#39;t exist</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_output_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            
+            <span class="c1"># Generate filenames</span>
+            <span class="n">keylog_filename</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_filename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_fritap_filenames</span><span class="p">(</span><span class="n">app_name</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fritap_keylog_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_output_dir</span><span class="p">,</span> <span class="n">keylog_filename</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_output_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_filename</span><span class="p">)</span>
+            
+            <span class="c1"># Build fritap command</span>
+            <span class="n">fritap_cmd</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s1">&#39;fritap&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;-m&#39;</span><span class="p">,</span>  <span class="c1"># Mobile app flag for Android</span>
+                <span class="s1">&#39;-k&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_keylog_file</span><span class="p">,</span>
+                <span class="s1">&#39;-p&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_file</span><span class="p">,</span>
+                <span class="s1">&#39;-f&#39;</span> <span class="c1"># enable full packet capture</span>
+            <span class="p">]</span>
+            
+            <span class="c1"># Add verbose flag if enabled</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                <span class="n">fritap_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;-v&#39;</span><span class="p">)</span>
+            
+            <span class="c1"># Add spawn flag if in spawn mode</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">spawn_mode</span><span class="p">:</span>
+                <span class="n">fritap_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;--spawn&#39;</span><span class="p">)</span>
+            
+            <span class="c1"># Add target</span>
+            <span class="n">target</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_name</span> <span class="ow">or</span> <span class="n">app_name</span>
+            <span class="n">fritap_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+            
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[*] starting fritap: </span><span class="si">{</span><span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fritap_cmd</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[*] mode: </span><span class="si">{</span><span class="s1">&#39;spawn&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">spawn_mode</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;attach&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[*] target: </span><span class="si">{</span><span class="n">target</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[*] keylog file: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_keylog_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[*] pcap file: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            
+            <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span>
+                <span class="n">fritap_cmd</span><span class="p">,</span>
+                <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">spawn_mode</span> <span class="k">else</span> <span class="p">(</span><span class="n">subprocess</span><span class="o">.</span><span class="n">DEVNULL</span> <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span> <span class="k">else</span> <span class="kc">None</span><span class="p">),</span>
+                <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">spawn_mode</span> <span class="k">else</span> <span class="p">(</span><span class="n">subprocess</span><span class="o">.</span><span class="n">DEVNULL</span> <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span> <span class="k">else</span> <span class="kc">None</span><span class="p">),</span>
+                <span class="n">preexec_fn</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">setsid</span><span class="p">,</span>  <span class="c1"># Create new process group for clean termination</span>
+                <span class="n">text</span><span class="o">=</span><span class="kc">True</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">spawn_mode</span> <span class="k">else</span> <span class="kc">False</span>
+            <span class="p">)</span>
+            
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[*] fritap started with PID: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="o">.</span><span class="n">pid</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                
+            <span class="c1"># If fritap is spawning, we need to wait for it to be ready</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">spawn_mode</span><span class="p">:</span>
+                <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>  <span class="c1"># Give fritap time to spawn and attach</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] fritap spawn mode - waiting for target to be ready&quot;</span><span class="p">)</span>
+            
+            <span class="c1"># Start monitoring fritap process in a separate thread</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fritap_monitor_thread</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span>
+                    <span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_monitor_fritap_process</span><span class="p">,</span> 
+                    <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span>
+                <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fritap_monitor_thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+            
+            <span class="k">return</span> <span class="kc">None</span>
+                
+        <span class="k">except</span> <span class="ne">FileNotFoundError</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[-] fritap not found. Please install fritap first.&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[-] fritap can be installed from: https://github.com/fkie-cad/friTap&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">enable_fritap</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[-] failed to start fritap: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">enable_fritap</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">return</span> <span class="kc">None</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_monitor_fritap_process</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Monitor fritap process in a separate thread&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="p">:</span>
+            <span class="k">return</span>
+        
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Wait for fritap to finish</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+            
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] fritap process finished&quot;</span><span class="p">)</span>
+            
+            <span class="c1"># Signal that fritap has finished</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fritap_finished</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+            
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[-] error monitoring fritap process: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fritap_finished</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_send_signal_to_fritap</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sig</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Send signal to fritap process&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="c1"># Send signal to the process group</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">killpg</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getpgid</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="o">.</span><span class="n">pid</span><span class="p">),</span> <span class="n">sig</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[-] error sending signal </span><span class="si">{</span><span class="n">sig</span><span class="si">}</span><span class="s2"> to fritap: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    
+<div class="viewcode-block" id="AppProfiler.send_interrupt_to_fritap">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.send_interrupt_to_fritap">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">send_interrupt_to_fritap</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Send SIGINT (Ctrl+C) to fritap process&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] sending interrupt signal to fritap&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_signal_to_fritap</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">SIGINT</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.wait_for_fritap">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.wait_for_fritap">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">wait_for_fritap</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Wait for fritap to finish</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            timeout: Maximum time to wait in seconds (None for indefinite)</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            True if fritap finished, False if timeout occurred</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_finished</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span></div>
+
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_stop_fritap</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Stop fritap subprocess&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_shutdown_requested</span> <span class="o">=</span> <span class="kc">True</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] stopping fritap gracefully&quot;</span><span class="p">)</span>
+                
+                <span class="c1"># First try SIGINT (Ctrl+C equivalent)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_send_signal_to_fritap</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">SIGINT</span><span class="p">)</span>
+                
+                <span class="c1"># Wait a bit for graceful shutdown</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] fritap stopped gracefully&quot;</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">fritap_finished</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+                    <span class="k">return</span>
+                <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">TimeoutExpired</span><span class="p">:</span>
+                    <span class="k">pass</span>
+                
+                <span class="c1"># If still running, try SIGTERM</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] sending SIGTERM to fritap&quot;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_send_signal_to_fritap</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">SIGTERM</span><span class="p">)</span>
+                
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] fritap stopped&quot;</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">fritap_finished</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+                <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">TimeoutExpired</span><span class="p">:</span>
+                    <span class="c1"># Force kill if graceful termination fails</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] force killing fritap&quot;</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_send_signal_to_fritap</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">SIGKILL</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] fritap force stopped&quot;</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">fritap_finished</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+                    
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[-] error stopping fritap: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fritap_finished</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+    
+<div class="viewcode-block" id="AppProfiler.start_profiling">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.start_profiling">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">start_profiling</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">frida</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">Script</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Start the profiling process&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Get app name from process if not provided</span>
+            <span class="k">if</span> <span class="n">app_name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">app_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;unknown_app&#39;</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="n">app_name</span> <span class="o">=</span> <span class="s1">&#39;unknown_app&#39;</span>
+            
+            <span class="c1"># Start fritap FIRST if enabled (fritap-first initialization)</span>
+            <span class="c1"># Skip if fritap is already running (e.g., started manually in spawn mode)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">enable_fritap</span> <span class="ow">and</span> <span class="p">(</span><span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">):</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] starting fritap before dexray-intercept hooks&quot;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_start_fritap</span><span class="p">(</span><span class="n">app_name</span><span class="p">)</span>
+                
+                <span class="c1"># In spawn mode, give fritap extra time to fully initialize the spawned process</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">spawn_mode</span><span class="p">:</span>
+                    <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] waiting for fritap to fully initialize spawned process&quot;</span><span class="p">)</span>
+                    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># Additional wait for spawn mode</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">enable_fritap</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_process</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] fritap already running, proceeding with dexray-intercept hooks&quot;</span><span class="p">)</span>
+            
+            <span class="c1"># Now start dexray-intercept&#39;s Frida script</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">enable_fritap</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] starting dexray-intercept hooks&quot;</span><span class="p">)</span>
+            
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">FridaBasedException</span><span class="p">(</span><span class="s2">&quot;No process session available - cannot load Frida script&quot;</span><span class="p">)</span>
+            
+            <span class="n">script</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">load_script</span><span class="p">()</span>
+            <span class="k">return</span> <span class="n">script</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="c1"># Clean up fritap if script loading fails</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">enable_fritap</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_stop_fritap</span><span class="p">()</span>
+            <span class="k">raise</span> <span class="n">FridaBasedException</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to start profiling: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.stop_profiling">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.stop_profiling">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">stop_profiling</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Stop the profiling process&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] stopping profiling&quot;</span><span class="p">)</span>
+        
+        <span class="c1"># Stop Frida instrumentation first</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">unload_script</span><span class="p">()</span>
+        
+        <span class="c1"># Stop fritap and wait for it to finish</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">enable_fritap</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_stop_fritap</span><span class="p">()</span>
+            
+            <span class="c1"># Wait for fritap to finish writing its files</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] waiting for fritap to finish...&quot;</span><span class="p">)</span>
+            
+            <span class="c1"># Wait up to 10 seconds for fritap to finish gracefully</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_fritap</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[-] fritap did not finish within timeout&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[*] fritap finished successfully&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_keylog_file</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_keylog_file</span><span class="p">):</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[*] TLS keys saved to: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_keylog_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_file</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_file</span><span class="p">):</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[*] Traffic capture saved to: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">saved__pcap_name</span> <span class="o">=</span> <span class="s2">&quot;_&quot;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_filename</span>
+                    <span class="n">dst</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_file</span><span class="p">)</span>
+                    <span class="n">src</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">saved__pcap_name</span><span class="p">)</span>
+
+                    <span class="n">src</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">dst</span><span class="p">)</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[*] Traffic capture saved to: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">fritap_pcap_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_message_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle messages from Frida script&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Handle initial startup messages</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_startup_messages</span><span class="p">(</span><span class="n">message</span><span class="p">):</span>
+                <span class="k">return</span>
+            
+            <span class="c1"># Process regular profile messages</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">profile_collector</span><span class="o">.</span><span class="n">process_frida_message</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+            
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[-] Error in message handler: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_handle_startup_messages</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle startup configuration messages&quot;&quot;&quot;</span>
+        <span class="n">payload</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;payload&#39;</span><span class="p">)</span>
+        
+        <span class="c1"># Send verbose mode configuration</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">startup</span> <span class="ow">and</span> <span class="n">payload</span> <span class="o">==</span> <span class="s1">&#39;verbose_mode&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">send_message</span><span class="p">({</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;verbose_mode&#39;</span><span class="p">,</span> 
+                <span class="s1">&#39;payload&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span>
+            <span class="p">})</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">startup</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        
+        <span class="c1"># Send unlink configuration</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">startup_unlink</span> <span class="ow">and</span> <span class="n">payload</span> <span class="o">==</span> <span class="s1">&#39;deactivate_unlink&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">send_message</span><span class="p">({</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;deactivate_unlink&#39;</span><span class="p">,</span> 
+                <span class="s1">&#39;payload&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">deactivate_unlink</span>
+            <span class="p">})</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">startup_unlink</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        
+        <span class="c1"># Send hook configuration</span>
+        <span class="k">if</span> <span class="n">payload</span> <span class="o">==</span> <span class="s1">&#39;hook_config&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">send_message</span><span class="p">({</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;hook_config&#39;</span><span class="p">,</span> 
+                <span class="s1">&#39;payload&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook_manager</span><span class="o">.</span><span class="n">get_hook_config</span><span class="p">()</span>
+            <span class="p">})</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        
+        <span class="c1"># Send stacktrace configuration</span>
+        <span class="k">if</span> <span class="n">payload</span> <span class="o">==</span> <span class="s1">&#39;enable_stacktrace&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">send_message</span><span class="p">({</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;enable_stacktrace&#39;</span><span class="p">,</span> 
+                <span class="s1">&#39;payload&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">enable_stacktrace</span>
+            <span class="p">})</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        
+        <span class="c1"># Send path filters (once)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_filters_sent</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_collector</span><span class="o">.</span><span class="n">path_filters</span><span class="p">:</span>
+            <span class="n">filters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_collector</span><span class="o">.</span><span class="n">path_filters</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">filters</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">filters</span> <span class="o">=</span> <span class="p">[</span><span class="n">filters</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">send_message</span><span class="p">({</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;path_filters&#39;</span><span class="p">,</span> 
+                <span class="s1">&#39;payload&#39;</span><span class="p">:</span> <span class="n">filters</span>
+            <span class="p">})</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">path_filters_sent</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        
+        <span class="k">return</span> <span class="kc">False</span>
+    
+    <span class="c1"># Hook management methods (delegated to HookManager)</span>
+<div class="viewcode-block" id="AppProfiler.enable_hook">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.enable_hook">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">enable_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hook_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Enable or disable a specific hook at runtime&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hook_manager</span><span class="o">.</span><span class="n">enable_hook</span><span class="p">(</span><span class="n">hook_name</span><span class="p">,</span> <span class="n">enabled</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">is_script_loaded</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">send_message</span><span class="p">({</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;hook_config&#39;</span><span class="p">,</span> 
+                <span class="s1">&#39;payload&#39;</span><span class="p">:</span> <span class="p">{</span><span class="n">hook_name</span><span class="p">:</span> <span class="n">enabled</span><span class="p">}</span>
+            <span class="p">})</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.get_enabled_hooks">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.get_enabled_hooks">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_enabled_hooks</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return list of currently enabled hooks&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook_manager</span><span class="o">.</span><span class="n">get_enabled_hooks</span><span class="p">()</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.enable_all_hooks">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.enable_all_hooks">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">enable_all_hooks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Enable all available hooks&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hook_manager</span><span class="o">.</span><span class="n">enable_all_hooks</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">is_script_loaded</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">send_message</span><span class="p">({</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;hook_config&#39;</span><span class="p">,</span> 
+                <span class="s1">&#39;payload&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook_manager</span><span class="o">.</span><span class="n">get_hook_config</span><span class="p">()</span>
+            <span class="p">})</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.enable_hook_group">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.enable_hook_group">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">enable_hook_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Enable a group of related hooks&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hook_manager</span><span class="o">.</span><span class="n">enable_hook_group</span><span class="p">(</span><span class="n">group_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">is_script_loaded</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">send_message</span><span class="p">({</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;hook_config&#39;</span><span class="p">,</span> 
+                <span class="s1">&#39;payload&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook_manager</span><span class="o">.</span><span class="n">get_hook_config</span><span class="p">()</span>
+            <span class="p">})</span></div>
+
+    
+    <span class="c1"># Profile data methods (delegated to ProfileCollector)</span>
+<div class="viewcode-block" id="AppProfiler.get_profile_data">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.get_profile_data">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_profile_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProfileData</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the collected profile data&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_collector</span><span class="o">.</span><span class="n">get_profile_data</span><span class="p">()</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.get_profiling_log_as_json">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.get_profiling_log_as_json">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_profiling_log_as_json</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get profile data as JSON string&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_collector</span><span class="o">.</span><span class="n">get_profile_json</span><span class="p">()</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.write_profiling_log">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.write_profiling_log">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">write_profiling_log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;profile.json&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write profile data to file&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_collector</span><span class="o">.</span><span class="n">write_profile_to_file</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.get_event_count">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.get_event_count">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_event_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">category</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get event count for category or total&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_collector</span><span class="o">.</span><span class="n">get_event_count</span><span class="p">(</span><span class="n">category</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.get_categories">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.get_categories">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_categories</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get all categories with events&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_collector</span><span class="o">.</span><span class="n">get_categories</span><span class="p">()</span></div>
+
+    
+    <span class="c1"># Legacy compatibility methods</span>
+<div class="viewcode-block" id="AppProfiler.instrument">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.instrument">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">instrument</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">frida</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">Script</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Legacy method - use start_profiling() instead&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_profiling</span><span class="p">()</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.finish_app_profiling">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.finish_app_profiling">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">finish_app_profiling</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Legacy method - use stop_profiling() instead&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_profiling</span><span class="p">()</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.get_frida_script">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.get_frida_script">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_frida_script</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the path to the Frida script&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">get_script_path</span><span class="p">()</span></div>
+
+    
+<div class="viewcode-block" id="AppProfiler.update_script">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.update_script">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">update_script</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">script</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Update script reference (for compatibility)&quot;&quot;&quot;</span>
+        <span class="c1"># This is handled internally now</span>
+        <span class="k">pass</span></div>
+
+    
+    <span class="c1"># Utility methods</span>
+<div class="viewcode-block" id="AppProfiler.get_stats">
+<a class="viewcode-back" href="../../api/python-api.html#dexray_intercept.AppProfiler.get_stats">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get profiling statistics&quot;&quot;&quot;</span>
+        <span class="n">hook_stats</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook_manager</span><span class="o">.</span><span class="n">get_hook_stats</span><span class="p">()</span>
+        <span class="n">profile_summary</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">profile_collector</span><span class="o">.</span><span class="n">get_profile_data</span><span class="p">()</span><span class="o">.</span><span class="n">get_summary</span><span class="p">()</span>
+        
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;hook_stats&#39;</span><span class="p">:</span> <span class="n">hook_stats</span><span class="p">,</span>
+            <span class="s1">&#39;profile_summary&#39;</span><span class="p">:</span> <span class="n">profile_summary</span><span class="p">,</span>
+            <span class="s1">&#39;script_loaded&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrumentation</span><span class="o">.</span><span class="n">is_script_loaded</span><span class="p">(),</span>
+            <span class="s1">&#39;output_format&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span><span class="p">,</span>
+            <span class="s1">&#39;verbose_mode&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose_mode</span>
+        <span class="p">}</span></div>
+</div>
+
+
+
+<span class="c1"># Legacy exception class for compatibility</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">FridaBasedException</span><span class="p">(</span><span class="n">FridaBasedException</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Legacy exception class - redirects to new FridaBasedException&quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+
+
+<span class="c1"># Legacy function for compatibility</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">setup_frida_handler</span><span class="p">(</span><span class="n">host</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">enable_spawn_gating</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Legacy function - use setup_frida_device() instead&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">setup_frida_device</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">enable_spawn_gating</span><span class="p">)</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Daniel Baier, Jan-Niclas Hilgert.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

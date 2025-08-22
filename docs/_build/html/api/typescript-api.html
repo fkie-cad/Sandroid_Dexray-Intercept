@@ -1,0 +1,994 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TypeScript API Reference &mdash; SanDroid - Dexray Intercept 0.3.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f7af4a0e" />
+
+  
+    <link rel="canonical" href="https://your-username.github.io/Sandroid_Dexray-Intercept/api/typescript-api.html" />
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=426446dc"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Development Guide" href="../development/index.html" />
+    <link rel="prev" title="Python API Reference" href="python-api.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SanDroid - Dexray Intercept
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user-guide/index.html">User Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="python-api.html">Python API Reference</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">TypeScript API Reference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#core-architecture">Core Architecture</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#hook-structure">Hook Structure</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#essential-components">Essential Components</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#logging-and-communication">Logging and Communication</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#logging-functions">Logging Functions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#message-format">Message Format</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#java-runtime-integration">Java Runtime Integration</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#basic-java-hooking">Basic Java Hooking</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#method-overloading">Method Overloading</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#exception-handling">Exception Handling</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#utility-functions">Utility Functions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#binary-data-handling">Binary Data Handling</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#stack-trace-collection">Stack Trace Collection</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#string-processing">String Processing</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#event-types-and-patterns">Event Types and Patterns</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#cryptographic-events">Cryptographic Events</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#network-events">Network Events</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#bypass-events">Bypass Events</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#hook-integration">Hook Integration</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#hook-loader-integration">Hook Loader Integration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cli-integration">CLI Integration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#parser-integration">Parser Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#advanced-patterns">Advanced Patterns</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#dynamic-hook-installation">Dynamic Hook Installation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#state-management">State Management</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#multi-method-hooking">Multi-Method Hooking</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#performance-considerations">Performance Considerations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#efficient-hook-design">Efficient Hook Design</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#memory-management">Memory Management</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#best-practices">Best Practices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#testing-hooks">Testing Hooks</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#local-testing">Local Testing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#development-workflow">Development Workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#example-complete-custom-hook">Example: Complete Custom Hook</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#architecture-integration">Architecture Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#development-workflow">Development Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#quick-examples">Quick Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#typescript-compilation">TypeScript Compilation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#api-compatibility">API Compatibility</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#getting-started">Getting Started</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/index.html">Development Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SanDroid - Dexray Intercept</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">TypeScript API Reference</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/typescript-api.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="typescript-api-reference">
+<h1>TypeScript API Reference<a class="headerlink" href="#typescript-api-reference" title="Link to this heading"></a></h1>
+<p>This section documents the TypeScript/JavaScript API for creating custom Frida hooks in Dexray Intercept.</p>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p><strong>Always run</strong> <code class="docutils literal notranslate"><span class="pre">npm</span> <span class="pre">run</span> <span class="pre">build</span></code> or <code class="docutils literal notranslate"><span class="pre">frida-compile</span></code> after modifying TypeScript hooks to compile them to JavaScript for use by the Python frontend.</p>
+</div>
+<section id="core-architecture">
+<h2>Core Architecture<a class="headerlink" href="#core-architecture" title="Link to this heading"></a></h2>
+<section id="hook-structure">
+<h3>Hook Structure<a class="headerlink" href="#hook-structure" title="Link to this heading"></a></h3>
+<p>All hooks follow a standardized structure for consistency and integration:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">log</span><span class="p">,</span><span class="w"> </span><span class="nx">devlog</span><span class="p">,</span><span class="w"> </span><span class="nx">am_send</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/logging.js&quot;</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Where</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/misc.js&quot;</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Java</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/javalib.js&quot;</span>
+
+<span class="c1">// Profile type identifier for this hook category</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MY_CATEGORY&quot;</span>
+
+<span class="c1">// Event creation helper</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">createMyEvent</span><span class="p">(</span><span class="nx">eventType</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">event</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">event_type</span><span class="o">:</span><span class="w"> </span><span class="kt">eventType</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">timestamp</span><span class="o">:</span><span class="w"> </span><span class="kt">Date.now</span><span class="p">(),</span>
+<span class="w">        </span><span class="p">...</span><span class="nx">data</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="w">    </span><span class="nx">am_send</span><span class="p">(</span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="p">,</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">event</span><span class="p">));</span>
+<span class="p">}</span>
+
+<span class="c1">// Main hook installation function</span>
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_my_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Installing my custom hooks&quot;</span><span class="p">);</span>
+
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Hook implementation goes here</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="essential-components">
+<h3>Essential Components<a class="headerlink" href="#essential-components" title="Link to this heading"></a></h3>
+<p><strong>Required Imports:</strong></p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">log</span><span class="p">,</span><span class="w"> </span><span class="nx">devlog</span><span class="p">,</span><span class="w"> </span><span class="nx">am_send</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/logging.js&quot;</span><span class="w">     </span><span class="c1">// Logging utilities</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Where</span><span class="p">,</span><span class="w"> </span><span class="nx">bytesToHex</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/misc.js&quot;</span><span class="w">          </span><span class="c1">// Helper functions</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Java</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/javalib.js&quot;</span><span class="w">                    </span><span class="c1">// Java runtime access</span>
+</pre></div>
+</div>
+<p><strong>Profile Type Constants:</strong></p>
+<p>Every hook category must define a unique profile type identifier:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="kd">const</span><span class="w"> </span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;CRYPTO_AES&quot;</span><span class="w">        </span><span class="c1">// Crypto hooks</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;WEB&quot;</span><span class="w">               </span><span class="c1">// Network hooks</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;BYPASS_DETECTION&quot;</span><span class="w">  </span><span class="c1">// Bypass hooks</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MY_CUSTOM_HOOKS&quot;</span><span class="w">   </span><span class="c1">// Your custom category</span>
+</pre></div>
+</div>
+<p><strong>Event Creation Pattern:</strong></p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="kd">function</span><span class="w"> </span><span class="nx">createCustomEvent</span><span class="p">(</span><span class="nx">eventType</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">event</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">event_type</span><span class="o">:</span><span class="w"> </span><span class="kt">eventType</span><span class="p">,</span><span class="w">           </span><span class="c1">// Specific event identifier</span>
+<span class="w">        </span><span class="nx">timestamp</span><span class="o">:</span><span class="w"> </span><span class="kt">Date.now</span><span class="p">(),</span><span class="w">           </span><span class="c1">// Event timestamp</span>
+<span class="w">        </span><span class="p">...</span><span class="nx">data</span><span class="w">                          </span><span class="c1">// Custom event data</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="w">    </span><span class="nx">am_send</span><span class="p">(</span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="p">,</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">event</span><span class="p">));</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="logging-and-communication">
+<h2>Logging and Communication<a class="headerlink" href="#logging-and-communication" title="Link to this heading"></a></h2>
+<section id="logging-functions">
+<h3>Logging Functions<a class="headerlink" href="#logging-functions" title="Link to this heading"></a></h3>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Standard logging (always visible)</span>
+<span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Hook installed successfully&quot;</span><span class="p">);</span>
+
+<span class="c1">// Development logging (only visible in verbose mode)</span>
+<span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Detailed debug information&quot;</span><span class="p">);</span>
+
+<span class="c1">// Send structured data to Python</span>
+<span class="nx">am_send</span><span class="p">(</span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="p">,</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">eventData</span><span class="p">));</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt><strong>Usage Guidelines:</strong></dt><dd><ul class="simple">
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">log()</span></code> for important status messages</p></li>
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">devlog()</span></code> for detailed debugging information</p></li>
+<li><p>Always use <code class="docutils literal notranslate"><span class="pre">am_send()</span></code> to send structured event data</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="message-format">
+<h3>Message Format<a class="headerlink" href="#message-format" title="Link to this heading"></a></h3>
+<p>Messages sent via <code class="docutils literal notranslate"><span class="pre">am_send()</span></code> must follow the structured format:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="kd">const</span><span class="w"> </span><span class="nx">eventData</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">event_type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;specific.event.identifier&quot;</span><span class="p">,</span><span class="w">  </span><span class="c1">// Required: dot-separated event type</span>
+<span class="w">    </span><span class="nx">timestamp</span><span class="o">:</span><span class="w"> </span><span class="kt">Date.now</span><span class="p">(),</span><span class="w">                    </span><span class="c1">// Required: event timestamp</span>
+<span class="w">    </span><span class="c1">// Custom fields based on event type</span>
+<span class="w">    </span><span class="nx">field1</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;value1&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">field2</span><span class="o">:</span><span class="w"> </span><span class="kt">42</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">binary_data</span><span class="o">:</span><span class="w"> </span><span class="kt">bytesToHex</span><span class="p">(</span><span class="nx">byteArray</span><span class="p">)</span><span class="w">       </span><span class="c1">// Convert binary to hex</span>
+<span class="p">};</span>
+
+<span class="nx">am_send</span><span class="p">(</span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="p">,</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">eventData</span><span class="p">));</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="java-runtime-integration">
+<h2>Java Runtime Integration<a class="headerlink" href="#java-runtime-integration" title="Link to this heading"></a></h2>
+<section id="basic-java-hooking">
+<h3>Basic Java Hooking<a class="headerlink" href="#basic-java-hooking" title="Link to this heading"></a></h3>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_basic_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="c1">// Get Java class</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">MyClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;com.example.MyClass&quot;</span><span class="p">);</span>
+
+<span class="w">            </span><span class="c1">// Hook method with overload</span>
+<span class="w">            </span><span class="nx">MyClass</span><span class="p">.</span><span class="nx">sensitiveMethod</span><span class="p">.</span><span class="nx">overload</span><span class="p">(</span><span class="s2">&quot;java.lang.String&quot;</span><span class="p">).</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">(</span><span class="nx">param</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="c1">// Log the hook activation</span>
+<span class="w">                </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;sensitiveMethod called with: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">param</span><span class="p">);</span>
+
+<span class="w">                </span><span class="c1">// Create event</span>
+<span class="w">                </span><span class="nx">createCustomEvent</span><span class="p">(</span><span class="s2">&quot;method.called&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nx">method_name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;sensitiveMethod&quot;</span><span class="p">,</span>
+<span class="w">                    </span><span class="nx">parameter</span><span class="o">:</span><span class="w"> </span><span class="kt">param</span><span class="p">,</span>
+<span class="w">                    </span><span class="nx">class_name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;com.example.MyClass&quot;</span>
+<span class="w">                </span><span class="p">});</span>
+
+<span class="w">                </span><span class="c1">// Call original method</span>
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">sensitiveMethod</span><span class="p">(</span><span class="nx">param</span><span class="p">);</span>
+<span class="w">            </span><span class="p">};</span>
+
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Error in hook installation: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">error</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="method-overloading">
+<h3>Method Overloading<a class="headerlink" href="#method-overloading" title="Link to this heading"></a></h3>
+<p>Handle multiple method signatures:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">Cipher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;javax.crypto.Cipher&quot;</span><span class="p">);</span>
+
+<span class="w">    </span><span class="c1">// Hook multiple overloads</span>
+<span class="w">    </span><span class="nx">Cipher</span><span class="p">.</span><span class="nx">init</span><span class="p">.</span><span class="nx">overload</span><span class="p">(</span><span class="s1">&#39;int&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;java.security.Key&#39;</span><span class="p">).</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">(</span><span class="nx">mode</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">createCryptoEvent</span><span class="p">(</span><span class="s2">&quot;cipher.init.key&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">mode</span><span class="o">:</span><span class="w"> </span><span class="kt">mode</span><span class="p">,</span>
+<span class="w">            </span><span class="nx">key_algorithm</span><span class="o">:</span><span class="w"> </span><span class="kt">key.getAlgorithm</span><span class="p">()</span>
+<span class="w">        </span><span class="p">});</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">init</span><span class="p">(</span><span class="nx">mode</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="p">);</span>
+<span class="w">    </span><span class="p">};</span>
+
+<span class="w">    </span><span class="nx">Cipher</span><span class="p">.</span><span class="nx">init</span><span class="p">.</span><span class="nx">overload</span><span class="p">(</span><span class="s1">&#39;int&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;java.security.Key&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;java.security.spec.AlgorithmParameterSpec&#39;</span><span class="p">).</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">(</span><span class="nx">mode</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="p">,</span><span class="w"> </span><span class="nx">params</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">createCryptoEvent</span><span class="p">(</span><span class="s2">&quot;cipher.init.key_params&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">mode</span><span class="o">:</span><span class="w"> </span><span class="kt">mode</span><span class="p">,</span>
+<span class="w">            </span><span class="nx">key_algorithm</span><span class="o">:</span><span class="w"> </span><span class="kt">key.getAlgorithm</span><span class="p">(),</span>
+<span class="w">            </span><span class="nx">params_class</span><span class="o">:</span><span class="w"> </span><span class="kt">params.$className</span>
+<span class="w">        </span><span class="p">});</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">init</span><span class="p">(</span><span class="nx">mode</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="p">,</span><span class="w"> </span><span class="nx">params</span><span class="p">);</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="p">});</span>
+</pre></div>
+</div>
+</section>
+<section id="exception-handling">
+<h3>Exception Handling<a class="headerlink" href="#exception-handling" title="Link to this heading"></a></h3>
+<p>Robust error handling in hooks:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">TargetClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;com.example.TargetClass&quot;</span><span class="p">);</span>
+
+<span class="w">        </span><span class="nx">TargetClass</span><span class="p">.</span><span class="nx">riskyMethod</span><span class="p">.</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="c1">// Pre-hook logic</span>
+<span class="w">                </span><span class="nx">createCustomEvent</span><span class="p">(</span><span class="s2">&quot;risky.method.start&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{});</span>
+
+<span class="w">                </span><span class="c1">// Call original with error handling</span>
+<span class="w">                </span><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">riskyMethod</span><span class="p">();</span>
+
+<span class="w">                </span><span class="c1">// Post-hook logic</span>
+<span class="w">                </span><span class="nx">createCustomEvent</span><span class="p">(</span><span class="s2">&quot;risky.method.success&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">result</span><span class="o">:</span><span class="w"> </span><span class="kt">result</span><span class="w"> </span><span class="p">});</span>
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span><span class="p">;</span>
+
+<span class="w">            </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">methodError</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="c1">// Handle method-specific errors</span>
+<span class="w">                </span><span class="nx">createCustomEvent</span><span class="p">(</span><span class="s2">&quot;risky.method.error&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nx">error</span><span class="o">:</span><span class="w"> </span><span class="kt">methodError.toString</span><span class="p">()</span>
+<span class="w">                </span><span class="p">});</span>
+<span class="w">                </span><span class="k">throw</span><span class="w"> </span><span class="nx">methodError</span><span class="p">;</span><span class="w"> </span><span class="c1">// Re-throw to maintain app behavior</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">};</span>
+
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">hookError</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Failed to install hook: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">hookError</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">});</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="utility-functions">
+<h2>Utility Functions<a class="headerlink" href="#utility-functions" title="Link to this heading"></a></h2>
+<section id="binary-data-handling">
+<h3>Binary Data Handling<a class="headerlink" href="#binary-data-handling" title="Link to this heading"></a></h3>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">bytesToHex</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/misc.js&quot;</span>
+
+<span class="c1">// Convert byte array to hex string</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">processBytes</span><span class="p">(</span><span class="nx">byteArray</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">[])</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">byteArray</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">byteArray</span><span class="p">.</span><span class="nx">length</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="mf">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">bytesToHex</span><span class="p">(</span><span class="ow">new</span><span class="w"> </span><span class="nb">Uint8Array</span><span class="p">(</span><span class="nx">byteArray</span><span class="p">));</span>
+<span class="p">}</span>
+
+<span class="c1">// Safe byte array processing</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">bytesToHexSafe</span><span class="p">(</span><span class="nx">bytes</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">[]</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">bytes</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">bytes</span><span class="p">.</span><span class="nx">length</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="mf">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">bytesToHex</span><span class="p">(</span><span class="ow">new</span><span class="w"> </span><span class="nb">Uint8Array</span><span class="p">(</span><span class="nx">bytes</span><span class="p">));</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Error converting bytes to hex: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">error</span><span class="p">);</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="s2">&quot;[conversion_error]&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="stack-trace-collection">
+<h3>Stack Trace Collection<a class="headerlink" href="#stack-trace-collection" title="Link to this heading"></a></h3>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Where</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/misc.js&quot;</span>
+
+<span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">Thread</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s1">&#39;java.lang.Thread&#39;</span><span class="p">);</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">threadInstance</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Thread</span><span class="p">.</span><span class="nx">$new</span><span class="p">();</span>
+
+<span class="w">    </span><span class="nx">MyClass</span><span class="p">.</span><span class="nx">trackedMethod</span><span class="p">.</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">stack</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">threadInstance</span><span class="p">.</span><span class="nx">currentThread</span><span class="p">().</span><span class="nx">getStackTrace</span><span class="p">();</span>
+
+<span class="w">        </span><span class="nx">createCustomEvent</span><span class="p">(</span><span class="s2">&quot;method.with.stack&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">method</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;trackedMethod&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nx">stack_trace</span><span class="o">:</span><span class="w"> </span><span class="kt">Where</span><span class="p">(</span><span class="nx">stack</span><span class="p">)</span><span class="w">  </span><span class="c1">// Convert stack to readable format</span>
+<span class="w">        </span><span class="p">});</span>
+
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">trackedMethod</span><span class="p">();</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="p">});</span>
+</pre></div>
+</div>
+</section>
+<section id="string-processing">
+<h3>String Processing<a class="headerlink" href="#string-processing" title="Link to this heading"></a></h3>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Safe string extraction from various types</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">extractStringValue</span><span class="p">(</span><span class="nx">obj</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">obj</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="ow">typeof</span><span class="w"> </span><span class="nx">obj</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s1">&#39;string&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">obj</span><span class="p">;</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">obj</span><span class="p">.</span><span class="nx">toString</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">obj</span><span class="p">.</span><span class="nx">toString</span><span class="p">();</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">obj</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="s2">&quot;[extraction_error]&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="c1">// Extract plaintext from hex data</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">extractPlaintext</span><span class="p">(</span><span class="nx">hexData</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">hexData</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">hexData</span><span class="p">.</span><span class="nx">match</span><span class="p">(</span><span class="sr">/.{2}/g</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="kr">byte</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nb">parseInt</span><span class="p">(</span><span class="kr">byte</span><span class="p">,</span><span class="w"> </span><span class="mf">16</span><span class="p">))</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">[];</span>
+<span class="w">        </span><span class="c1">// Only printable ASCII characters</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">String</span><span class="p">.</span><span class="nx">fromCharCode</span><span class="p">(...</span><span class="nx">bytes</span><span class="p">.</span><span class="nx">filter</span><span class="p">(</span><span class="nx">b</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">b</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">32</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">b</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">126</span><span class="p">));</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="event-types-and-patterns">
+<h2>Event Types and Patterns<a class="headerlink" href="#event-types-and-patterns" title="Link to this heading"></a></h2>
+<section id="cryptographic-events">
+<h3>Cryptographic Events<a class="headerlink" href="#cryptographic-events" title="Link to this heading"></a></h3>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Key generation/creation events</span>
+<span class="nx">createCryptoEvent</span><span class="p">(</span><span class="s2">&quot;crypto.key.creation&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">algorithm</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;AES&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">key_length</span><span class="o">:</span><span class="w"> </span><span class="kt">keyBytes.length</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">key_hex</span><span class="o">:</span><span class="w"> </span><span class="kt">bytesToHexSafe</span><span class="p">(</span><span class="nx">keyBytes</span><span class="p">)</span>
+<span class="p">});</span>
+
+<span class="c1">// Encryption/decryption operations</span>
+<span class="nx">createCryptoEvent</span><span class="p">(</span><span class="s2">&quot;crypto.cipher.operation&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">algorithm</span><span class="o">:</span><span class="w"> </span><span class="kt">cipher.getAlgorithm</span><span class="p">(),</span>
+<span class="w">    </span><span class="nx">operation_mode</span><span class="o">:</span><span class="w"> </span><span class="kt">opMode</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">key_hex</span><span class="o">:</span><span class="w"> </span><span class="kt">bytesToHexSafe</span><span class="p">(</span><span class="nx">keyBytes</span><span class="p">),</span>
+<span class="w">    </span><span class="nx">iv_hex</span><span class="o">:</span><span class="w"> </span><span class="kt">bytesToHexSafe</span><span class="p">(</span><span class="nx">ivBytes</span><span class="p">),</span>
+<span class="w">    </span><span class="nx">input_hex</span><span class="o">:</span><span class="w"> </span><span class="kt">bytesToHexSafe</span><span class="p">(</span><span class="nx">inputBytes</span><span class="p">),</span>
+<span class="w">    </span><span class="nx">output_hex</span><span class="o">:</span><span class="w"> </span><span class="kt">bytesToHexSafe</span><span class="p">(</span><span class="nx">outputBytes</span><span class="p">),</span>
+<span class="w">    </span><span class="nx">input_length</span><span class="o">:</span><span class="w"> </span><span class="kt">inputBytes.length</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">output_length</span><span class="o">:</span><span class="w"> </span><span class="kt">outputBytes.length</span>
+<span class="p">});</span>
+</pre></div>
+</div>
+</section>
+<section id="network-events">
+<h3>Network Events<a class="headerlink" href="#network-events" title="Link to this heading"></a></h3>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// HTTP requests</span>
+<span class="nx">createNetworkEvent</span><span class="p">(</span><span class="s2">&quot;http.request&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">url</span><span class="o">:</span><span class="w"> </span><span class="kt">requestUrl</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">method</span><span class="o">:</span><span class="w"> </span><span class="kt">requestMethod</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">headers</span><span class="o">:</span><span class="w"> </span><span class="kt">headersObj</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">body_preview</span><span class="o">:</span><span class="w"> </span><span class="kt">bodyPreview</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">library</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;OkHttp&quot;</span>
+<span class="p">});</span>
+
+<span class="c1">// Socket connections</span>
+<span class="nx">createNetworkEvent</span><span class="p">(</span><span class="s2">&quot;socket.connect&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">host</span><span class="o">:</span><span class="w"> </span><span class="kt">targetHost</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">port</span><span class="o">:</span><span class="w"> </span><span class="kt">targetPort</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">protocol</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;TCP&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">local_port</span><span class="o">:</span><span class="w"> </span><span class="kt">localPort</span>
+<span class="p">});</span>
+</pre></div>
+</div>
+</section>
+<section id="bypass-events">
+<h3>Bypass Events<a class="headerlink" href="#bypass-events" title="Link to this heading"></a></h3>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Detection bypass events</span>
+<span class="nx">createBypassEvent</span><span class="p">(</span><span class="s2">&quot;bypass.root.file_check&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">file_path</span><span class="o">:</span><span class="w"> </span><span class="kt">filePath</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">original_result</span><span class="o">:</span><span class="w"> </span><span class="kt">originalResult</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">bypassed_result</span><span class="o">:</span><span class="w"> </span><span class="kt">bypassedResult</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">detection_method</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;File.exists()&quot;</span>
+<span class="p">});</span>
+
+<span class="c1">// Evasion technique events</span>
+<span class="nx">createBypassEvent</span><span class="p">(</span><span class="s2">&quot;bypass.frida.process_check&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">process_name</span><span class="o">:</span><span class="w"> </span><span class="kt">processName</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">detection_method</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;ActivityManager.getRunningAppProcesses()&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">action</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;removed_from_list&quot;</span>
+<span class="p">});</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="hook-integration">
+<h2>Hook Integration<a class="headerlink" href="#hook-integration" title="Link to this heading"></a></h2>
+<section id="hook-loader-integration">
+<h3>Hook Loader Integration<a class="headerlink" href="#hook-loader-integration" title="Link to this heading"></a></h3>
+<p>To integrate new hooks into the main system, modify <code class="docutils literal notranslate"><span class="pre">agent/hooking_profile_loader.ts</span></code>:</p>
+<p><strong>1. Add Import:</strong></p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">install_my_custom_hooks</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;./custom/my_hooks.js&quot;</span>
+</pre></div>
+</div>
+<p><strong>2. Add to Hook Configuration:</strong></p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">export</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nx">hook_config</span><span class="o">:</span><span class="w"> </span><span class="kt">HookConfig</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ... existing hooks ...</span>
+<span class="w">    </span><span class="s1">&#39;my_custom_hooks&#39;</span><span class="o">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p><strong>3. Add to Installation Function:</strong></p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="kd">function</span><span class="w"> </span><span class="nx">load_profile_hooks</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ... existing installations ...</span>
+<span class="w">    </span><span class="nx">install_hook_conditionally</span><span class="p">(</span><span class="s1">&#39;my_custom_hooks&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">install_my_custom_hooks</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="cli-integration">
+<h3>CLI Integration<a class="headerlink" href="#cli-integration" title="Link to this heading"></a></h3>
+<p>To add CLI support for your hooks, modify <code class="docutils literal notranslate"><span class="pre">src/dexray_intercept/ammm.py</span></code>:</p>
+<p><strong>1. Add to Hook Groups (optional):</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">parsed_args</span><span class="o">.</span><span class="n">hooks_custom</span><span class="p">:</span>
+    <span class="n">hook_config</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+        <span class="s1">&#39;my_custom_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span>
+    <span class="p">})</span>
+</pre></div>
+</div>
+<p><strong>2. Add Individual Hook Support:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">individual_hooks</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="c1"># ... existing hooks ...</span>
+    <span class="s1">&#39;enable_my_custom&#39;</span><span class="p">:</span> <span class="s1">&#39;my_custom_hooks&#39;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>3. Add CLI Arguments:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">hooks</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--enable-my-custom&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
+                   <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Enable my custom hooks&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="parser-integration">
+<h3>Parser Integration<a class="headerlink" href="#parser-integration" title="Link to this heading"></a></h3>
+<p>Create a Python parser for your custom events in <code class="docutils literal notranslate"><span class="pre">src/dexray_intercept/parsers/</span></code>:</p>
+<p><strong>1. Create Parser File:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># src/dexray_intercept/parsers/my_custom.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseParser</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..models.events</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyCustomParser</span><span class="p">(</span><span class="n">BaseParser</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">parse_json_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">event</span> <span class="o">=</span> <span class="n">MyCustomEvent</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;event_type&#39;</span><span class="p">),</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="c1"># Parse custom fields</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">custom_field</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;custom_field&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">event</span>
+</pre></div>
+</div>
+<p><strong>2. Register in Parser Factory:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># src/dexray_intercept/parsers/factory.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.my_custom</span><span class="w"> </span><span class="kn">import</span> <span class="n">MyCustomParser</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_register_default_parsers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="c1"># ... existing parsers ...</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_parsers</span><span class="p">[</span><span class="s2">&quot;MY_CUSTOM_HOOKS&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">MyCustomParser</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="advanced-patterns">
+<h2>Advanced Patterns<a class="headerlink" href="#advanced-patterns" title="Link to this heading"></a></h2>
+<section id="dynamic-hook-installation">
+<h3>Dynamic Hook Installation<a class="headerlink" href="#dynamic-hook-installation" title="Link to this heading"></a></h3>
+<p>Install hooks based on runtime conditions:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_dynamic_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="c1">// Check if target class exists</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">TargetClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;com.example.TargetClass&quot;</span><span class="p">);</span>
+
+<span class="w">            </span><span class="c1">// Install hook only if conditions are met</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">checkInstallConditions</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">installTargetHooks</span><span class="p">(</span><span class="nx">TargetClass</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Conditions not met, skipping hook installation&quot;</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="c1">// Class doesn&#39;t exist, skip gracefully</span>
+<span class="w">            </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Target class not found, skipping hooks: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">error</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+
+<span class="kd">function</span><span class="w"> </span><span class="nx">checkInstallConditions</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Custom logic to determine if hooks should be installed</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="kc">true</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="state-management">
+<h3>State Management<a class="headerlink" href="#state-management" title="Link to this heading"></a></h3>
+<p>Maintain state across hook invocations:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Global state for hook category</span>
+<span class="kd">interface</span><span class="w"> </span><span class="nx">SessionInfo</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">algorithm?</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">keyData?</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">[];</span>
+<span class="p">}</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">activeSessions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Map</span><span class="o">&lt;</span><span class="kt">number</span><span class="p">,</span><span class="w"> </span><span class="nx">SessionInfo</span><span class="o">&gt;</span><span class="p">();</span>
+
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_stateful_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">CipherClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;javax.crypto.Cipher&quot;</span><span class="p">);</span>
+
+<span class="w">        </span><span class="c1">// Initialize state</span>
+<span class="w">        </span><span class="nx">CipherClass</span><span class="p">.</span><span class="nx">init</span><span class="p">.</span><span class="nx">overload</span><span class="p">(</span><span class="s1">&#39;int&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;java.security.Key&#39;</span><span class="p">).</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">(</span><span class="nx">mode</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">sessionId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">hashCode</span><span class="p">();</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">keyBytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">key</span><span class="p">.</span><span class="nx">getEncoded</span><span class="p">();</span>
+
+<span class="w">            </span><span class="nx">activeSessions</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="nx">sessionId</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">id</span><span class="o">:</span><span class="w"> </span><span class="kt">sessionId</span><span class="p">,</span>
+<span class="w">                </span><span class="nx">algorithm</span><span class="o">:</span><span class="w"> </span><span class="kt">key.getAlgorithm</span><span class="p">(),</span>
+<span class="w">                </span><span class="nx">keyData</span><span class="o">:</span><span class="w"> </span><span class="kt">keyBytes</span>
+<span class="w">            </span><span class="p">});</span>
+
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">init</span><span class="p">(</span><span class="nx">mode</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="p">);</span>
+<span class="w">        </span><span class="p">};</span>
+
+<span class="w">        </span><span class="c1">// Use state</span>
+<span class="w">        </span><span class="nx">CipherClass</span><span class="p">.</span><span class="nx">doFinal</span><span class="p">.</span><span class="nx">overload</span><span class="p">(</span><span class="s2">&quot;[B&quot;</span><span class="p">).</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">(</span><span class="nx">inputBytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">doFinal</span><span class="p">(</span><span class="nx">inputBytes</span><span class="p">);</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">sessionId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">hashCode</span><span class="p">();</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">session</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">activeSessions</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="nx">sessionId</span><span class="p">);</span>
+
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">session</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">createCryptoEvent</span><span class="p">(</span><span class="s2">&quot;cipher.operation&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nx">algorithm</span><span class="o">:</span><span class="w"> </span><span class="kt">session.algorithm</span><span class="p">,</span>
+<span class="w">                    </span><span class="nx">key_hex</span><span class="o">:</span><span class="w"> </span><span class="kt">bytesToHexSafe</span><span class="p">(</span><span class="nx">session</span><span class="p">.</span><span class="nx">keyData</span><span class="p">),</span>
+<span class="w">                    </span><span class="nx">input_hex</span><span class="o">:</span><span class="w"> </span><span class="kt">bytesToHexSafe</span><span class="p">(</span><span class="nx">inputBytes</span><span class="p">),</span>
+<span class="w">                    </span><span class="nx">output_hex</span><span class="o">:</span><span class="w"> </span><span class="kt">bytesToHexSafe</span><span class="p">(</span><span class="nx">result</span><span class="p">)</span>
+<span class="w">                </span><span class="p">});</span>
+
+<span class="w">                </span><span class="c1">// Clean up session</span>
+<span class="w">                </span><span class="nx">activeSessions</span><span class="p">.</span><span class="ow">delete</span><span class="p">(</span><span class="nx">sessionId</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span><span class="p">;</span>
+<span class="w">        </span><span class="p">};</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="multi-method-hooking">
+<h3>Multi-Method Hooking<a class="headerlink" href="#multi-method-hooking" title="Link to this heading"></a></h3>
+<p>Hook multiple related methods systematically:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_comprehensive_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">FileClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;java.io.File&quot;</span><span class="p">);</span>
+
+<span class="w">        </span><span class="c1">// Define methods to hook</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">methodsToHook</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+<span class="w">            </span><span class="p">{</span><span class="w"> </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;exists&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">args</span><span class="o">:</span><span class="w"> </span><span class="p">[]</span><span class="w"> </span><span class="p">},</span>
+<span class="w">            </span><span class="p">{</span><span class="w"> </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;canRead&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">args</span><span class="o">:</span><span class="w"> </span><span class="p">[]</span><span class="w"> </span><span class="p">},</span>
+<span class="w">            </span><span class="p">{</span><span class="w"> </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;canWrite&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">args</span><span class="o">:</span><span class="w"> </span><span class="p">[]</span><span class="w"> </span><span class="p">},</span>
+<span class="w">            </span><span class="p">{</span><span class="w"> </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;delete&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">args</span><span class="o">:</span><span class="w"> </span><span class="p">[]</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="p">];</span>
+
+<span class="w">        </span><span class="nx">methodsToHook</span><span class="p">.</span><span class="nx">forEach</span><span class="p">(</span><span class="nx">methodInfo</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="kd">const</span><span class="w"> </span><span class="nx">method</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">methodInfo</span><span class="p">.</span><span class="nx">args</span><span class="p">.</span><span class="nx">length</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0</span>
+<span class="w">                    </span><span class="o">?</span><span class="w"> </span><span class="nx">FileClass</span><span class="p">[</span><span class="nx">methodInfo</span><span class="p">.</span><span class="nx">name</span><span class="p">].</span><span class="nx">overload</span><span class="p">(...</span><span class="nx">methodInfo</span><span class="p">.</span><span class="nx">args</span><span class="p">)</span>
+<span class="w">                    </span><span class="o">:</span><span class="w"> </span><span class="nx">FileClass</span><span class="p">[</span><span class="nx">methodInfo</span><span class="p">.</span><span class="nx">name</span><span class="p">];</span>
+
+<span class="w">                </span><span class="nx">method</span><span class="p">.</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">(...</span><span class="nx">args</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="kd">const</span><span class="w"> </span><span class="nx">filePath</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">getAbsolutePath</span><span class="p">();</span>
+<span class="w">                    </span><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">method</span><span class="p">.</span><span class="nx">apply</span><span class="p">(</span><span class="k">this</span><span class="p">,</span><span class="w"> </span><span class="nx">args</span><span class="p">);</span>
+
+<span class="w">                    </span><span class="nx">createFileEvent</span><span class="p">(</span><span class="sb">`file.</span><span class="si">${</span><span class="nx">methodInfo</span><span class="p">.</span><span class="nx">name</span><span class="si">}</span><span class="sb">`</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="nx">file_path</span><span class="o">:</span><span class="w"> </span><span class="kt">filePath</span><span class="p">,</span>
+<span class="w">                        </span><span class="nx">method</span><span class="o">:</span><span class="w"> </span><span class="kt">methodInfo.name</span><span class="p">,</span>
+<span class="w">                        </span><span class="nx">result</span><span class="o">:</span><span class="w"> </span><span class="kt">result</span><span class="p">,</span>
+<span class="w">                        </span><span class="nx">arguments</span><span class="o">:</span><span class="w"> </span><span class="kt">args</span>
+<span class="w">                    </span><span class="p">});</span>
+
+<span class="w">                    </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span><span class="p">;</span>
+<span class="w">                </span><span class="p">};</span>
+<span class="w">            </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">devlog</span><span class="p">(</span><span class="sb">`Failed to hook </span><span class="si">${</span><span class="nx">methodInfo</span><span class="p">.</span><span class="nx">name</span><span class="si">}</span><span class="sb">: </span><span class="si">${</span><span class="nx">error</span><span class="si">}</span><span class="sb">`</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">});</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="performance-considerations">
+<h2>Performance Considerations<a class="headerlink" href="#performance-considerations" title="Link to this heading"></a></h2>
+<section id="efficient-hook-design">
+<h3>Efficient Hook Design<a class="headerlink" href="#efficient-hook-design" title="Link to this heading"></a></h3>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_optimized_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">TargetClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;com.example.TargetClass&quot;</span><span class="p">);</span>
+
+<span class="w">        </span><span class="c1">// Pre-compute expensive operations</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">stringClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;java.lang.String&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">threadClass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;java.lang.Thread&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">currentThread</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">threadClass</span><span class="p">.</span><span class="nx">currentThread</span><span class="p">();</span>
+
+<span class="w">        </span><span class="nx">TargetClass</span><span class="p">.</span><span class="nx">frequentMethod</span><span class="p">.</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">(</span><span class="nx">param</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="c1">// Minimal processing in hot path</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">startTime</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Date</span><span class="p">.</span><span class="nx">now</span><span class="p">();</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">frequentMethod</span><span class="p">(</span><span class="nx">param</span><span class="p">);</span>
+
+<span class="w">            </span><span class="c1">// Only create event if necessary</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">shouldLogEvent</span><span class="p">(</span><span class="nx">param</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">createOptimizedEvent</span><span class="p">(</span><span class="s2">&quot;frequent.method&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nx">parameter</span><span class="o">:</span><span class="w"> </span><span class="kt">param</span><span class="p">,</span>
+<span class="w">                    </span><span class="nx">execution_time</span><span class="o">:</span><span class="w"> </span><span class="kt">Date.now</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">startTime</span>
+<span class="w">                </span><span class="p">});</span>
+<span class="w">            </span><span class="p">}</span>
+
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span><span class="p">;</span>
+<span class="w">        </span><span class="p">};</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+
+<span class="kd">function</span><span class="w"> </span><span class="nx">shouldLogEvent</span><span class="p">(</span><span class="nx">param</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Custom logic to reduce event volume</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">param</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">param</span><span class="p">.</span><span class="nx">toString</span><span class="p">().</span><span class="nx">length</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">10</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="memory-management">
+<h3>Memory Management<a class="headerlink" href="#memory-management" title="Link to this heading"></a></h3>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Limit state storage size</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">MAX_SESSION_COUNT</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1000</span><span class="p">;</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">activeSessions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Map</span><span class="o">&lt;</span><span class="kt">number</span><span class="p">,</span><span class="w"> </span><span class="nx">SessionInfo</span><span class="o">&gt;</span><span class="p">();</span>
+
+<span class="kd">function</span><span class="w"> </span><span class="nx">cleanupOldSessions</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">activeSessions</span><span class="p">.</span><span class="nx">size</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="nx">MAX_SESSION_COUNT</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Remove oldest entries</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">entries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Array</span><span class="p">.</span><span class="kr">from</span><span class="p">(</span><span class="nx">activeSessions</span><span class="p">.</span><span class="nx">entries</span><span class="p">());</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">toRemove</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">entries</span><span class="p">.</span><span class="nx">slice</span><span class="p">(</span><span class="mf">0</span><span class="p">,</span><span class="w"> </span><span class="nx">entries</span><span class="p">.</span><span class="nx">length</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">MAX_SESSION_COUNT</span><span class="p">);</span>
+<span class="w">        </span><span class="nx">toRemove</span><span class="p">.</span><span class="nx">forEach</span><span class="p">(([</span><span class="nx">key</span><span class="p">])</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">activeSessions</span><span class="p">.</span><span class="ow">delete</span><span class="p">(</span><span class="nx">key</span><span class="p">));</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="best-practices">
+<h2>Best Practices<a class="headerlink" href="#best-practices" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt><strong>Hook Design:</strong></dt><dd><ol class="arabic simple">
+<li><p>Always wrap hooks in try-catch blocks</p></li>
+<li><p>Use descriptive event type names (e.g., <code class="docutils literal notranslate"><span class="pre">crypto.key.creation</span></code>)</p></li>
+<li><p>Include relevant context in event data</p></li>
+<li><p>Call original methods to maintain app functionality</p></li>
+</ol>
+</dd>
+<dt><strong>Error Handling:</strong></dt><dd><ol class="arabic simple">
+<li><p>Gracefully handle missing classes/methods</p></li>
+<li><p>Log errors using <code class="docutils literal notranslate"><span class="pre">devlog()</span></code> for debugging</p></li>
+<li><p>Don’t break app execution due to hook failures</p></li>
+<li><p>Validate data before processing</p></li>
+</ol>
+</dd>
+<dt><strong>Performance:</strong></dt><dd><ol class="arabic simple">
+<li><p>Minimize processing in frequently called methods</p></li>
+<li><p>Use conditional event creation for high-volume hooks</p></li>
+<li><p>Clean up state periodically to prevent memory leaks</p></li>
+<li><p>Pre-compute expensive operations when possible</p></li>
+</ol>
+</dd>
+<dt><strong>Integration:</strong></dt><dd><ol class="arabic simple">
+<li><p>Follow naming conventions for consistency</p></li>
+<li><p>Document hook behavior and event formats</p></li>
+<li><p>Add CLI support for user control</p></li>
+<li><p>Create corresponding Python parsers</p></li>
+</ol>
+</dd>
+</dl>
+</section>
+<section id="testing-hooks">
+<h2>Testing Hooks<a class="headerlink" href="#testing-hooks" title="Link to this heading"></a></h2>
+<section id="local-testing">
+<h3>Local Testing<a class="headerlink" href="#local-testing" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Compile hooks</span>
+npm<span class="w"> </span>run<span class="w"> </span>build
+
+<span class="c1"># Test with target app</span>
+ammm<span class="w"> </span>--enable-my-custom<span class="w"> </span>com.test.app
+
+<span class="c1"># Use verbose mode for debugging</span>
+ammm<span class="w"> </span>-v<span class="w"> </span>--enable-my-custom<span class="w"> </span>com.test.app
+</pre></div>
+</div>
+</section>
+<section id="development-workflow">
+<h3>Development Workflow<a class="headerlink" href="#development-workflow" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Development cycle</span>
+<span class="m">1</span>.<span class="w"> </span>Edit<span class="w"> </span>TypeScript<span class="w"> </span>hook<span class="w"> </span>file
+<span class="m">2</span>.<span class="w"> </span>npm<span class="w"> </span>run<span class="w"> </span>build<span class="w">                    </span><span class="c1"># Compile to JavaScript</span>
+<span class="m">3</span>.<span class="w"> </span>ammm<span class="w"> </span>--enable-my-custom<span class="w"> </span>app<span class="w">      </span><span class="c1"># Test with target</span>
+<span class="m">4</span>.<span class="w"> </span>Check<span class="w"> </span>JSON<span class="w"> </span>output<span class="w"> </span><span class="k">for</span><span class="w"> </span>events
+<span class="m">5</span>.<span class="w"> </span>Iterate<span class="w"> </span>and<span class="w"> </span>refine
+</pre></div>
+</div>
+</section>
+</section>
+<section id="example-complete-custom-hook">
+<h2>Example: Complete Custom Hook<a class="headerlink" href="#example-complete-custom-hook" title="Link to this heading"></a></h2>
+<p>Here’s a complete example of a custom hook implementation:</p>
+<p><strong>TypeScript Hook</strong> (<code class="docutils literal notranslate"><span class="pre">agent/custom/android_id.ts</span></code>):</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">log</span><span class="p">,</span><span class="w"> </span><span class="nx">devlog</span><span class="p">,</span><span class="w"> </span><span class="nx">am_send</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/logging.js&quot;</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Java</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;../utils/javalib.js&quot;</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ANDROID_ID_ACCESS&quot;</span>
+
+<span class="kd">function</span><span class="w"> </span><span class="nx">createAndroidIdEvent</span><span class="p">(</span><span class="nx">eventType</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">event</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">event_type</span><span class="o">:</span><span class="w"> </span><span class="kt">eventType</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">timestamp</span><span class="o">:</span><span class="w"> </span><span class="kt">Date.now</span><span class="p">(),</span>
+<span class="w">        </span><span class="p">...</span><span class="nx">data</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="w">    </span><span class="nx">am_send</span><span class="p">(</span><span class="nx">PROFILE_HOOKING_TYPE</span><span class="p">,</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">event</span><span class="p">));</span>
+<span class="p">}</span>
+
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_android_id_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Installing Android ID access hooks&quot;</span><span class="p">);</span>
+
+<span class="w">    </span><span class="nx">Java</span><span class="p">.</span><span class="nx">perform</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">Settings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Java</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="s2">&quot;android.provider.Settings$Secure&quot;</span><span class="p">);</span>
+
+<span class="w">            </span><span class="nx">Settings</span><span class="p">.</span><span class="nx">getString</span><span class="p">.</span><span class="nx">overload</span><span class="p">(</span><span class="s2">&quot;android.content.ContentResolver&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;java.lang.String&quot;</span><span class="p">).</span><span class="nx">implementation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">(</span><span class="nx">resolver</span><span class="p">,</span><span class="w"> </span><span class="nx">name</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">getString</span><span class="p">(</span><span class="nx">resolver</span><span class="p">,</span><span class="w"> </span><span class="nx">name</span><span class="p">);</span>
+
+<span class="w">                </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">name</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s2">&quot;android_id&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nx">createAndroidIdEvent</span><span class="p">(</span><span class="s2">&quot;android_id.access&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="nx">setting_name</span><span class="o">:</span><span class="w"> </span><span class="kt">name</span><span class="p">,</span>
+<span class="w">                        </span><span class="nx">android_id</span><span class="o">:</span><span class="w"> </span><span class="kt">result</span><span class="p">,</span>
+<span class="w">                        </span><span class="nx">access_method</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Settings.Secure.getString&quot;</span>
+<span class="w">                    </span><span class="p">});</span>
+<span class="w">                </span><span class="p">}</span>
+
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span><span class="p">;</span>
+<span class="w">            </span><span class="p">};</span>
+
+<span class="w">            </span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Android ID hooks installed successfully&quot;</span><span class="p">);</span>
+
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">devlog</span><span class="p">(</span><span class="s2">&quot;Error installing Android ID hooks: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">error</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>Python Parser</strong> (<code class="docutils literal notranslate"><span class="pre">src/dexray_intercept/parsers/android_id.py</span></code>):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseParser</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..models.events</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AndroidIdEvent</span><span class="p">(</span><span class="n">Event</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">event_type</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setting_name</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">android_id</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">access_method</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_event_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;event_type&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_type</span><span class="p">,</span>
+            <span class="s2">&quot;setting_name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">setting_name</span><span class="p">,</span>
+            <span class="s2">&quot;android_id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">android_id</span><span class="p">,</span>
+            <span class="s2">&quot;access_method&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">access_method</span>
+        <span class="p">}</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AndroidIdParser</span><span class="p">(</span><span class="n">BaseParser</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">parse_json_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">event</span> <span class="o">=</span> <span class="n">AndroidIdEvent</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;event_type&#39;</span><span class="p">),</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">setting_name</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;setting_name&#39;</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">android_id</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;android_id&#39;</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">access_method</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;access_method&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">event</span>
+</pre></div>
+</div>
+<p><strong>Integration Steps:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Add to Hook Loader</strong> (<code class="docutils literal notranslate"><span class="pre">agent/hooking_profile_loader.ts</span></code>):</p></li>
+</ol>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">install_android_id_hooks</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">&quot;./custom/android_id.js&quot;</span>
+
+<span class="k">export</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nx">hook_config</span><span class="o">:</span><span class="w"> </span><span class="kt">HookConfig</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ... existing hooks ...</span>
+<span class="w">    </span><span class="s1">&#39;android_id_hooks&#39;</span><span class="o">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="kd">function</span><span class="w"> </span><span class="nx">load_profile_hooks</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ... existing installations ...</span>
+<span class="w">    </span><span class="nx">install_hook_conditionally</span><span class="p">(</span><span class="s1">&#39;android_id_hooks&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">install_android_id_hooks</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p><strong>Register Parser</strong> (<code class="docutils literal notranslate"><span class="pre">src/dexray_intercept/parsers/factory.py</span></code>):</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">.android_id</span><span class="w"> </span><span class="kn">import</span> <span class="n">AndroidIdParser</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_register_default_parsers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="c1"># ... existing parsers ...</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_parsers</span><span class="p">[</span><span class="s2">&quot;ANDROID_ID_ACCESS&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">AndroidIdParser</span><span class="p">()</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p><strong>Add CLI Support</strong> (<code class="docutils literal notranslate"><span class="pre">src/dexray_intercept/ammm.py</span></code>):</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">individual_hooks</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="c1"># ... existing hooks ...</span>
+    <span class="s1">&#39;enable_android_id&#39;</span><span class="p">:</span> <span class="s1">&#39;android_id_hooks&#39;</span>
+<span class="p">}</span>
+
+<span class="n">hooks</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--enable-android-id&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
+                   <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Enable Android ID access monitoring&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="4">
+<li><p><strong>Build and Test</strong>:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>npm<span class="w"> </span>run<span class="w"> </span>build
+ammm<span class="w"> </span>--enable-android-id<span class="w"> </span>com.test.app
+</pre></div>
+</div>
+<p>This creates a complete hook system that monitors Android ID access, parses the events in Python, and integrates with the CLI system.</p>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Review existing hooks in <code class="docutils literal notranslate"><span class="pre">agent/</span></code> directories for more examples</p></li>
+<li><p>Study the Python API for event processing: <a class="reference internal" href="python-api.html"><span class="doc">Python API Reference</span></a></p></li>
+<li><p>Learn about the development workflow: <a class="reference internal" href="../development/index.html"><span class="doc">Development Guide</span></a></p></li>
+<li><p>Explore advanced hook patterns in the source code</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="python-api.html" class="btn btn-neutral float-left" title="Python API Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../development/index.html" class="btn btn-neutral float-right" title="Development Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Daniel Baier, Jan-Niclas Hilgert.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

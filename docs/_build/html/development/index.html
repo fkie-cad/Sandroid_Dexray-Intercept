@@ -1,0 +1,725 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Development Guide &mdash; SanDroid - Dexray Intercept 0.3.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f7af4a0e" />
+
+  
+    <link rel="canonical" href="https://your-username.github.io/Sandroid_Dexray-Intercept/development/index.html" />
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=426446dc"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Creating Custom Hooks" href="creating-hooks.html" />
+    <link rel="prev" title="TypeScript API Reference" href="../api/typescript-api.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            SanDroid - Dexray Intercept
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user-guide/index.html">User Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/index.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Development Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="creating-hooks.html">Creating Custom Hooks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#architecture-for-developers">Architecture for Developers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#understanding-the-system-flow">Understanding the System Flow</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#development-environment-setup">Development Environment Setup</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#project-structure">Project Structure</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#development-workflow">Development Workflow</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#standard-development-cycle">Standard Development Cycle</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#hook-development-cycle">Hook Development Cycle</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#core-development-areas">Core Development Areas</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#hook-categories">Hook Categories</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#parser-development">Parser Development</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#testing-and-validation">Testing and Validation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#unit-testing">Unit Testing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#integration-testing">Integration Testing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#manual-testing">Manual Testing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#performance-testing">Performance Testing</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#documentation-standards">Documentation Standards</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#code-documentation">Code Documentation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#api-documentation">API Documentation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#user-documentation">User Documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#contributing-workflow">Contributing Workflow</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#development-process">Development Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#code-standards">Code Standards</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#quality-assurance">Quality Assurance</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#pre-commit-checks">Pre-commit Checks</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#continuous-integration">Continuous Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#release-process">Release Process</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#common-development-tasks">Common Development Tasks</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#adding-a-new-hook-category">Adding a New Hook Category</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adding-cli-parameters">Adding CLI Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#debugging-hook-issues">Debugging Hook Issues</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#extending-event-types">Extending Event Types</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SanDroid - Dexray Intercept</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Development Guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/development/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="development-guide">
+<h1>Development Guide<a class="headerlink" href="#development-guide" title="Link to this heading"></a></h1>
+<p>This section provides comprehensive guidance for developers who want to extend, modify, or contribute to Dexray Intercept.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="creating-hooks.html">Creating Custom Hooks</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="creating-hooks.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="creating-hooks.html#example-android-clipboard-monitoring">Example: Android Clipboard Monitoring</a></li>
+<li class="toctree-l2"><a class="reference internal" href="creating-hooks.html#advanced-hook-patterns">Advanced Hook Patterns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="creating-hooks.html#testing-strategies">Testing Strategies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="creating-hooks.html#common-pitfalls-and-solutions">Common Pitfalls and Solutions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="creating-hooks.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p>Dexray Intercept is designed to be extensible at multiple levels:</p>
+<dl class="simple">
+<dt><strong>Hook Development</strong></dt><dd><p>Create new TypeScript hooks to monitor specific Android behaviors not covered by built-in hooks.</p>
+</dd>
+<dt><strong>Parser Development</strong></dt><dd><p>Extend Python parsers to process new event types and extract meaningful insights.</p>
+</dd>
+<dt><strong>Core Development</strong></dt><dd><p>Modify the core instrumentation engine, CLI interface, or analysis capabilities.</p>
+</dd>
+<dt><strong>Integration Development</strong></dt><dd><p>Build tools and integrations that consume Dexray Intercept profiles for specialized analysis workflows.</p>
+</dd>
+</dl>
+</section>
+<section id="architecture-for-developers">
+<h2>Architecture for Developers<a class="headerlink" href="#architecture-for-developers" title="Link to this heading"></a></h2>
+<section id="understanding-the-system-flow">
+<h3>Understanding the System Flow<a class="headerlink" href="#understanding-the-system-flow" title="Link to this heading"></a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   CLI Frontend  │    │  Core Services  │    │ Frida Backend   │
+│                 │    │                 │    │                 │
+│ • ammm.py       │    │ • AppProfiler   │    │ • TypeScript    │
+│ • Argument      │◄──►│ • HookManager   │◄──►│   Hooks         │
+│   Parsing       │    │ • ProfileData   │    │ • am_send()     │
+│ • Hook Config   │    │ • EventParsers  │    │ • Java.perform  │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+        │                       │                       │
+        ▼                       ▼                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Target Android Process                       │
+│                                                                 │
+│  JavaScript hooks execute in target process context           │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+</div>
+<p><strong>Key Integration Points:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>TypeScript → JavaScript</strong>: <code class="docutils literal notranslate"><span class="pre">frida-compile</span></code> converts TypeScript hooks to JavaScript</p></li>
+<li><p><strong>JavaScript → Python</strong>: <code class="docutils literal notranslate"><span class="pre">am_send()</span></code> passes structured event data to Python</p></li>
+<li><p><strong>Python Processing</strong>: Events are parsed, formatted, and stored in profiles</p></li>
+<li><p><strong>CLI Integration</strong>: New hooks require CLI parameter additions</p></li>
+</ol>
+</section>
+</section>
+<section id="development-environment-setup">
+<h2>Development Environment Setup<a class="headerlink" href="#development-environment-setup" title="Link to this heading"></a></h2>
+<section id="prerequisites">
+<h3>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Install development dependencies</span>
+npm<span class="w"> </span>install
+python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[dev]&quot;</span>
+
+<span class="c1"># Install development tools</span>
+npm<span class="w"> </span>install<span class="w"> </span>-g<span class="w"> </span>typescript
+npm<span class="w"> </span>install<span class="w"> </span>-g<span class="w"> </span>@types/node
+</pre></div>
+</div>
+<dl class="simple">
+<dt><strong>Recommended Development Tools:</strong></dt><dd><ul class="simple">
+<li><p><strong>VS Code</strong> with TypeScript and Python extensions</p></li>
+<li><p><strong>Android Studio</strong> for APK analysis</p></li>
+<li><p><strong>Frida DevTools</strong> for live debugging</p></li>
+<li><p><strong>Wireshark</strong> for network analysis validation</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="project-structure">
+<h3>Project Structure<a class="headerlink" href="#project-structure" title="Link to this heading"></a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Sandroid_Dexray-Intercept/
+├── agent/                          # TypeScript hooks
+│   ├── hooking_profile_loader.ts   # Main hook orchestrator
+│   ├── crypto/                     # Cryptography hooks
+│   ├── network/                    # Network hooks
+│   ├── security/                   # Anti-analysis bypass hooks
+│   └── utils/                      # Shared utilities
+├── src/dexray_intercept/          # Python package
+│   ├── ammm.py                     # CLI entry point
+│   ├── appProfiling.py             # Main profiler class
+│   ├── parsers/                    # Event parsers
+│   ├── models/                     # Data models
+│   └── services/                   # Core services
+├── docs/                           # Documentation
+├── tests/                          # Test suite
+└── package.json                    # Node.js dependencies
+</pre></div>
+</div>
+</section>
+</section>
+<section id="development-workflow">
+<h2>Development Workflow<a class="headerlink" href="#development-workflow" title="Link to this heading"></a></h2>
+<section id="standard-development-cycle">
+<h3>Standard Development Cycle<a class="headerlink" href="#standard-development-cycle" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. Make changes to TypeScript hooks</span>
+vim<span class="w"> </span>agent/my_category/my_hooks.ts
+
+<span class="c1"># 2. Compile to JavaScript</span>
+npm<span class="w"> </span>run<span class="w"> </span>build
+
+<span class="c1"># 3. Test with target application</span>
+ammm<span class="w"> </span>--enable-my-hooks<span class="w"> </span>com.test.app
+
+<span class="c1"># 4. Validate JSON output</span>
+cat<span class="w"> </span>profile_com.test.app_*.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+
+<span class="c1"># 5. Run tests</span>
+python3<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/
+
+<span class="c1"># 6. Commit changes</span>
+git<span class="w"> </span>add<span class="w"> </span>.
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Add new hook category: my_hooks&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="hook-development-cycle">
+<h3>Hook Development Cycle<a class="headerlink" href="#hook-development-cycle" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Development mode with auto-compilation</span>
+npm<span class="w"> </span>run<span class="w"> </span>watch<span class="w"> </span><span class="p">&amp;</span><span class="w">                     </span><span class="c1"># Auto-compile on changes</span>
+
+<span class="c1"># Test iteration</span>
+<span class="k">while</span><span class="w"> </span>true<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">    </span>ammm<span class="w"> </span>-v<span class="w"> </span>--enable-my-hooks<span class="w"> </span>com.test.app
+<span class="w">    </span><span class="c1"># Review output, make changes, repeat</span>
+<span class="k">done</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="core-development-areas">
+<h2>Core Development Areas<a class="headerlink" href="#core-development-areas" title="Link to this heading"></a></h2>
+<section id="hook-categories">
+<h3>Hook Categories<a class="headerlink" href="#hook-categories" title="Link to this heading"></a></h3>
+<dl class="simple">
+<dt><strong>Existing Categories:</strong></dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">agent/crypto/</span></code> - Cryptographic operations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">agent/network/</span></code> - Network communications</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">agent/file/</span></code> - File system operations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">agent/ipc/</span></code> - Inter-process communication</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">agent/process/</span></code> - Process and runtime monitoring</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">agent/services/</span></code> - Android system services</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">agent/security/</span></code> - Anti-analysis bypass</p></li>
+</ul>
+</dd>
+<dt><strong>Creating New Categories:</strong></dt><dd><ol class="arabic simple">
+<li><p>Create directory under <code class="docutils literal notranslate"><span class="pre">agent/</span></code></p></li>
+<li><p>Implement hook functions following established patterns</p></li>
+<li><p>Add to <code class="docutils literal notranslate"><span class="pre">hooking_profile_loader.ts</span></code> for integration</p></li>
+<li><p>Create corresponding Python parsers</p></li>
+<li><p>Add CLI support in <code class="docutils literal notranslate"><span class="pre">ammm.py</span></code></p></li>
+</ol>
+</dd>
+</dl>
+</section>
+<section id="parser-development">
+<h3>Parser Development<a class="headerlink" href="#parser-development" title="Link to this heading"></a></h3>
+<p><strong>Parser Structure:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># src/dexray_intercept/parsers/my_category.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseParser</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..models.events</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyCategoryEvent</span><span class="p">(</span><span class="n">Event</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">event_type</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">custom_field</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_event_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;event_type&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_type</span><span class="p">,</span>
+            <span class="s2">&quot;custom_field&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">custom_field</span><span class="p">,</span>
+            <span class="s2">&quot;timestamp&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span>
+        <span class="p">}</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyCategoryParser</span><span class="p">(</span><span class="n">BaseParser</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">parse_json_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">event</span> <span class="o">=</span> <span class="n">MyCategoryEvent</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;event_type&#39;</span><span class="p">),</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">custom_field</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;custom_field&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Add metadata for enhanced analysis</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;category&#39;</span><span class="p">,</span> <span class="s1">&#39;my_category&#39;</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="s1">&#39;severity&#39;</span><span class="p">,</span> <span class="s1">&#39;medium&#39;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">event</span>
+</pre></div>
+</div>
+<p><strong>Parser Registration:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># src/dexray_intercept/parsers/factory.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.my_category</span><span class="w"> </span><span class="kn">import</span> <span class="n">MyCategoryParser</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_register_default_parsers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_parsers</span><span class="p">[</span><span class="s2">&quot;MY_CATEGORY&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">MyCategoryParser</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="testing-and-validation">
+<h2>Testing and Validation<a class="headerlink" href="#testing-and-validation" title="Link to this heading"></a></h2>
+<section id="unit-testing">
+<h3>Unit Testing<a class="headerlink" href="#unit-testing" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># tests/test_my_parser.py</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">unittest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept.parsers.my_category</span><span class="w"> </span><span class="kn">import</span> <span class="n">MyCategoryParser</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TestMyCategoryParser</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span> <span class="o">=</span> <span class="n">MyCategoryParser</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_parse_json_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">test_data</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;event_type&#39;</span><span class="p">:</span> <span class="s1">&#39;my_category.test&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;custom_field&#39;</span><span class="p">:</span> <span class="s1">&#39;test_value&#39;</span>
+        <span class="p">}</span>
+
+        <span class="n">event</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse_json_data</span><span class="p">(</span><span class="n">test_data</span><span class="p">,</span> <span class="s1">&#39;2024-08-20T10:30:00Z&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">event_type</span><span class="p">,</span> <span class="s1">&#39;my_category.test&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">custom_field</span><span class="p">,</span> <span class="s1">&#39;test_value&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="integration-testing">
+<h3>Integration Testing<a class="headerlink" href="#integration-testing" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Test hook integration</span>
+python3<span class="w"> </span>tests/integration/test_hook_integration.py
+
+<span class="c1"># Test with real app (requires device)</span>
+python3<span class="w"> </span>tests/integration/test_real_app.py<span class="w"> </span>com.example.testapp
+</pre></div>
+</div>
+</section>
+<section id="manual-testing">
+<h3>Manual Testing<a class="headerlink" href="#manual-testing" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Test specific hook categories</span>
+ammm<span class="w"> </span>-v<span class="w"> </span>--enable-my-hooks<span class="w"> </span>com.test.app
+
+<span class="c1"># Test with malware samples (use caution)</span>
+ammm<span class="w"> </span>--hooks-bypass<span class="w"> </span>--enable-my-hooks<span class="w"> </span>malware.apk
+
+<span class="c1"># Validate output format</span>
+python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<span class="s2">import json</span>
+<span class="s2">with open(&#39;profile.json&#39;) as f:</span>
+<span class="s2">    data = json.load(f)</span>
+<span class="s2">    print(f&#39;Events: {data.get(\&quot;_metadata\&quot;, {}).get(\&quot;total_events\&quot;, 0)}&#39;)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="performance-testing">
+<h3>Performance Testing<a class="headerlink" href="#performance-testing" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># tests/performance/test_hook_performance.py</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dexray_intercept</span><span class="w"> </span><span class="kn">import</span> <span class="n">AppProfiler</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_hook_performance</span><span class="p">():</span>
+    <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+    <span class="c1"># Run profiler with hooks</span>
+    <span class="n">profiler</span> <span class="o">=</span> <span class="n">AppProfiler</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">hook_config</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;my_hooks&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+    <span class="n">profiler</span><span class="o">.</span><span class="n">start_profiling</span><span class="p">()</span>
+
+    <span class="c1"># Let app run for measured time</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">30</span><span class="p">)</span>
+
+    <span class="n">profiler</span><span class="o">.</span><span class="n">stop_profiling</span><span class="p">()</span>
+    <span class="n">duration</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span>
+
+    <span class="c1"># Validate performance impact</span>
+    <span class="k">assert</span> <span class="n">duration</span> <span class="o">&lt;</span> <span class="mi">35</span>  <span class="c1"># Should not add more than 5s overhead</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="documentation-standards">
+<h2>Documentation Standards<a class="headerlink" href="#documentation-standards" title="Link to this heading"></a></h2>
+<section id="code-documentation">
+<h3>Code Documentation<a class="headerlink" href="#code-documentation" title="Link to this heading"></a></h3>
+<p><strong>TypeScript Hooks:</strong></p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="cm">/**</span>
+<span class="cm"> * Install hooks for monitoring custom Android behavior</span>
+<span class="cm"> *</span>
+<span class="cm"> * This function hooks into com.example.CustomClass methods to track</span>
+<span class="cm"> * sensitive operations and data access patterns.</span>
+<span class="cm"> *</span>
+<span class="cm"> * Events generated:</span>
+<span class="cm"> * - custom.method.called: When sensitiveMethod is invoked</span>
+<span class="cm"> * - custom.data.access: When data access occurs</span>
+<span class="cm"> *</span>
+<span class="cm"> * @example</span>
+<span class="cm"> * // Enable in hook config</span>
+<span class="cm"> * hook_config = { &#39;custom_hooks&#39;: true }</span>
+<span class="cm"> */</span>
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">install_custom_hooks</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+</pre></div>
+</div>
+<p><strong>Python Classes:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">CustomEvent</span><span class="p">(</span><span class="n">Event</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Event representing custom Android behavior.</span>
+
+<span class="sd">    This event captures information about custom operations</span>
+<span class="sd">    including method calls, data access, and timing information.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        event_type: Specific event identifier (e.g., &#39;custom.method.called&#39;)</span>
+<span class="sd">        timestamp: ISO 8601 timestamp when event occurred</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">        &gt;&gt;&gt; event = CustomEvent(&#39;custom.method.called&#39;, &#39;2024-08-20T10:30:00Z&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; event.method_name = &#39;sensitiveMethod&#39;</span>
+<span class="sd">        &gt;&gt;&gt; event.get_event_data()</span>
+<span class="sd">        {&#39;event_type&#39;: &#39;custom.method.called&#39;, &#39;method_name&#39;: &#39;sensitiveMethod&#39;}</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="api-documentation">
+<h3>API Documentation<a class="headerlink" href="#api-documentation" title="Link to this heading"></a></h3>
+<dl class="simple">
+<dt>All public APIs should include:</dt><dd><ol class="arabic simple">
+<li><p><strong>Purpose and behavior description</strong></p></li>
+<li><p><strong>Parameter documentation with types</strong></p></li>
+<li><p><strong>Return value documentation</strong></p></li>
+<li><p><strong>Usage examples</strong></p></li>
+<li><p><strong>Exception handling notes</strong></p></li>
+</ol>
+</dd>
+</dl>
+</section>
+<section id="user-documentation">
+<h3>User Documentation<a class="headerlink" href="#user-documentation" title="Link to this heading"></a></h3>
+<dl class="simple">
+<dt>New features require:</dt><dd><ol class="arabic simple">
+<li><p><strong>CLI usage examples</strong> in user guide</p></li>
+<li><p><strong>Hook configuration documentation</strong></p></li>
+<li><p><strong>Event format specifications</strong></p></li>
+<li><p><strong>Integration examples</strong></p></li>
+</ol>
+</dd>
+</dl>
+</section>
+</section>
+<section id="contributing-workflow">
+<h2>Contributing Workflow<a class="headerlink" href="#contributing-workflow" title="Link to this heading"></a></h2>
+<section id="development-process">
+<h3>Development Process<a class="headerlink" href="#development-process" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Fork and Clone</strong></p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/your-username/Sandroid_Dexray-Intercept.git
+<span class="nb">cd</span><span class="w"> </span>Sandroid_Dexray-Intercept
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p><strong>Create Feature Branch</strong></p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>feature/my-new-hook-category
+git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>fix/parser-bug
+git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>docs/improve-api-reference
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p><strong>Development and Testing</strong></p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Make changes</span>
+vim<span class="w"> </span>agent/my_category/my_hooks.ts
+vim<span class="w"> </span>src/dexray_intercept/parsers/my_category.py
+
+<span class="c1"># Test changes</span>
+npm<span class="w"> </span>run<span class="w"> </span>build
+python3<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/
+ammm<span class="w"> </span>--enable-my-category<span class="w"> </span>com.test.app
+</pre></div>
+</div>
+<ol class="arabic simple" start="4">
+<li><p><strong>Documentation</strong></p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Update documentation</span>
+vim<span class="w"> </span>docs/user-guide/hook-configuration.rst
+vim<span class="w"> </span>docs/api/typescript-api.rst
+
+<span class="c1"># Build and verify docs</span>
+<span class="nb">cd</span><span class="w"> </span>docs/
+make<span class="w"> </span>html
+</pre></div>
+</div>
+<ol class="arabic simple" start="5">
+<li><p><strong>Commit and Push</strong></p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>add<span class="w"> </span>.
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Add new hook category for monitoring XYZ behavior&quot;</span>
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>feature/my-new-hook-category
+</pre></div>
+</div>
+<ol class="arabic simple" start="6">
+<li><p><strong>Create Pull Request</strong>
+- Describe changes and motivation
+- Include testing instructions
+- Reference related issues</p></li>
+</ol>
+</section>
+<section id="code-standards">
+<h3>Code Standards<a class="headerlink" href="#code-standards" title="Link to this heading"></a></h3>
+<dl class="simple">
+<dt><strong>TypeScript Style:</strong></dt><dd><ul class="simple">
+<li><p>Use TypeScript strict mode</p></li>
+<li><p>Follow established naming conventions</p></li>
+<li><p>Include comprehensive error handling</p></li>
+<li><p>Document complex logic with comments</p></li>
+</ul>
+</dd>
+<dt><strong>Python Style:</strong></dt><dd><ul class="simple">
+<li><p>Follow PEP 8 conventions</p></li>
+<li><p>Use type hints for function signatures</p></li>
+<li><p>Include docstrings for public methods</p></li>
+<li><p>Handle exceptions appropriately</p></li>
+</ul>
+</dd>
+<dt><strong>Testing Requirements:</strong></dt><dd><ul class="simple">
+<li><p>Unit tests for new parsers</p></li>
+<li><p>Integration tests for new hook categories</p></li>
+<li><p>Performance testing for potentially heavy hooks</p></li>
+<li><p>Documentation examples should be tested</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+</section>
+<section id="quality-assurance">
+<h2>Quality Assurance<a class="headerlink" href="#quality-assurance" title="Link to this heading"></a></h2>
+<section id="pre-commit-checks">
+<h3>Pre-commit Checks<a class="headerlink" href="#pre-commit-checks" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Run before committing</span>
+npm<span class="w"> </span>run<span class="w"> </span>build<span class="w">                    </span><span class="c1"># Ensure TypeScript compiles</span>
+python3<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/<span class="w">        </span><span class="c1"># Run test suite</span>
+ruff<span class="w"> </span>check<span class="w"> </span>.<span class="w">                     </span><span class="c1"># Python linting</span>
+python3<span class="w"> </span>-m<span class="w"> </span>mypy<span class="w"> </span>src/<span class="w">            </span><span class="c1"># Type checking</span>
+</pre></div>
+</div>
+</section>
+<section id="continuous-integration">
+<h3>Continuous Integration<a class="headerlink" href="#continuous-integration" title="Link to this heading"></a></h3>
+<dl class="simple">
+<dt>The project uses automated testing for:</dt><dd><ul class="simple">
+<li><p><strong>TypeScript compilation validation</strong></p></li>
+<li><p><strong>Python unit and integration tests</strong></p></li>
+<li><p><strong>Code quality and style checks</strong></p></li>
+<li><p><strong>Documentation build verification</strong></p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="release-process">
+<h3>Release Process<a class="headerlink" href="#release-process" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Version bump</span>
+npm<span class="w"> </span>version<span class="w"> </span>patch<span class="p">|</span>minor<span class="p">|</span>major
+
+<span class="c1"># Update changelog</span>
+vim<span class="w"> </span>CHANGELOG.md
+
+<span class="c1"># Tag release</span>
+git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>v0.3.1<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Release version 0.3.1&quot;</span>
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>v0.3.1
+</pre></div>
+</div>
+</section>
+</section>
+<section id="common-development-tasks">
+<h2>Common Development Tasks<a class="headerlink" href="#common-development-tasks" title="Link to this heading"></a></h2>
+<section id="adding-a-new-hook-category">
+<h3>Adding a New Hook Category<a class="headerlink" href="#adding-a-new-hook-category" title="Link to this heading"></a></h3>
+<p>See detailed guide: <a class="reference internal" href="creating-hooks.html"><span class="doc">Creating Custom Hooks</span></a></p>
+</section>
+<section id="adding-cli-parameters">
+<h3>Adding CLI Parameters<a class="headerlink" href="#adding-cli-parameters" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># In src/dexray_intercept/ammm.py</span>
+
+<span class="c1"># Add argument</span>
+<span class="n">hooks</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--enable-my-feature&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
+                   <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Enable my feature monitoring&quot;</span><span class="p">)</span>
+
+<span class="c1"># Add to individual hooks mapping</span>
+<span class="n">individual_hooks</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;enable_my_feature&#39;</span><span class="p">:</span> <span class="s1">&#39;my_feature_hooks&#39;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="debugging-hook-issues">
+<h3>Debugging Hook Issues<a class="headerlink" href="#debugging-hook-issues" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Enable verbose mode</span>
+ammm<span class="w"> </span>-v<span class="w"> </span>--enable-problematic-hook<span class="w"> </span>com.test.app
+
+<span class="c1"># Check JavaScript compilation</span>
+cat<span class="w"> </span>src/dexray_intercept/profiling.js<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;my_hook_function&quot;</span>
+
+<span class="c1"># Test with minimal app</span>
+ammm<span class="w"> </span>--enable-problematic-hook<span class="w"> </span>com.android.calculator
+
+<span class="c1"># Validate JSON output</span>
+python3<span class="w"> </span>-m<span class="w"> </span>json.tool<span class="w"> </span>profile_*.json
+</pre></div>
+</div>
+</section>
+<section id="extending-event-types">
+<h3>Extending Event Types<a class="headerlink" href="#extending-event-types" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create new event class in src/dexray_intercept/models/events.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyCustomEvent</span><span class="p">(</span><span class="n">Event</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">event_type</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">custom_property</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="c1"># Update parser to use new event type</span>
+<span class="c1"># Update factory registration</span>
+<span class="c1"># Add to __all__ exports</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>Choose your development focus:</p>
+<ul class="simple">
+<li><p><strong>Creating new hooks</strong>: <a class="reference internal" href="creating-hooks.html"><span class="doc">Creating Custom Hooks</span></a></p></li>
+<li><p><strong>Understanding build process</strong>: <span class="xref std std-doc">building</span></p></li>
+<li><p><strong>Contributing guidelines</strong>: <span class="xref std std-doc">contributing</span></p></li>
+</ul>
+<p>For questions or discussions:</p>
+<ul class="simple">
+<li><p><strong>GitHub Issues</strong>: Technical questions and bug reports</p></li>
+<li><p><strong>GitHub Discussions</strong>: Development discussions and feature requests</p></li>
+<li><p><strong>Pull Requests</strong>: Code contributions and improvements</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../api/typescript-api.html" class="btn btn-neutral float-left" title="TypeScript API Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="creating-hooks.html" class="btn btn-neutral float-right" title="Creating Custom Hooks" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Daniel Baier, Jan-Niclas Hilgert.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
