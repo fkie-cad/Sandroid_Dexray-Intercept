@@ -3,6 +3,7 @@
 import os
 import sys
 from datetime import datetime
+import importlib.util
 
 # Add the src directory to Python path for autodoc
 src_path = os.path.abspath('../src')
