@@ -68,8 +68,13 @@ class ConsoleFormatter(BaseFormatter):
             if event.bytes_read:
                 lines.append(f"[*] Bytes Read: {event.bytes_read}")
             
-            # Display data if available
-            if event.hexdump_display:
+            # Display data if available (truncated for terminal)
+            if event.data_hex:
+                lines.append("[*] Data:")
+                data_dump = hexdump(event.data_hex, header=True, ansi=True, truncate=True, max_bytes=0x50)
+                for line in data_dump.split('\n'):
+                    lines.append(f"    {line}")
+            elif event.hexdump_display:
                 lines.append("[*] Data:")
                 for line in event.hexdump_display.split('\n'):
                     lines.append(f"    {line}")
@@ -87,13 +92,14 @@ class ConsoleFormatter(BaseFormatter):
             if event.is_large_data:
                 lines.append(f"[*] Data truncated (showing {getattr(event, 'displayed_length', 0)} of {getattr(event, 'original_length', 0)} bytes)")
             
-            # Display data based on file type
+            # Display data based on file type (truncated for terminal)
             if event.file_type == 'xml' and event.plaintext:
                 plaintext = truncate_string(event.plaintext, 200)
                 lines.append(f"[*] XML Content: {plaintext}")
-            elif event.file_type == 'binary' and event.hexdump_display:
-                lines.append("[*] Binary Data:")
-                for line in event.hexdump_display.split('\n'):
+            elif event.data_hex:
+                lines.append("[*] Binary Data:" if event.file_type == 'binary' else "[*] Data:")
+                data_dump = hexdump(event.data_hex, header=True, ansi=True, truncate=True, max_bytes=0x50)
+                for line in data_dump.split('\n'):
                     lines.append(f"    {line}")
             elif event.hexdump_display:
                 lines.append("[*] Data:")
@@ -121,23 +127,23 @@ class ConsoleFormatter(BaseFormatter):
         if event.event_type == 'crypto.cipher.operation':
             lines.append(f"\n[*] AES {event.operation_mode_desc or 'UNKNOWN'} Operation:")
             lines.append(f"    Algorithm: {event.algorithm or 'N/A'}")
-            
-            # Display input data with hexdump
+
+            # Display input data with hexdump (truncated for terminal, full in JSON)
             if event.input_hex:
                 lines.append(f"    Input ({event.input_length or 0} bytes):")
-                input_dump = hexdump(event.input_hex, header=True, ansi=True)
+                input_dump = hexdump(event.input_hex, header=True, ansi=True, truncate=True, max_bytes=0x50)
                 if input_dump:
                     for line in input_dump.split('\n'):
                         lines.append(f"      {line}")
-            
-            # Display output data with hexdump  
+
+            # Display output data with hexdump (truncated for terminal, full in JSON)
             if event.output_hex:
                 lines.append(f"    Output ({event.output_length or 0} bytes):")
-                output_dump = hexdump(event.output_hex, header=True, ansi=True)
+                output_dump = hexdump(event.output_hex, header=True, ansi=True, truncate=True, max_bytes=0x50)
                 if output_dump:
                     for line in output_dump.split('\n'):
                         lines.append(f"      {line}")
-            
+
             # Display plaintext if available (truncated for terminal)
             if event.plaintext:
                 plaintext = truncate_string(event.plaintext, 100)
@@ -149,17 +155,17 @@ class ConsoleFormatter(BaseFormatter):
             lines.append(f"    Key Length: {event.key_length or 0} bytes")
             if event.key_hex:
                 lines.append("    Key:")
-                key_dump = hexdump(event.key_hex, header=True, ansi=True)
+                key_dump = hexdump(event.key_hex, header=True, ansi=True, truncate=True, max_bytes=0x50)
                 if key_dump:
                     for line in key_dump.split('\n'):
                         lines.append(f"      {line}")
-        
+
         elif event.event_type == 'crypto.iv.creation':
             lines.append("[*] AES IV Created:")
             lines.append(f"    IV Length: {event.iv_length or 0} bytes")
             if event.iv_hex:
                 lines.append("    IV:")
-                iv_dump = hexdump(event.iv_hex, header=True, ansi=True)
+                iv_dump = hexdump(event.iv_hex, header=True, ansi=True, truncate=True, max_bytes=0x50)
                 if iv_dump:
                     for line in iv_dump.split('\n'):
                         lines.append(f"      {line}")
