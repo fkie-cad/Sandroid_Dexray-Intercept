@@ -484,13 +484,43 @@ class ConsoleFormatter(BaseFormatter):
     def _format_dex_event(self, event: DEXEvent) -> str:
         """Format DEX events"""
         lines = []
-        
+
+        # Handle legacy format
         if event.event_type == "dex.loading" and event.even_type:
             lines.append(f"[*] Method used for unpacking: {event.even_type}")
+
+        # Handle new structured events
+        elif event.event_type == "dex.unpacking.detected":
+            if hasattr(event, 'hooked_function') and event.hooked_function:
+                # Extract just the function name from demangled format
+                func_parts = str(event.hooked_function).split("::")
+                func_name = func_parts[-1] if len(func_parts) > 1 else event.hooked_function
+                lines.append(f"[*] Method used for unpacking: {func_name}")
+            if hasattr(event, 'magic') and event.magic:
+                lines.append(f"[*] Magic: {event.magic}")
+            if hasattr(event, 'size') and event.size:
+                lines.append(f"[*] Size: {event.size}")
+            if hasattr(event, 'original_location') and event.original_location:
+                lines.append(f"[*] Original location: {event.original_location}")
+
+        elif event.event_type.startswith("dex.classloader."):
+            loader_type = getattr(event, 'class_loader_type', 'Unknown')
+            file_path = getattr(event, 'file_path', 'Unknown')
+            lines.append(f"[*] {loader_type} loading: {file_path}")
+
+        elif event.event_type == "dex.in_memory_loader":
+            buffer_size = getattr(event, 'buffer_size', 'Unknown')
+            lines.append(f"[*] InMemoryDexClassLoader: {buffer_size} bytes")
+
+        elif event.event_type == "dex.dump_success":
+            file_name = getattr(event, 'file_name', 'Unknown')
+            bytes_written = getattr(event, 'bytes_written', 'Unknown')
+            lines.append(f"[*] Dumped successfully: {file_name} ({bytes_written} bytes)")
+
         else:
             lines.append(f"[*] DEX: {event.event_type}")
-        
-        return '\n'.join(lines)
+
+        return '\n'.join(lines) if lines else ""
     
     def _format_generic_event(self, event: Event) -> str:
         """Format generic events"""

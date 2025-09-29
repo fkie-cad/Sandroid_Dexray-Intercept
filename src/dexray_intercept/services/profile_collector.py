@@ -152,33 +152,87 @@ class ProfileCollector:
     
     def _handle_dex_loading(self, content: str, timestamp: str) -> bool:
         """Handle DEX loading events"""
+        import json
+
         if content not in self.dex_list:
             self.dex_list.append(content)
-        
-        if "dumped" in content:
-            # Handle file dumping
-            file_path = getFilePath(content)
-            self._dump_dex_file(file_path, timestamp)
-            return True
-        else:
-            # Regular DEX loading event
-            if self.output_format == "CMD":
+
+        # Try to parse as JSON (new format)
+        try:
+            data = json.loads(content)
+            event_type = data.get('event_type', '')
+
+            # Handle new JSON format events
+            if event_type == 'dex.unpacking.detected':
+                # Store original location if present
+                if 'original_location' in data:
+                    self.orig_file_location = data['original_location']
+
+                # Extract file path and trigger dump
+                file_path = data.get('dumped_path', '')
+                if file_path:
+                    self._dump_dex_file(file_path, timestamp)
+
+                # Parse and display event
+                if self.output_format == "CMD":
+                    parser = parser_factory.get_parser("DEX_LOADING")
+                    if parser:
+                        event = parser.parse(content, timestamp)
+                        if event and self.formatter:
+                            formatted = self.formatter.format_event(event)
+                            if formatted:
+                                print(formatted)
+                        # Add to profile data
+                        self.profile_data.add_event("DEX_LOADING", event)
+                return True
+
+            elif event_type.startswith('dex.'):
+                # Other DEX events (classloader, memory dumps, etc.)
+                if 'original_location' in data:
+                    self.orig_file_location = data['original_location']
+                elif 'file_path' in data:
+                    # For classloader events, store file path as orig location
+                    self.orig_file_location = data['file_path']
+
                 # Parse and display
-                parser = parser_factory.get_parser("DEX_LOADING")
-                if parser:
-                    event = parser.parse(content, timestamp)
-                    if event and self.formatter:
-                        formatted = self.formatter.format_event(event)
-                        if formatted:
-                            print(formatted)
-                
-                # Add to profile data
-                self.profile_data.add_event("DEX_LOADING", event or self._create_generic_event("DEX_LOADING", content, timestamp))
-            
-            if "orig location" in content:
-                self.orig_file_location = get_orig_path(content)
-            
-            return True
+                if self.output_format == "CMD":
+                    parser = parser_factory.get_parser("DEX_LOADING")
+                    if parser:
+                        event = parser.parse(content, timestamp)
+                        if event and self.formatter:
+                            formatted = self.formatter.format_event(event)
+                            if formatted:
+                                print(formatted)
+                        # Add to profile data
+                        self.profile_data.add_event("DEX_LOADING", event)
+                return True
+
+        except (json.JSONDecodeError, ValueError):
+            # Legacy string format handling
+            if "dumped" in content:
+                # Handle file dumping (old format)
+                file_path = getFilePath(content)
+                self._dump_dex_file(file_path, timestamp)
+                return True
+            else:
+                # Regular DEX loading event (old format)
+                if self.output_format == "CMD":
+                    # Parse and display
+                    parser = parser_factory.get_parser("DEX_LOADING")
+                    if parser:
+                        event = parser.parse(content, timestamp)
+                        if event and self.formatter:
+                            formatted = self.formatter.format_event(event)
+                            if formatted:
+                                print(formatted)
+
+                    # Add to profile data
+                    self.profile_data.add_event("DEX_LOADING", event or self._create_generic_event("DEX_LOADING", content, timestamp))
+
+                if "orig location" in content:
+                    self.orig_file_location = get_orig_path(content)
+
+                return True
     
     def _process_event(self, category: str, content: str, timestamp: str) -> bool:
         """Process a regular event"""

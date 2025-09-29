@@ -56,7 +56,20 @@ class DEXParser(BaseParser):
         if event_type.startswith('dex.unpacking.'):
             # DEX unpacking events
             if 'hooked_function' in data:
-                event.even_type = get_demangled_method_for_dex_unpacking(data['hooked_function'])
+                # Demangle the function name if it looks like a mangled C++ symbol
+                hooked_func = data['hooked_function']
+                if '::' in hooked_func and not hooked_func.startswith('Libart::') and not hooked_func.startswith('Libdvm::'):
+                    # Already appears to be in readable format
+                    event.hooked_function = hooked_func
+                else:
+                    # Try to demangle it
+                    try:
+                        event.hooked_function = get_demangled_method_for_dex_unpacking(hooked_func)
+                    except Exception:
+                        # If demangling fails, use the original
+                        event.hooked_function = hooked_func
+                # Also set even_type for backwards compatibility
+                event.even_type = event.hooked_function
         elif event_type.startswith('dex.classloader.'):
             # ClassLoader events
             event.add_metadata('class_loader_operation', True)
