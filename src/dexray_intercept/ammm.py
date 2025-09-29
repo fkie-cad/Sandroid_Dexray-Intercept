@@ -310,7 +310,6 @@ Examples:
                 profiler._start_fritap(target_process)
                 
                 # Wait for fritap to spawn and initialize the target
-                import time
                 print("[*] waiting for fritap to spawn target...")
                 time.sleep(5)
                 
