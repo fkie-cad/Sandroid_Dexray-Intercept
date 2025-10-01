@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from colorama import Fore
@@ -10,15 +11,18 @@ from ..models.events import Event, DEXEvent
 from ..parsers.factory import parser_factory
 from ..formatters.factory import formatter_factory
 from ..utils.android_utils import (
-    getFilePath, get_orig_path, get_filename_from_path, 
+    getFilePath, get_orig_path, get_filename_from_path,
     is_benign_dump, pull_file_from_device
 )
+
+# Set up logger for dexray-intercept
+logger = logging.getLogger('dexray_intercept')
 
 
 class ProfileCollector:
     """Service for collecting and processing profile events"""
-    
-    def __init__(self, output_format: str = "CMD", verbose_mode: bool = False, 
+
+    def __init__(self, output_format: str = "CMD", verbose_mode: bool = False,
                  enable_stacktrace: bool = False, path_filters: Optional[List[str]] = None,
                  base_path: Optional[str] = None):
         self.output_format = output_format
@@ -92,20 +96,22 @@ class ProfileCollector:
         if "creating local copy of unpacked file" in content:
             self.skip_output = True
             return
-        
+
         if "Unpacking detected!" in content:
             self.skip_output = False
             return
-        
+
         if self.skip_output:
             return
-        
+
         if message_type == "console_dev":
             if self.verbose_mode and len(content) > 3:
                 print(f"[***] {content}")
+                logger.debug(f"[console_dev] {content}")
         elif message_type == "console":
             if content != "Unknown":
                 print(f"[***] {content}")
+                logger.info(f"[console] {content}")
     
     def _handle_custom_script_message(self, content, timestamp: str) -> bool:
         """Handle custom script messages"""
@@ -182,6 +188,7 @@ class ProfileCollector:
                             formatted = self.formatter.format_event(event)
                             if formatted:
                                 print(formatted)
+                                logger.info(f"[DEX_LOADING] {formatted.replace(chr(10), ' | ')}")
                         # Add to profile data
                         self.profile_data.add_event("DEX_LOADING", event)
                 return True
@@ -203,6 +210,7 @@ class ProfileCollector:
                             formatted = self.formatter.format_event(event)
                             if formatted:
                                 print(formatted)
+                                logger.info(f"[DEX_LOADING] {formatted.replace(chr(10), ' | ')}")
                         # Add to profile data
                         self.profile_data.add_event("DEX_LOADING", event)
                 return True
@@ -225,6 +233,7 @@ class ProfileCollector:
                             formatted = self.formatter.format_event(event)
                             if formatted:
                                 print(formatted)
+                                logger.info(f"[DEX_LOADING] {formatted.replace(chr(10), ' | ')}")
 
                     # Add to profile data
                     self.profile_data.add_event("DEX_LOADING", event or self._create_generic_event("DEX_LOADING", content, timestamp))
@@ -258,6 +267,8 @@ class ProfileCollector:
             formatted = self.formatter.format_event(event)
             if formatted:
                 print(formatted)
+                # Also log to file handler if available
+                logger.info(formatted.replace('\n', ' | '))
         
         return True
     
@@ -310,22 +321,30 @@ class ProfileCollector:
         if self.orig_file_location in self.downloaded_origins:
             previously_downloaded = self.downloaded_origins[self.orig_file_location]
             if self.output_format == "CMD":
-                print(f"[*] File '{file_name}' has already been dumped as {previously_downloaded}")
+                msg = f"[*] File '{file_name}' has already been dumped as {previously_downloaded}"
+                print(msg)
+                logger.info(msg)
             return
-        
+
         # Determine if benign or malicious
         if is_benign_dump(self.orig_file_location):
             dump_path = f"{self.benign_path}/{file_name}"
             pull_file_from_device(file_path, dump_path)
             if self.output_format == "CMD":
-                print(f"{Fore.GREEN}[*] Dumped benign DEX to: {dump_path}")
+                msg = f"[*] Dumped benign DEX to: {dump_path}"
+                print(f"{Fore.GREEN}{msg}")
+                logger.info(msg)
         else:
             if self.output_format == "CMD":
-                print("[*] Unpacking detected!")
+                msg = "[*] Unpacking detected!"
+                print(msg)
+                logger.warning(msg)
             dump_path = f"{self.malicious_path}/{file_name}"
             pull_file_from_device(file_path, dump_path)
             if self.output_format == "CMD":
-                print(f"{Fore.RED}[*] Dumped DEX payload to: {dump_path}")
+                msg = f"[*] Dumped DEX payload to: {dump_path}"
+                print(f"{Fore.RED}{msg}")
+                logger.warning(msg)
         
         # Record the download
         self.downloaded_origins[self.orig_file_location] = file_name

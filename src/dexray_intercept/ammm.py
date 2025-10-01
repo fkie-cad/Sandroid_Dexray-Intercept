@@ -43,10 +43,82 @@ class ArgParser(argparse.ArgumentParser):
         self.exit(0)
 
 
-def parse_hook_config(parsed_args):
-    """Convert CLI arguments to hook configuration dictionary"""
+def interactive_hook_selection():
+    """Interactive prompt for selecting hooks to enable"""
+    print("\n=== Dexray-Intercept Hook Selection ===")
+    print("Select which hook categories to enable (y/n for each):\n")
+
+    hook_groups = {
+        'crypto': {
+            'name': 'Crypto Hooks',
+            'description': 'AES, encodings, keystore operations',
+            'hooks': ['aes_hooks', 'encodings_hooks', 'keystore_hooks']
+        },
+        'network': {
+            'name': 'Network Hooks',
+            'description': 'Web requests, sockets, HTTP/HTTPS traffic',
+            'hooks': ['web_hooks', 'socket_hooks']
+        },
+        'filesystem': {
+            'name': 'Filesystem Hooks',
+            'description': 'File operations, database access',
+            'hooks': ['file_system_hooks', 'database_hooks']
+        },
+        'ipc': {
+            'name': 'IPC Hooks',
+            'description': 'Binder, intents, broadcasts, shared preferences',
+            'hooks': ['shared_prefs_hooks', 'binder_hooks', 'intent_hooks', 'broadcast_hooks']
+        },
+        'process': {
+            'name': 'Process Hooks',
+            'description': 'Native libraries, runtime, DEX unpacking',
+            'hooks': ['dex_unpacking_hooks', 'java_dex_unpacking_hooks', 'native_library_hooks', 'process_hooks', 'runtime_hooks']
+        },
+        'services': {
+            'name': 'Service Hooks',
+            'description': 'Bluetooth, camera, clipboard, location, telephony',
+            'hooks': ['bluetooth_hooks', 'camera_hooks', 'clipboard_hooks', 'location_hooks', 'telephony_hooks']
+        },
+        'bypass': {
+            'name': 'Anti-Analysis Bypass Hooks',
+            'description': 'Root, frida, debugger, emulator detection',
+            'hooks': ['bypass_hooks']
+        }
+    }
+
+    selected_hooks = {}
+
+    for key, group in hook_groups.items():
+        while True:
+            response = input(f"{group['name']} ({group['description']}): [y/n] ").strip().lower()
+            if response in ['y', 'n', 'yes', 'no']:
+                if response in ['y', 'yes']:
+                    for hook in group['hooks']:
+                        selected_hooks[hook] = True
+                break
+            print("Please enter 'y' or 'n'")
+
+    if not selected_hooks:
+        print("\n⚠ Warning: No hooks selected. Dexray-intercept will run but won't capture any events.")
+        response = input("Continue without hooks? [y/n] ").strip().lower()
+        if response not in ['y', 'yes']:
+            print("Aborting...")
+            sys.exit(0)
+    else:
+        print(f"\n✓ Enabled {len(selected_hooks)} hook(s)")
+
+    return selected_hooks
+
+
+def parse_hook_config(parsed_args, use_interactive=False):
+    """Convert CLI arguments to hook configuration dictionary
+
+    Args:
+        parsed_args: Parsed command line arguments
+        use_interactive: If True and no hooks specified, prompt user interactively
+    """
     hook_config = {}
-    
+
     # Handle group selections
     if parsed_args.hooks_all:
         # Enable all hooks
@@ -138,7 +210,11 @@ def parse_hook_config(parsed_args):
     for arg_name, hook_name in individual_hooks.items():
         if getattr(parsed_args, arg_name, False):
             hook_config[hook_name] = True
-    
+
+    # If no hooks specified and interactive mode requested, prompt user
+    if not hook_config and use_interactive:
+        hook_config = interactive_hook_selection()
+
     return hook_config
 
 
@@ -183,6 +259,8 @@ Examples:
                       help="Show verbose output. This could very noisy.")
     args.add_argument("-st", "--enable-full-stacktrace", required=False, action="store_const", const=True, default=False,
                       help="Enable full stack traces for hook invocations (shows call origin in binary)")
+    args.add_argument("--non-interactive", required=False, action="store_const", const=True, default=False,
+                      help="Disable interactive hook selection prompt (use with caution - no hooks will be enabled without explicit flags)")
     args.add_argument("--enable-fritap", required=False, action="store_const", const=True, default=False,
                       help="Enable fritap for TLS key extraction and traffic capture")
     args.add_argument("--fritap-output-dir", metavar="<directory>", required=False, default="./fritap_output",
@@ -272,14 +350,16 @@ Examples:
                 process_session = device.attach(int(target_process) if target_process.isnumeric() else target_process)
                 pid = None  # No PID in attach mode
             print("[*] starting app profiling")
-            
+
             # Parse hook configuration from CLI arguments
-            hook_config = parse_hook_config(parsed)
+            # Enable interactive mode if no hooks specified on command line (unless --non-interactive flag set)
+            use_interactive = not parsed.non_interactive
+            hook_config = parse_hook_config(parsed, use_interactive=use_interactive)
             enabled_hooks = [hook for hook, enabled in hook_config.items() if enabled]
             if enabled_hooks:
                 print(f"[*] enabled hooks: {', '.join(enabled_hooks)}")
             else:
-                print("[*] no hooks enabled - use --help to see hook options")
+                print("[*] no hooks enabled - dexray-intercept will not capture events")
             
             if parsed.enable_fritap:
                 print(f"[*] fritap enabled - output directory: {parsed.fritap_output_dir}")
