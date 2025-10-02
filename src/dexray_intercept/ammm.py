@@ -335,20 +335,58 @@ Examples:
             elif parsed.spawn:
                 # Normal spawn mode without fritap
                 print("[*] spawning app: "+ target_process)
-                pid = device.spawn(target_process)
-                process_session = device.attach(pid)
+                try:
+                    pid = device.spawn(target_process)
+                    process_session = device.attach(pid)
+                except frida.NotSupportedError as e:
+                    print(f"\n[-] Failed to spawn app: {str(e)}")
+                    print("\nPossible solutions:")
+                    print("  1. Restart frida-server on device: adb shell killall frida-server")
+                    print("  2. Check if app is installed: adb shell pm list packages | grep {0}".format(target_process))
+                    print("  3. Try attach mode instead: remove -s flag and start app manually first")
+                    print("  4. Check device connection: adb devices")
+                    sys.exit(1)
+                except frida.ServerNotRunningError:
+                    print("\n[-] Frida server is not running on the device")
+                    print("  Run with -f flag to install and start frida-server")
+                    sys.exit(1)
+                except frida.ProcessNotFoundError:
+                    print(f"\n[-] App not found: {target_process}")
+                    print("  Check if package is installed: adb shell pm list packages | grep {0}".format(target_process))
+                    sys.exit(1)
+                except Exception as e:
+                    print(f"\n[-] Unexpected error while spawning app: {type(e).__name__}: {str(e)}")
+                    print("  Try restarting frida-server or check device connection")
+                    sys.exit(1)
             else:
                 # Attach mode (works the same whether fritap is enabled or not)
                 if parsed.foreground:
                     target_process = device.get_frontmost_application()
                     if target_process is None or len(target_process.identifier) < 2:
                         print("[-] unable to attach to the frontmost application. Aborting ...")
+                        sys.exit(1)
 
                     target_process = target_process.identifier
 
                 print("[*] attaching to app: "+ target_process)
-                process_session = device.attach(int(target_process) if target_process.isnumeric() else target_process)
-                pid = None  # No PID in attach mode
+                try:
+                    process_session = device.attach(int(target_process) if target_process.isnumeric() else target_process)
+                    pid = None  # No PID in attach mode
+                except frida.ProcessNotFoundError:
+                    print(f"\n[-] Process not found: {target_process}")
+                    print("  Make sure the app is running. Possible solutions:")
+                    print("  1. Start app manually on device")
+                    print("  2. Use spawn mode with -s flag")
+                    print("  3. Check running processes: adb shell ps | grep {0}".format(target_process))
+                    sys.exit(1)
+                except frida.ServerNotRunningError:
+                    print("\n[-] Frida server is not running on the device")
+                    print("  Run with -f flag to install and start frida-server")
+                    sys.exit(1)
+                except Exception as e:
+                    print(f"\n[-] Failed to attach to process: {type(e).__name__}: {str(e)}")
+                    print("  Try restarting frida-server or check if app is running")
+                    sys.exit(1)
             print("[*] starting app profiling")
 
             # Parse hook configuration from CLI arguments
