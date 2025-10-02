@@ -210,8 +210,22 @@ export function install_aes_info() {
 export function install_aes_hooks(): void {
     devlog("\n")
     devlog("install aes hooks");
-    
-    install_aes_secrets();
-    install_aes_keys();
-    install_aes_info();
+
+    try {
+        install_aes_secrets();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install AES secrets hooks: ${error}`);
+    }
+
+    try {
+        install_aes_keys();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install AES keys hooks: ${error}`);
+    }
+
+    try {
+        install_aes_info();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install AES info hooks: ${error}`);
+    }
 }

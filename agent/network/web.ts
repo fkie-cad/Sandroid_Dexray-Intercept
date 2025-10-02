@@ -457,22 +457,58 @@ function install_websocket_hooks() {
 export function install_web_hooks(){
     devlog("\n")
     devlog("Installing comprehensive web hooks");
-    
+
     // Core HTTP/HTTPS hooks
-    install_url_hooks();
-    install_http_hooks();
-    install_https_hooks();
-    
+    try {
+        install_url_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install URL hooks: ${error}`);
+    }
+
+    try {
+        install_http_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install HTTP hooks: ${error}`);
+    }
+
+    try {
+        install_https_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install HTTPS hooks: ${error}`);
+    }
+
     // Popular HTTP libraries
-    install_okhttp_hooks();
-    install_retrofit_hooks();
-    install_volley_hooks();
-    
+    try {
+        install_okhttp_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install OkHTTP hooks: ${error}`);
+    }
+
+    try {
+        install_retrofit_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install Retrofit hooks: ${error}`);
+    }
+
+    try {
+        install_volley_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install Volley hooks: ${error}`);
+    }
+
     // WebSocket communication
-    install_websocket_hooks();
-    
+    try {
+        install_websocket_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install WebSocket hooks: ${error}`);
+    }
+
     // WebView and browser components
-    install_webview_hooks();
-    
+    try {
+        install_webview_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install WebView hooks: ${error}`);
+    }
+
     devlog("Comprehensive web hooks installation completed");
 }

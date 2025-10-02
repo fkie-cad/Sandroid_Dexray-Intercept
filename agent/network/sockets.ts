@@ -842,7 +842,16 @@ Interceptor.attach(close_ptr, {
 export function install_socket_hooks(){
     devlog("\n")
     devlog("install socket hooks");
-    hook_java_socket_communication();
-    hook_bionic_socket_commuication();
 
+    try {
+        hook_java_socket_communication();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install Java socket hooks: ${error}`);
+    }
+
+    try {
+        hook_bionic_socket_commuication();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install bionic socket hooks: ${error}`);
+    }
 }

@@ -130,6 +130,10 @@ setTimeout(() => {
 export function install_intent_hooks(){
     devlog("\n")
     devlog("install intent hooks");
-    intent_hooks();
 
+    try {
+        intent_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install intent hooks: ${error}`);
+    }
 }

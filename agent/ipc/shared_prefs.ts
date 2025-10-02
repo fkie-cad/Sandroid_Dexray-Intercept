@@ -160,7 +160,16 @@ function install_datastore_hooks() {
 export function install_shared_prefs_hooks(){
     devlog("\n");
     devlog("Installing shared preferences hooks");
-    
-    install_shared_preferences_hooks();
-    install_datastore_hooks();
+
+    try {
+        install_shared_preferences_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install shared preferences hooks: ${error}`);
+    }
+
+    try {
+        install_datastore_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install datastore hooks: ${error}`);
+    }
 }

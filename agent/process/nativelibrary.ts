@@ -139,7 +139,11 @@ function hook_native_lib_loading(){
 export function install_native_library_hooks(){
     devlog("\n")
     devlog("install native hooks");
-    hook_native_lib_loading();
 
+    try {
+        hook_native_lib_loading();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install native library loading hooks: ${error}`);
+    }
 }
 

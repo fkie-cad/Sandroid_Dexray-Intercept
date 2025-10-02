@@ -165,7 +165,17 @@ function hook_native_process_creation(){
 export function install_process_hooks(){
     devlog("\n")
     devlog("install process hooks");
-    hook_java_process_creation();
-    hook_native_process_creation();
+
+    try {
+        hook_java_process_creation();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install Java process hooks: ${error}`);
+    }
+
+    try {
+        hook_native_process_creation();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install native process hooks: ${error}`);
+    }
 }
 

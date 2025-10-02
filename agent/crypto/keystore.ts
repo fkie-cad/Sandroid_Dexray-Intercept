@@ -484,9 +484,23 @@ function install_keystore_access_hooks(): void {
 export function install_keystore_hooks(): void {
     devlog("\n");
     devlog("Installing keystore hooks");
-    
-    install_keystore_constructor_hooks();
-    install_keystore_load_hooks();
-    install_keystore_access_hooks();
+
+    try {
+        install_keystore_constructor_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install keystore constructor hooks: ${error}`);
+    }
+
+    try {
+        install_keystore_load_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install keystore load hooks: ${error}`);
+    }
+
+    try {
+        install_keystore_access_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install keystore access hooks: ${error}`);
+    }
 }
 

@@ -152,6 +152,10 @@ function hook_bluetooth(){
 export function install_bluetooth_hooks(){
     devlog("\n")
     devlog("install bluetooth hooks");
-    hook_bluetooth();
 
+    try {
+        hook_bluetooth();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install bluetooth hooks: ${error}`);
+    }
 }

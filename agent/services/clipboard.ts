@@ -101,7 +101,11 @@ function hook_clipboard(){
 export function install_clipboard_hooks(){
     devlog("\n")
     devlog("install clipboard hooks");
-    hook_clipboard();
 
+    try {
+        hook_clipboard();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install clipboard hooks: ${error}`);
+    }
 }
 

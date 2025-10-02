@@ -421,12 +421,36 @@ export function install_hook_detection_bypass() {
 export function install_bypass_hooks(): void {
     devlog("\n")
     devlog("Installing anti-analysis bypass hooks");
-    
-    install_root_detection_bypass();
-    install_frida_detection_bypass();
-    install_debugger_detection_bypass();
-    install_emulator_detection_bypass();
-    install_hook_detection_bypass();
-    
+
+    try {
+        install_root_detection_bypass();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install root detection bypass: ${error}`);
+    }
+
+    try {
+        install_frida_detection_bypass();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install Frida detection bypass: ${error}`);
+    }
+
+    try {
+        install_debugger_detection_bypass();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install debugger detection bypass: ${error}`);
+    }
+
+    try {
+        install_emulator_detection_bypass();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install emulator detection bypass: ${error}`);
+    }
+
+    try {
+        install_hook_detection_bypass();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install hook detection bypass: ${error}`);
+    }
+
     log("[BYPASS] All anti-analysis bypass hooks installed");
 }

@@ -105,6 +105,10 @@ function hook_camera(){
 export function install_camera_hooks(){
     devlog("\n")
     devlog("install camera hooks");
-    hook_camera();
 
+    try {
+        hook_camera();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install camera hooks: ${error}`);
+    }
 }

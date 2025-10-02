@@ -561,8 +561,22 @@ function hook_device_infos_and_cloak(){
 export function install_telephony_manager_hooks(){
     devlog("\n")
     devlog("install telephony manager hooks");
-    hook_device_infos();
-    hook_sms();
-    //hook_mms();
 
+    try {
+        hook_device_infos();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install device info hooks: ${error}`);
+    }
+
+    try {
+        hook_sms();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install SMS hooks: ${error}`);
+    }
+
+    //try {
+    //    hook_mms();
+    //} catch (error) {
+    //    devlog(`[HOOK] Failed to install MMS hooks: ${error}`);
+    //}
 }

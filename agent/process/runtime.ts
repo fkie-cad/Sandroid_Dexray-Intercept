@@ -260,7 +260,17 @@ function trace_reflection(){
 export function install_runtime_hooks(){
     devlog("\n")
     devlog("install runtime hooks");
-    hook_runtime();
-    trace_reflection();
+
+    try {
+        hook_runtime();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install runtime hooks: ${error}`);
+    }
+
+    try {
+        trace_reflection();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install reflection tracing hooks: ${error}`);
+    }
 }
 

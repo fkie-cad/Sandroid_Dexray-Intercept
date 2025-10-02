@@ -172,5 +172,10 @@ function install_base64_hooks(): void {
 export function install_encodings_hooks(): void {
     devlog("\n");
     devlog("Installing encodings hooks");
-    install_base64_hooks();
+
+    try {
+        install_base64_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install base64 hooks: ${error}`);
+    }
 }

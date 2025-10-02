@@ -380,6 +380,16 @@ function hook_filesystem_deletes(): void {
 export function install_file_system_hooks() {
     devlog("\n")
     devlog("install filesystem hooks");
-    hook_filesystem_accesses();
-    hook_filesystem_deletes();
+
+    try {
+        hook_filesystem_accesses();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install filesystem access hooks: ${error}`);
+    }
+
+    try {
+        hook_filesystem_deletes();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install filesystem delete hooks: ${error}`);
+    }
 }

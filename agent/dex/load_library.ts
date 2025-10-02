@@ -78,13 +78,22 @@ function install_runtime_library_hooks(): void {
 export function install_java_dex_unpacking_hooks(): void {
     devlog("\n");
     devlog("Installing library loading hooks");
-    
+
     try {
         install_system_library_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install system library hooks: ${error}`);
+        createLibraryEvent("library.system.hook_error", {
+            error: error.toString()
+        });
+    }
+
+    try {
         install_runtime_library_hooks();
-    } catch(e) {
-        createLibraryEvent("library.hook_error", {
-            error: e.toString()
+    } catch (error) {
+        devlog(`[HOOK] Failed to install runtime library hooks: ${error}`);
+        createLibraryEvent("library.runtime.hook_error", {
+            error: error.toString()
         });
     }
 }

@@ -485,8 +485,22 @@ function advanced_unpacking_procedure(){
 export function install_dex_unpacking_hooks(): void {
     devlog("\n");
     devlog("Installing DEX unpacking hooks");
-    
-    install_dex_memory_hooks();
-    install_dex_classloader_hooks();
-    advanced_unpacking_procedure();
+
+    try {
+        install_dex_memory_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install DEX memory hooks: ${error}`);
+    }
+
+    try {
+        install_dex_classloader_hooks();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install DEX classloader hooks: ${error}`);
+    }
+
+    try {
+        advanced_unpacking_procedure();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install advanced unpacking hooks: ${error}`);
+    }
 }

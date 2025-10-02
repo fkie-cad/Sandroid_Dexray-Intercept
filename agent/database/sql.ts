@@ -1,7 +1,7 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where } from "../utils/misc.js"
-import { Java } from "../utils/javalib.js"
+import { Java, safeJavaUse } from "../utils/javalib.js"
 
 /**
  * Some parts are taken from https://codeshare.frida.re/@ninjadiary/sqlite-database/
@@ -730,20 +730,24 @@ function hook_java_sql(){
 function hook_SQLCipher() {
     setImmediate(function() {
         Java.perform(function() {
-            
-            var SQLiteOpenHelper = Java.use('net.sqlcipher.database.SQLiteOpenHelper');
-            SQLiteOpenHelper.getWritableDatabase.overload('java.lang.String').implementation = function (password) {
-                createDatabaseEvent("database.sqlcipher.open", {
-                    method: "SQLiteOpenHelper.getWritableDatabase(String)",
-                    password: password,
-                    database_type: "SQLCipher",
-                    access_type: "writable"
-                });
+            const SQLiteOpenHelper = safeJavaUse('net.sqlcipher.database.SQLiteOpenHelper');
+            if (SQLiteOpenHelper) {
+                SQLiteOpenHelper.getWritableDatabase.overload('java.lang.String').implementation = function (password) {
+                    createDatabaseEvent("database.sqlcipher.open", {
+                        method: "SQLiteOpenHelper.getWritableDatabase(String)",
+                        password: password,
+                        database_type: "SQLCipher",
+                        access_type: "writable"
+                    });
 
-                return this.getWritableDatabase.overload('java.lang.String').apply(this, arguments);
+                    return this.getWritableDatabase.overload('java.lang.String').apply(this, arguments);
+                }
             }
 
-            const SQLiteDatabase = Java.use("net.sqlcipher.database.SQLiteDatabase");
+            const SQLiteDatabase = safeJavaUse("net.sqlcipher.database.SQLiteDatabase");
+            if (!SQLiteDatabase) {
+                return;
+            }
 
             SQLiteDatabase.openOrCreateDatabase.overload(
                 "java.io.File",
@@ -892,7 +896,11 @@ function hook_room_library(){
             //console.log("ROOM hooks being installed");
 
             // Hook the Room.databaseBuilder method
-            const Room = Java.use("androidx.room.Room");
+            const Room = safeJavaUse("androidx.room.Room");
+            if (!Room) {
+                return;
+            }
+
             Room.databaseBuilder.overload("android.content.Context", "java.lang.Class", "java.lang.String").implementation = function (context, klass, dbName) {
                 createDatabaseEvent("database.room.builder", {
                     method: "Room.databaseBuilder(Context, Class, String)",
@@ -905,8 +913,9 @@ function hook_room_library(){
                 return result;
             };
 
-            // Hook SQLiteDatabase.openOrCreateDatabase
-            const SQLiteDatabase = Java.use("net.sqlcipher.database.SQLiteDatabase");
+            // Hook SQLiteDatabase.openOrCreateDatabase (only if SQLCipher is present)
+            const SQLiteDatabase = safeJavaUse("net.sqlcipher.database.SQLiteDatabase");
+            if (SQLiteDatabase) {
 
             SQLiteDatabase.openOrCreateDatabase.overload("java.io.File", "java.lang.String").implementation = function (file, password) {
                 const methodVal = "SQLiteDatabase.openOrCreateDatabase(File, String), ";
@@ -924,8 +933,23 @@ function hook_room_library(){
                 return this.openOrCreateDatabase(path, password);
             };
 
+            // Hook PRAGMA key setting for SQLCipher
+            SQLiteDatabase.execSQL.overload("java.lang.String").implementation = function (sql) {
+                if (sql.toLowerCase().includes("pragma key")) {
+                    createDatabaseEvent("database.sqlcipher.pragma", {
+                        method: "SQLiteDatabase.execSQL(String)",
+                        sql: sql,
+                        pragma_type: "key",
+                        database_type: "SQLCipher"
+                    });
+                }
+                return this.execSQL(sql);
+            };
+            } // End if (SQLiteDatabase)
+
             // Hook SupportSQLiteOpenHelper.Callback onCreate
-            const SupportSQLiteOpenHelper_Callback = Java.use("androidx.sqlite.db.SupportSQLiteOpenHelper$Callback");
+            const SupportSQLiteOpenHelper_Callback = safeJavaUse("androidx.sqlite.db.SupportSQLiteOpenHelper$Callback");
+            if (SupportSQLiteOpenHelper_Callback) {
 
             SupportSQLiteOpenHelper_Callback.onCreate.implementation = function (db) {
                 createDatabaseEvent("database.room.callback", {
@@ -947,23 +971,12 @@ function hook_room_library(){
                 });
                 return this.onOpen(db);
             };
+            } // End if (SupportSQLiteOpenHelper_Callback)
 
-            // Hook PRAGMA key setting for SQLCipher
-            SQLiteDatabase.execSQL.overload("java.lang.String").implementation = function (sql) {
-                if (sql.toLowerCase().includes("pragma key")) {
-                    createDatabaseEvent("database.sqlcipher.pragma", {
-                        method: "SQLiteDatabase.execSQL(String)",
-                        sql: sql,
-                        pragma_type: "key",
-                        database_type: "SQLCipher"
-                    });
-                }
-                return this.execSQL(sql);
-            };
 
-  
             // Hook DAO methods (insert, update, delete)
-            const Dao = Java.use("androidx.room.RoomDatabase");
+            const Dao = safeJavaUse("androidx.room.RoomDatabase");
+            if (Dao) {
             Dao.insert.overload("java.lang.Object").implementation = function (entity) {
                 createDatabaseEvent("database.room.dao", {
                     method: "RoomDatabase.insert(Object)",
@@ -993,36 +1006,43 @@ function hook_room_library(){
                 });
                 return this.delete(entity);
             };
+            } // End if (Dao)
 
-            // Hook query execution
-            const RoomDatabaseQuery = Java.use("androidx.room.RoomDatabase");
-            RoomDatabaseQuery.query.overload("androidx.sqlite.db.SupportSQLiteQuery").implementation = function (query) {
+            // Hook query execution (using same Dao reference as RoomDatabase)
+            if (Dao) {
+            Dao.query.overload("androidx.sqlite.db.SupportSQLiteQuery").implementation = function (query) {
                 const methodVal = "RoomDatabase.query, ";
                 const logVal = `Query executed: ${query.toString()}`;
                 am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
                 return this.query(query);
             };
+            } // End if (Dao)
 
             // Hook SupportSQLiteDatabase execSQL
-            const SupportSQLiteDatabase = Java.use("androidx.sqlite.db.SupportSQLiteDatabase");
+            const SupportSQLiteDatabase = safeJavaUse("androidx.sqlite.db.SupportSQLiteDatabase");
+            if (SupportSQLiteDatabase) {
             SupportSQLiteDatabase.execSQL.overload("java.lang.String").implementation = function (sql) {
                 const methodVal = "SupportSQLiteDatabase.execSQL, ";
                 const logVal = `Executing SQL: ${sql}`;
                 am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
                 return this.execSQL(sql);
             };
+            } // End if (SupportSQLiteDatabase)
 
             // Hook LiveData observe
-            const LiveData = Java.use("androidx.lifecycle.LiveData");
+            const LiveData = safeJavaUse("androidx.lifecycle.LiveData");
+            if (LiveData) {
             LiveData.observe.overload("androidx.lifecycle.LifecycleOwner", "androidx.lifecycle.Observer").implementation = function (owner, observer) {
                 const methodVal = "LiveData.observe, ";
                 const logVal = `LiveData observed with LifecycleOwner: ${owner.toString()}`;
                 am_send(PROFILE_HOOKING_TYPE, `event_type: Room.LiveData, ${methodVal}${logVal}`);
                 return this.observe(owner, observer);
             };
+            } // End if (LiveData)
 
             // Hook Flow collect
-            const FlowCollector = Java.use("kotlinx.coroutines.flow.FlowCollector");
+            const FlowCollector = safeJavaUse("kotlinx.coroutines.flow.FlowCollector");
+            if (FlowCollector) {
             FlowCollector.emit.overload("java.lang.Object").implementation = function (value) {
                 const methodVal = "FlowCollector.emit, ";
                 const logVal = `Flow emitted value: ${value}`;
@@ -1030,6 +1050,7 @@ function hook_room_library(){
                 //console.log(logVal);
                 return this.emit(value);
             };
+            } // End if (FlowCollector)
 
         });
     });
@@ -1210,9 +1231,11 @@ function hook_native_sqlite() {
 function hook_wcdb() {
     setImmediate(function() {
         Java.perform(function() {
-            try {
-                const wcdbDatabase = Java.use("com.tencent.wcdb.database.SQLiteDatabase");
-                devlog("WCDB hooks being installed");
+            const wcdbDatabase = safeJavaUse("com.tencent.wcdb.database.SQLiteDatabase");
+            if (!wcdbDatabase) {
+                return;
+            }
+            devlog("WCDB hooks being installed");
                 
                 // Helper function to interpret database flags - same as in SQLite
                 function interpretDatabaseFlags(flags) {
@@ -1565,10 +1588,6 @@ function hook_wcdb() {
                     
                     return this.setTransactionSuccessful();
                 };
-                
-            } catch (e) {
-                devlog("WCDB hooking failed: " + e);
-            }
         });
     });
 }
@@ -1578,10 +1597,40 @@ function hook_wcdb() {
 export function install_database_hooks(){
     devlog("\n")
     devlog("install sql hooks");
-    hook_java_sql();
-    hook_SQLCipher();
-    hook_wcdb(); // Add WCDB hooks
-    //hook_native_sqlite(); 
-    hook_room_library(); // e.g on the To Do List App this results into a crash/stopping of the target app
-    hook_sql_related_stuff();
+
+    try {
+        hook_java_sql();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install Java SQL hooks: ${error}`);
+    }
+
+    try {
+        hook_SQLCipher();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install SQLCipher hooks: ${error}`);
+    }
+
+    try {
+        hook_wcdb(); // Add WCDB hooks
+    } catch (error) {
+        devlog(`[HOOK] Failed to install WCDB hooks: ${error}`);
+    }
+
+    //try {
+    //    hook_native_sqlite();
+    //} catch (error) {
+    //    devlog(`[HOOK] Failed to install native SQLite hooks: ${error}`);
+    //}
+
+    try {
+        hook_room_library(); // e.g on the To Do List App this results into a crash/stopping of the target app
+    } catch (error) {
+        devlog(`[HOOK] Failed to install Room library hooks: ${error}`);
+    }
+
+    try {
+        hook_sql_related_stuff();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install SQL related hooks: ${error}`);
+    }
 }

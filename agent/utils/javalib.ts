@@ -21,4 +21,28 @@ if (javaLegacy && typeof javaLegacy.perform === "function") {
 type JavaWrapper = JavaBridge.Wrapper<any>;
 type JavaMethod = JavaBridge.Method<any>;
 
-export { Java, JavaWrapper, JavaMethod };
+/**
+ * Safely attempts to load a Java class without crashing the Frida script.
+ * Returns null if the class is not found, allowing hooks to skip gracefully.
+ *
+ * @param className - The fully qualified Java class name to load
+ * @param silent - If true, suppresses the warning log when class is not found
+ * @returns The Java class wrapper if found, null otherwise
+ */
+function safeJavaUse(className: string, silent: boolean = false): JavaWrapper | null {
+    try {
+        return Java.use(className);
+    } catch (e) {
+        if (!silent) {
+            const errorMsg = e instanceof Error ? e.message : String(e);
+            if (errorMsg.includes("ClassNotFoundException")) {
+                devlog(`Class '${className}' not found in target app, skipping hook`);
+            } else {
+                devlog(`Error loading class '${className}': ${errorMsg}`);
+            }
+        }
+        return null;
+    }
+}
+
+export { Java, JavaWrapper, JavaMethod, safeJavaUse };

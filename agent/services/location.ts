@@ -171,6 +171,16 @@ function hook_playstore_location_api(){
 export function install_location_hooks(){
     devlog("\n")
     devlog("install location hooks");
-    hook_location();
-    hook_playstore_location_api()
+
+    try {
+        hook_location();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install location hooks: ${error}`);
+    }
+
+    try {
+        hook_playstore_location_api();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install Play Store location API hooks: ${error}`);
+    }
 }

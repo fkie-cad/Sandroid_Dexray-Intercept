@@ -201,6 +201,10 @@ function hook_binder(){
 export function install_binder_hooks(){
     devlog("\n")
     devlog("install binder hooks");
-    hook_binder();
 
+    try {
+        hook_binder();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install binder hooks: ${error}`);
+    }
 }

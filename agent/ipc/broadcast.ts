@@ -187,6 +187,10 @@ function hook_broadcasts() {
 export function install_broadcast_hooks(){
     devlog("\n")
     devlog("install broadcast hooks");
-    hook_broadcasts();
 
+    try {
+        hook_broadcasts();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install broadcast hooks: ${error}`);
+    }
 }
