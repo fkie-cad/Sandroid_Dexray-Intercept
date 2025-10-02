@@ -47,17 +47,18 @@ def hexdump(hex_string: str, header: bool = True, ansi: bool = True, truncate: b
     else:
         was_truncated = False
 
-    # ANSI color codes
+    # ANSI color codes - using valid ANSI escape sequences
     if ansi:
         colors = {
             'reset': '\033[0m',
-            'gray': '\033[110m',      # header and separators
-            'cyan': '\033[36m',      # hex values
-            'green': '\033[32m',     # printable ASCII
-            'yellow': '\033[33m'     # non-printable (dots)
+            'gray': '\033[90m',       # bright black/gray for header and separators
+            'cyan': '\033[36m',       # cyan for hex values
+            'green': '\033[32m',      # green for printable ASCII
+            'yellow': '\033[33m',     # yellow for non-printable (dots)
+            'bold': '\033[1m'         # bold for emphasis
         }
     else:
-        colors = {k: '' for k in ['reset', 'gray', 'cyan', 'green', 'yellow']}
+        colors = {k: '' for k in ['reset', 'gray', 'cyan', 'green', 'yellow', 'bold']}
 
     result = []
 

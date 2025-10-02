@@ -14,6 +14,7 @@ from ..utils.android_utils import (
     getFilePath, get_orig_path, get_filename_from_path,
     is_benign_dump, pull_file_from_device
 )
+from ..utils.string_utils import strip_ansi_codes
 
 # Set up logger for dexray-intercept
 logger = logging.getLogger('dexray_intercept')
@@ -188,7 +189,8 @@ class ProfileCollector:
                             formatted = self.formatter.format_event(event)
                             if formatted:
                                 print(formatted)
-                                logger.info(f"[DEX_LOADING] {formatted.replace(chr(10), ' | ')}")
+                                clean_formatted = strip_ansi_codes(formatted)
+                                logger.info(f"[DEX_LOADING] {clean_formatted.replace(chr(10), ' | ')}")
                         # Add to profile data
                         self.profile_data.add_event("DEX_LOADING", event)
                 return True
@@ -210,7 +212,8 @@ class ProfileCollector:
                             formatted = self.formatter.format_event(event)
                             if formatted:
                                 print(formatted)
-                                logger.info(f"[DEX_LOADING] {formatted.replace(chr(10), ' | ')}")
+                                clean_formatted = strip_ansi_codes(formatted)
+                                logger.info(f"[DEX_LOADING] {clean_formatted.replace(chr(10), ' | ')}")
                         # Add to profile data
                         self.profile_data.add_event("DEX_LOADING", event)
                 return True
@@ -233,7 +236,8 @@ class ProfileCollector:
                             formatted = self.formatter.format_event(event)
                             if formatted:
                                 print(formatted)
-                                logger.info(f"[DEX_LOADING] {formatted.replace(chr(10), ' | ')}")
+                                clean_formatted = strip_ansi_codes(formatted)
+                                logger.info(f"[DEX_LOADING] {clean_formatted.replace(chr(10), ' | ')}")
 
                     # Add to profile data
                     self.profile_data.add_event("DEX_LOADING", event or self._create_generic_event("DEX_LOADING", content, timestamp))
@@ -267,8 +271,9 @@ class ProfileCollector:
             formatted = self.formatter.format_event(event)
             if formatted:
                 print(formatted)
-                # Also log to file handler if available
-                logger.info(formatted.replace('\n', ' | '))
+                # Strip ANSI codes for clean log file output
+                clean_formatted = strip_ansi_codes(formatted)
+                logger.info(clean_formatted.replace('\n', ' | '))
         
         return True
     
