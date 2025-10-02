@@ -59,20 +59,20 @@ class FileSystemEvent(Event):
     
     def get_event_data(self) -> Dict[str, Any]:
         data = {'file_path': self.file_path}
-        
+
         # Only include non-None values
+        # NOTE: hexdump_display is excluded - it's only for console display and contains ANSI codes
         optional_fields = [
             'operation', 'buffer_size', 'offset', 'length', 'data_hex',
             'plaintext', 'file_type', 'is_large_data', 'fd', 'parent_path',
-            'child_path', 'stream_type', 'bytes_read', 'bytes_written',
-            'hexdump_display'
+            'child_path', 'stream_type', 'bytes_read', 'bytes_written'
         ]
-        
+
         for field in optional_fields:
             value = getattr(self, field)
             if value is not None:
                 data[field] = value
-                
+
         return data
 
 
