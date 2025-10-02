@@ -215,20 +215,23 @@ function hook_filesystem_accesses() {
             }
 
             var result = FileInputStream.read[1].call(this, a0);
-            var b = Java.array('byte', a0);
 
-            if (!shouldSkipFile(fname)) {
+            if (!shouldSkipFile(fname) && result > 0) {
                 // Determine content type for proper processing
                 const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
                 const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
-                
+
+                // Only capture actual bytes read, not the entire buffer
+                const bytesArray = Java.array('byte', a0);
+                const actualBytes = bytesArray.slice(0, result);
+
                 createFileSystemEvent("file.read", {
                     operation: "FileInputStream.read",
                     variant: 1,
                     file_path: fname,
                     buffer_size: a0.length,
                     bytes_read: result,
-                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(b) : null,
+                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(actualBytes) : null,
                     should_dump_ascii: shouldDumpAscii,
                     should_dump_hex: shouldDumpHex,
                     method: "java.io.FileInputStream.read(byte[])"
@@ -250,13 +253,16 @@ function hook_filesystem_accesses() {
             }
 
             var result = FileInputStream.read[2].call(this, a0, a1, a2);
-            var b = Java.array('byte', a0);
 
-            if (!shouldSkipFile(fname)) {
+            if (!shouldSkipFile(fname) && result > 0) {
                 // Determine content type for proper processing
                 const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
                 const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
-                
+
+                // Only capture actual bytes read (from offset a1, length result), not the entire buffer
+                const bytesArray = Java.array('byte', a0);
+                const actualBytes = bytesArray.slice(a1, a1 + result);
+
                 createFileSystemEvent("file.read", {
                     operation: "FileInputStream.read",
                     variant: 2,
@@ -265,7 +271,7 @@ function hook_filesystem_accesses() {
                     offset: a1,
                     length: a2,
                     bytes_read: result,
-                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(b) : null,
+                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(actualBytes) : null,
                     should_dump_ascii: shouldDumpAscii,
                     should_dump_hex: shouldDumpHex,
                     method: "java.io.FileInputStream.read(byte[], int, int)"
@@ -296,11 +302,15 @@ function hook_filesystem_accesses() {
                 const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
                 const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
                 const isLargeData = a2 > CONFIG.max_output_length;
-                
+
                 // Special handling for different file types
                 const isApkDexJar = fname.endsWith(".apk") || fname.endsWith(".dex") || fname.endsWith(".jar");
                 const isXmlFile = fname.endsWith(".xml");
-                
+
+                // Only capture actual bytes written (from offset a1, length a2), not the entire buffer
+                const bytesArray = Java.array('byte', a0);
+                const actualBytes = bytesArray.slice(a1, a1 + a2);
+
                 createFileSystemEvent("file.write", {
                     operation: "FileOutputStream.write",
                     variant: 2,
@@ -308,7 +318,7 @@ function hook_filesystem_accesses() {
                     buffer_size: a0.length,
                     offset: a1,
                     length: a2,
-                    data_hex: (shouldDumpHex || shouldDumpAscii || isApkDexJar || isXmlFile) ? bytesToHexSafe(a0) : null,
+                    data_hex: (shouldDumpHex || shouldDumpAscii || isApkDexJar || isXmlFile) ? bytesToHexSafe(actualBytes) : null,
                     should_dump_ascii: shouldDumpAscii,
                     should_dump_hex: shouldDumpHex,
                     is_large_data: isLargeData,
