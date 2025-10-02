@@ -107,12 +107,14 @@ class ProfileCollector:
 
         if message_type == "console_dev":
             if self.verbose_mode and len(content) > 3:
-                print(f"[***] {content}")
                 logger.debug(f"[console_dev] {content}")
+                if self.output_format == "CMD":
+                    print(f"[***] {content}")
         elif message_type == "console":
             if content != "Unknown":
-                print(f"[***] {content}")
                 logger.info(f"[console] {content}")
+                if self.output_format == "CMD":
+                    print(f"[***] {content}")
     
     def _handle_custom_script_message(self, content, timestamp: str) -> bool:
         """Handle custom script messages"""
@@ -190,7 +192,7 @@ class ProfileCollector:
                             if formatted:
                                 print(formatted)
                                 clean_formatted = strip_ansi_codes(formatted)
-                                logger.info(f"[DEX_LOADING] {clean_formatted.replace(chr(10), ' | ')}")
+                                logger.info(f"[DEX_LOADING] {clean_formatted}")
                         # Add to profile data
                         self.profile_data.add_event("DEX_LOADING", event)
                 return True
@@ -213,7 +215,7 @@ class ProfileCollector:
                             if formatted:
                                 print(formatted)
                                 clean_formatted = strip_ansi_codes(formatted)
-                                logger.info(f"[DEX_LOADING] {clean_formatted.replace(chr(10), ' | ')}")
+                                logger.info(f"[DEX_LOADING] {clean_formatted}")
                         # Add to profile data
                         self.profile_data.add_event("DEX_LOADING", event)
                 return True
@@ -237,7 +239,7 @@ class ProfileCollector:
                             if formatted:
                                 print(formatted)
                                 clean_formatted = strip_ansi_codes(formatted)
-                                logger.info(f"[DEX_LOADING] {clean_formatted.replace(chr(10), ' | ')}")
+                                logger.info(f"[DEX_LOADING] {clean_formatted}")
 
                     # Add to profile data
                     self.profile_data.add_event("DEX_LOADING", event or self._create_generic_event("DEX_LOADING", content, timestamp))
@@ -271,9 +273,9 @@ class ProfileCollector:
             formatted = self.formatter.format_event(event)
             if formatted:
                 print(formatted)
-                # Strip ANSI codes for clean log file output
+                # Strip ANSI codes for clean log file output and preserve newlines
                 clean_formatted = strip_ansi_codes(formatted)
-                logger.info(clean_formatted.replace('\n', ' | '))
+                logger.info(clean_formatted)
         
         return True
     
@@ -325,31 +327,31 @@ class ProfileCollector:
         # Check if already downloaded
         if self.orig_file_location in self.downloaded_origins:
             previously_downloaded = self.downloaded_origins[self.orig_file_location]
+            msg = f"[*] File '{file_name}' has already been dumped as {previously_downloaded}"
+            logger.info(msg)
             if self.output_format == "CMD":
-                msg = f"[*] File '{file_name}' has already been dumped as {previously_downloaded}"
                 print(msg)
-                logger.info(msg)
             return
 
         # Determine if benign or malicious
         if is_benign_dump(self.orig_file_location):
             dump_path = f"{self.benign_path}/{file_name}"
             pull_file_from_device(file_path, dump_path)
+            msg = f"[*] Dumped benign DEX to: {dump_path}"
+            logger.info(msg)
             if self.output_format == "CMD":
-                msg = f"[*] Dumped benign DEX to: {dump_path}"
                 print(f"{Fore.GREEN}{msg}")
-                logger.info(msg)
         else:
+            msg = "[*] Unpacking detected!"
+            logger.warning(msg)
             if self.output_format == "CMD":
-                msg = "[*] Unpacking detected!"
                 print(msg)
-                logger.warning(msg)
             dump_path = f"{self.malicious_path}/{file_name}"
             pull_file_from_device(file_path, dump_path)
+            msg = f"[*] Dumped DEX payload to: {dump_path}"
+            logger.warning(msg)
             if self.output_format == "CMD":
-                msg = f"[*] Dumped DEX payload to: {dump_path}"
                 print(f"{Fore.RED}{msg}")
-                logger.warning(msg)
         
         # Record the download
         self.downloaded_origins[self.orig_file_location] = file_name
