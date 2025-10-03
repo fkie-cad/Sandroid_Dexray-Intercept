@@ -26,34 +26,46 @@ class ProfileCollector:
     def __init__(self, output_format: str = "CMD", verbose_mode: bool = False,
                  enable_stacktrace: bool = False, path_filters: Optional[List[str]] = None,
                  base_path: Optional[str] = None):
+        # Validate and normalize output format
+        # Supported modes: "CMD" (terminal only), "JSON" (silent), "DUAL" (terminal + JSON)
+        valid_formats = ["CMD", "JSON", "DUAL"]
+        if output_format not in valid_formats:
+            logger.warning(f"Invalid output_format '{output_format}', defaulting to 'CMD'")
+            output_format = "CMD"
+
         self.output_format = output_format
         self.verbose_mode = verbose_mode
         self.enable_stacktrace = enable_stacktrace
         self.path_filters = path_filters or []
-        
+
         # Profile data storage
         self.profile_data = ProfileData()
-        
+
         # DEX unpacking tracking
         self.dex_list = []
         self.downloaded_origins = {}
         self.orig_file_location = ""
-        
+
         # Output control
         self.skip_output = False
         self.startup = True
         self.startup_unlink = True
-        
+
         # Setup paths for DEX dumps
         from ..utils.android_utils import create_unpacking_folder
         self.benign_path, self.malicious_path = create_unpacking_folder(base_path)
-        
-        # Get formatter
+
+        # Get formatter (use CMD formatter for DUAL mode to get terminal output)
+        formatter_mode = output_format if output_format != "DUAL" else "CMD"
         self.formatter = formatter_factory.get_formatter(
-            output_format, 
+            formatter_mode,
             verbose_mode=verbose_mode
         )
-    
+
+    def _should_print_to_terminal(self) -> bool:
+        """Check if events should be printed to terminal (CMD or DUAL mode)"""
+        return self.output_format in ["CMD", "DUAL"]
+
     def process_frida_message(self, message: Dict[str, Any], data: Any = None) -> bool:
         """Process a message from Frida script"""
         try:
@@ -108,12 +120,12 @@ class ProfileCollector:
         if message_type == "console_dev":
             if self.verbose_mode and len(content) > 3:
                 logger.debug(f"[console_dev] {content}")
-                if self.output_format == "CMD":
+                if self._should_print_to_terminal():
                     print(f"[***] {content}")
         elif message_type == "console":
             if content != "Unknown":
                 logger.info(f"[console] {content}")
-                if self.output_format == "CMD":
+                if self._should_print_to_terminal():
                     print(f"[***] {content}")
     
     def _handle_custom_script_message(self, content, timestamp: str) -> bool:
@@ -128,11 +140,11 @@ class ProfileCollector:
             
             # Add to profile data
             self.profile_data.add_event("CUSTOM_SCRIPT", event)
-            
-            # Display for CMD output with special formatting
-            if self.output_format == "CMD":
+
+            # Display for CMD/DUAL output with special formatting
+            if self._should_print_to_terminal():
                 print(f"[CUSTOM] {script_name}: {message_content}")
-            
+
             return True
             
         except Exception as e:
@@ -183,7 +195,7 @@ class ProfileCollector:
                     self._dump_dex_file(file_path, timestamp)
 
                 # Parse and display event
-                if self.output_format == "CMD":
+                if self._should_print_to_terminal():
                     parser = parser_factory.get_parser("DEX_LOADING")
                     if parser:
                         event = parser.parse(content, timestamp)
@@ -206,7 +218,7 @@ class ProfileCollector:
                     self.orig_file_location = data['file_path']
 
                 # Parse and display
-                if self.output_format == "CMD":
+                if self._should_print_to_terminal():
                     parser = parser_factory.get_parser("DEX_LOADING")
                     if parser:
                         event = parser.parse(content, timestamp)
@@ -229,7 +241,7 @@ class ProfileCollector:
                 return True
             else:
                 # Regular DEX loading event (old format)
-                if self.output_format == "CMD":
+                if self._should_print_to_terminal():
                     # Parse and display
                     parser = parser_factory.get_parser("DEX_LOADING")
                     if parser:
@@ -267,16 +279,16 @@ class ProfileCollector:
         
         # Add to profile data
         self.profile_data.add_event(category, event)
-        
-        # Format and display for CMD output
-        if self.output_format == "CMD" and self.formatter:
+
+        # Format and display for CMD/DUAL output
+        if self._should_print_to_terminal() and self.formatter:
             formatted = self.formatter.format_event(event)
             if formatted:
                 print(formatted)
                 # Strip ANSI codes for clean log file output and preserve newlines
                 clean_formatted = strip_ansi_codes(formatted)
                 logger.info(clean_formatted)
-        
+
         return True
     
     def _should_skip_event(self, category: str, content: str) -> bool:
@@ -329,7 +341,7 @@ class ProfileCollector:
             previously_downloaded = self.downloaded_origins[self.orig_file_location]
             msg = f"[*] File '{file_name}' has already been dumped as {previously_downloaded}"
             logger.info(msg)
-            if self.output_format == "CMD":
+            if self._should_print_to_terminal():
                 print(msg)
             return
 
@@ -339,18 +351,18 @@ class ProfileCollector:
             pull_file_from_device(file_path, dump_path)
             msg = f"[*] Dumped benign DEX to: {dump_path}"
             logger.info(msg)
-            if self.output_format == "CMD":
+            if self._should_print_to_terminal():
                 print(f"{Fore.GREEN}{msg}")
         else:
             msg = "[*] Unpacking detected!"
             logger.warning(msg)
-            if self.output_format == "CMD":
+            if self._should_print_to_terminal():
                 print(msg)
             dump_path = f"{self.malicious_path}/{file_name}"
             pull_file_from_device(file_path, dump_path)
             msg = f"[*] Dumped DEX payload to: {dump_path}"
             logger.warning(msg)
-            if self.output_format == "CMD":
+            if self._should_print_to_terminal():
                 print(f"{Fore.RED}{msg}")
         
         # Record the download
