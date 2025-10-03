@@ -9,6 +9,49 @@ from ..utils.hexdump import hex_to_string_safe, hexdump
 from ..utils.string_utils import escape_special_characters, unescape_special_characters
 
 
+def truncate_hex_to_actual_data(hex_string: str, offset: int = 0, length: int = 0, bytes_read: int = 0) -> str:
+    """
+    Truncate hex string to only contain actual data, removing trailing buffer zeros.
+
+    Args:
+        hex_string: Full buffer hex string (may contain trailing zeros)
+        offset: Starting offset in the buffer (for read/write with offset)
+        length: Actual length of data written/read
+        bytes_read: For reads, the actual number of bytes read (overrides length)
+
+    Returns:
+        Truncated hex string containing only actual data
+    """
+    if not hex_string:
+        return hex_string
+
+    # Use bytes_read if available (for reads), otherwise use length (for writes)
+    actual_length = bytes_read if bytes_read > 0 else length
+
+    if actual_length > 0:
+        # Each byte = 2 hex chars
+        start_pos = offset * 2
+        end_pos = start_pos + (actual_length * 2)
+        return hex_string[start_pos:end_pos]
+
+    # Fallback: Detect and remove trailing zeros
+    # Find the last occurrence of non-zero bytes
+    # A full line of zeros in hex is 32 chars of "00" = "00000000000000000000000000000000"
+
+    # Remove trailing zeros by finding last non-zero byte
+    hex_stripped = hex_string.rstrip('0')
+
+    # If we stripped too much (odd length), add back one zero
+    if len(hex_stripped) % 2 != 0:
+        hex_stripped += '0'
+
+    # If everything was zeros, return at least something
+    if not hex_stripped:
+        return hex_string[:32] if len(hex_string) >= 32 else hex_string
+
+    return hex_stripped
+
+
 class FileSystemParser(BaseParser):
     """Parser for file system events"""
     
@@ -48,23 +91,36 @@ class FileSystemParser(BaseParser):
         # Handle hexdump for display if data_hex is present
         if data.get('data_hex'):
             hex_data = data['data_hex']
-            
+
+            # IMPORTANT: Truncate hex to actual data (remove trailing buffer zeros)
+            # TypeScript sends full buffer to avoid slice() performance issues
+            # We truncate here using offset/length/bytes_read fields
+            offset = data.get('offset', 0)
+            length = data.get('length', 0)
+            bytes_read = data.get('bytes_read', 0)
+
+            # Truncate to actual data
+            hex_data_truncated = truncate_hex_to_actual_data(hex_data, offset, length, bytes_read)
+
+            # Store the truncated version
+            event.data_hex = hex_data_truncated
+
             # Add plaintext conversion for ASCII-compatible data
             if data.get('should_dump_ascii', False):
-                event.plaintext = hex_to_string_safe(hex_data)
-            
-            # Add formatted hexdump for display
+                event.plaintext = hex_to_string_safe(hex_data_truncated)
+
+            # Add formatted hexdump for display (console only, not saved to JSON)
             if data.get('should_dump_hex', False) or data.get('file_type') in ['binary', 'xml']:
-                event.hexdump_display = hexdump(hex_data, header=True, ansi=True)
-            
+                event.hexdump_display = hexdump(hex_data_truncated, header=True, ansi=True)
+
             # Handle truncation if needed
             if data.get('is_large_data', False):
                 max_len = data.get('max_display_length', 1024)
-                if len(hex_data) > max_len * 2:  # hex string is 2x byte length
+                if len(hex_data_truncated) > max_len * 2:  # hex string is 2x byte length
                     event.add_metadata('truncated', True)
-                    event.add_metadata('original_length', len(hex_data) // 2)
+                    event.add_metadata('original_length', len(hex_data_truncated) // 2)
                     event.add_metadata('displayed_length', max_len)
-        
+
         return event
     
     def parse_legacy_data(self, raw_data: str, timestamp: str) -> Optional[FileSystemEvent]:

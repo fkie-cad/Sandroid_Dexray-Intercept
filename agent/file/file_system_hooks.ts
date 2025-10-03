@@ -7,6 +7,12 @@ import { Java } from "../utils/javalib.js"
 
 const PROFILE_HOOKING_TYPE: string = "FILE_SYSTEM"
 
+// ============================================================================
+// IMPORTANT: We send the full buffer hex from TypeScript (no slicing here)
+// because slice() on Java arrays in Frida causes app freezing/crashes.
+// The Python side will truncate the hex string based on the length field.
+// ============================================================================
+
 var TraceFD = {};
 var TraceFS = {};
 var TraceFile = {};
@@ -215,23 +221,22 @@ function hook_filesystem_accesses() {
             }
 
             var result = FileInputStream.read[1].call(this, a0);
+            var b = Java.array('byte', a0);
 
-            if (!shouldSkipFile(fname) && result > 0) {
+            if (!shouldSkipFile(fname)) {
                 // Determine content type for proper processing
                 const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
                 const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
 
-                // Only capture actual bytes read, not the entire buffer
-                const bytesArray = Java.array('byte', a0);
-                const actualBytes = bytesArray.slice(0, result);
-
+                // Send full buffer hex (NO slicing here - Python will truncate using bytes_read)
+                // We avoid slice() because it causes app freezing on Java arrays in Frida
                 createFileSystemEvent("file.read", {
                     operation: "FileInputStream.read",
                     variant: 1,
                     file_path: fname,
                     buffer_size: a0.length,
                     bytes_read: result,
-                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(actualBytes) : null,
+                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(b) : null,
                     should_dump_ascii: shouldDumpAscii,
                     should_dump_hex: shouldDumpHex,
                     method: "java.io.FileInputStream.read(byte[])"
@@ -253,16 +258,15 @@ function hook_filesystem_accesses() {
             }
 
             var result = FileInputStream.read[2].call(this, a0, a1, a2);
+            var b = Java.array('byte', a0);
 
-            if (!shouldSkipFile(fname) && result > 0) {
+            if (!shouldSkipFile(fname)) {
                 // Determine content type for proper processing
                 const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
                 const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
 
-                // Only capture actual bytes read (from offset a1, length result), not the entire buffer
-                const bytesArray = Java.array('byte', a0);
-                const actualBytes = bytesArray.slice(a1, a1 + result);
-
+                // Send full buffer hex (NO slicing here - Python will truncate using offset+bytes_read)
+                // We avoid slice() because it causes app freezing on Java arrays in Frida
                 createFileSystemEvent("file.read", {
                     operation: "FileInputStream.read",
                     variant: 2,
@@ -271,7 +275,7 @@ function hook_filesystem_accesses() {
                     offset: a1,
                     length: a2,
                     bytes_read: result,
-                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(actualBytes) : null,
+                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(b) : null,
                     should_dump_ascii: shouldDumpAscii,
                     should_dump_hex: shouldDumpHex,
                     method: "java.io.FileInputStream.read(byte[], int, int)"
@@ -307,10 +311,8 @@ function hook_filesystem_accesses() {
                 const isApkDexJar = fname.endsWith(".apk") || fname.endsWith(".dex") || fname.endsWith(".jar");
                 const isXmlFile = fname.endsWith(".xml");
 
-                // Only capture actual bytes written (from offset a1, length a2), not the entire buffer
-                const bytesArray = Java.array('byte', a0);
-                const actualBytes = bytesArray.slice(a1, a1 + a2);
-
+                // Send full buffer hex (NO slicing here - Python will truncate using offset+length)
+                // We avoid slice() because it causes app freezing on Java arrays in Frida
                 createFileSystemEvent("file.write", {
                     operation: "FileOutputStream.write",
                     variant: 2,
@@ -318,7 +320,7 @@ function hook_filesystem_accesses() {
                     buffer_size: a0.length,
                     offset: a1,
                     length: a2,
-                    data_hex: (shouldDumpHex || shouldDumpAscii || isApkDexJar || isXmlFile) ? bytesToHexSafe(actualBytes) : null,
+                    data_hex: (shouldDumpHex || shouldDumpAscii || isApkDexJar || isXmlFile) ? bytesToHexSafe(a0) : null,
                     should_dump_ascii: shouldDumpAscii,
                     should_dump_hex: shouldDumpHex,
                     is_large_data: isLargeData,
