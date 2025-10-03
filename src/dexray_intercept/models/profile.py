@@ -64,32 +64,41 @@ class ProfileData:
         return json.dumps(self.to_dict(), indent=indent, default=self._json_serializer)
     
     def write_to_file(self, filename: str):
-        """Write profile data to JSON file"""
+        """Write profile data to JSON file
+
+        Args:
+            filename: Either a full path (e.g. '/path/to/profile_app_2025-10-03_12-00-00.json')
+                     or just an app name (e.g. 'com.example.app') for standalone mode
+
+        Returns:
+            str: Path to the written file
+        """
+        import os
+
         try:
-            current_time = datetime.now()
-            timestamp = current_time.strftime("%Y-%m-%d_%H-%M-%S")
-            
-            # Ensure filename is safe
-            base_filename = filename.replace(" ", "_")  # Replace spaces with underscores
-            
-            # Remove .json extension if present, we'll add it back at the end
-            if base_filename.endswith('.json'):
-                base_filename = base_filename[:-5]  # Remove '.json'
-            
-            safe_filename = f"profile_{base_filename}_{timestamp}.json"
-            
+            # Check if filename is a full path or just an app name
+            if os.path.sep in filename or filename.endswith('.json'):
+                # Full path provided (from Sandroid integration) - use as-is
+                safe_filename = filename
+            else:
+                # Just app name provided (standalone mode) - construct filename
+                current_time = datetime.now()
+                timestamp = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+                base_filename = filename.replace(" ", "_")
+                safe_filename = f"profile_{base_filename}_{timestamp}.json"
+
+            # Write JSON data
             with open(safe_filename, "w") as file:
                 file.write(self.to_json())
-            
+
             return safe_filename
-            
+
         except Exception as e:
-            print(f"[-] Error writing profile to file: {e}")
-            # Write debug file
-            debug_file = f"{filename}_debug.txt"
-            with open(debug_file, "w") as file:
-                file.write(str(self.to_dict()))
-            return debug_file
+            # Log the error but still raise it - don't silently write debug file
+            import logging
+            logger = logging.getLogger('dexray_intercept')
+            logger.error(f"Error writing profile to file {filename}: {e}")
+            raise  # Re-raise the exception so caller knows it failed
     
     def _json_serializer(self, obj):
         """Custom JSON serializer for special objects"""

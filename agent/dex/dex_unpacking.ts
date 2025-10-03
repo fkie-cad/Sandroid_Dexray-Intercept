@@ -206,15 +206,21 @@ function checkMagic(dataAddr: NativePointer) { // Throws access violation errors
 
 function dumpDexToFile(begin: NativePointer, dexInfo: any, processName: string, location: string, hooked_fct: string): void {
     const dexSize = begin.add(dexInfo.sizeOffset).readInt();
+
+    devlog(`[DEX] Dumping ${dexInfo.ext} file: ${dexSize} bytes from ${location || 'unknown location'}`);
+
     let dexPath = "/data/data/" + processName + "/" + dexSize + "." + dexInfo.ext;
     let dexFile: File;
-    
+
     try {
         dexFile = new File(dexPath, "wb");
+        devlog(`[DEX] Created file: ${dexPath}`);
     } catch(e) {
         const g_package_name = get_package_name();
         dexPath = "/data/data/" + g_package_name + "/" + dexSize + "." + dexInfo.ext;
-        
+
+        devlog(`[DEX] Retry with package name: ${g_package_name}, path: ${dexPath}`);
+
         // Log file creation attempt
         if(g_package_name.length > 4) {
             createDEXEvent("dex.unpacking.file_creation", {
@@ -232,6 +238,8 @@ function dumpDexToFile(begin: NativePointer, dexInfo: any, processName: string, 
     dexFile.flush();
     dexFile.close();
 
+    devlog(`[DEX] File written successfully: ${dexPath}`);
+
     // Send structured unpacking event
     createDEXEvent("dex.unpacking.detected", {
         hooked_function: hooked_fct,
@@ -242,6 +250,8 @@ function dumpDexToFile(begin: NativePointer, dexInfo: any, processName: string, 
         dumped_path: dexPath,
         file_type: dexInfo.ext
     });
+
+    devlog(`[DEX] Unpacking event sent for ${dexInfo.magicString} (${dexSize} bytes)`);
 }
 
 function dumpDex(moduleFuncName, g_processName, g_AndroidOSVersion){
@@ -304,6 +314,8 @@ function dumpDex(moduleFuncName, g_processName, g_AndroidOSVersion){
             dumpDexToFile(begin, dexInfo, g_processName, location, hooked_fct);
         },
     });
+
+    devlog(`[DEX] Interceptor attached to ${hooked_fct} at ${hookFunction}`);
 }
 
 
@@ -311,23 +323,36 @@ function dumpDex(moduleFuncName, g_processName, g_AndroidOSVersion){
 
 function install_dex_memory_hooks(): void {
     devlog("Installing DEX memory-based unpacking hooks");
-    
+
     const g_AndroidOSVersion: number = getAndroidVersion();
+    devlog(`[DEX] Android version: ${g_AndroidOSVersion}`);
+
     const g_moduleFunctionName: string = getFunctionName(g_AndroidOSVersion);
+    devlog(`[DEX] Target function name: ${g_moduleFunctionName || 'NOT FOUND'}`);
+
     const g_processName: string = getg_processName();
+    devlog(`[DEX] Process name: ${g_processName || 'NOT FOUND'}`);
 
     if (g_moduleFunctionName !== "" && g_processName !== "") {
         dumpDex(g_moduleFunctionName, g_processName, g_AndroidOSVersion);
         dex_api_unpacking(g_processName);
+        devlog("[DEX] Memory hooks successfully installed");
+    } else {
+        devlog(`[DEX] ERROR: Failed to install memory hooks - missing function name or process name`);
     }
 }
 
 function install_dex_classloader_hooks(): void {
     devlog("Installing DEX class loader hooks");
-    
+
     const g_processName: string = getg_processName();
+    devlog(`[DEX] Process name for classloader hooks: ${g_processName || 'NOT FOUND'}`);
+
     if (g_processName !== "") {
         dex_api_unpacking(g_processName);
+        devlog("[DEX] ClassLoader hooks successfully installed");
+    } else {
+        devlog("[DEX] ERROR: Failed to install classloader hooks - no process name");
     }
 }
 
