@@ -67,7 +67,10 @@ class ProfileCollector:
         self.event_logger = EventLogger()
 
         # Configure terminal output based on mode
-        if self._should_print_to_terminal():
+        # Only set up event_logger's terminal handler in standalone mode
+        # In integrated mode (Sandroid with base_path), use logger which goes through Sandroid's RichHandler
+        self.integrated_mode = base_path is not None
+        if self._should_print_to_terminal() and not self.integrated_mode:
             self.event_logger.setup_terminal_output(True)
 
     def _should_print_to_terminal(self) -> bool:
@@ -128,13 +131,20 @@ class ProfileCollector:
         if message_type == "console_dev":
             # Show devlog messages when verbose mode is enabled
             if self.verbose_mode and len(content) > 3:
-                logger.debug(f"[console_dev] {content}")
-                if self._should_print_to_terminal():
-                    self.event_logger.event(f"[DEBUG] {content}")
+                # In integrated mode (Sandroid), use logger.info to go through RichHandler
+                # In standalone, use event_logger for clean output
+                if self.integrated_mode:
+                    logger.info(f"[DEBUG] {content}")
+                else:
+                    logger.debug(f"[console_dev] {content}")
+                    if self._should_print_to_terminal():
+                        self.event_logger.event(f"[DEBUG] {content}")
         elif message_type == "console":
             if content != "Unknown":
+                # In integrated mode, only use logger (goes through Sandroid's RichHandler)
+                # In standalone, use both logger (file) and event_logger (terminal)
                 logger.info(f"[console] {content}")
-                if self._should_print_to_terminal():
+                if self._should_print_to_terminal() and not self.integrated_mode:
                     self.event_logger.event(content)
     
     def _handle_custom_script_message(self, content, timestamp: str) -> bool:
@@ -193,7 +203,8 @@ class ProfileCollector:
             event_type = data.get('event_type', '')
 
             if self.verbose_mode:
-                logger.debug(f"[DEX] Received DEX_LOADING message: event_type='{event_type}'")
+                log_func = logger.info if self.integrated_mode else logger.debug
+                log_func(f"[DEX] Received DEX_LOADING message: event_type='{event_type}'")
 
             # Handle new JSON format events
             if event_type == 'dex.unpacking.detected':
@@ -205,10 +216,12 @@ class ProfileCollector:
                 file_path = data.get('dumped_path', '')
                 if file_path:
                     if self.verbose_mode:
-                        logger.debug(f"[DEX] Calling _dump_dex_file with path: {file_path}")
+                        log_func = logger.info if self.integrated_mode else logger.debug
+                        log_func(f"[DEX] Calling _dump_dex_file with path: {file_path}")
                     self._dump_dex_file(file_path, timestamp)
                 elif self.verbose_mode:
-                    logger.debug(f"[DEX] WARNING: No dumped_path in dex.unpacking.detected event")
+                    log_func = logger.info if self.integrated_mode else logger.debug
+                    log_func(f"[DEX] WARNING: No dumped_path in dex.unpacking.detected event")
 
                 # Parse and display event
                 if self._should_print_to_terminal():
@@ -251,19 +264,22 @@ class ProfileCollector:
         except (json.JSONDecodeError, ValueError):
             # Legacy string format handling
             if self.verbose_mode:
-                logger.debug(f"[DEX] Processing legacy string format DEX event")
+                log_func = logger.info if self.integrated_mode else logger.debug
+                log_func(f"[DEX] Processing legacy string format DEX event")
 
             if "dumped" in content:
                 # Handle file dumping (old format)
                 file_path = getFilePath(content)
                 if self.verbose_mode:
-                    logger.debug(f"[DEX] Legacy format dump detected, file_path: {file_path}")
+                    log_func = logger.info if self.integrated_mode else logger.debug
+                    log_func(f"[DEX] Legacy format dump detected, file_path: {file_path}")
                 self._dump_dex_file(file_path, timestamp)
                 return True
             else:
                 # Regular DEX loading event (old format)
                 if self.verbose_mode:
-                    logger.debug(f"[DEX] Legacy format regular DEX loading event")
+                    log_func = logger.info if self.integrated_mode else logger.debug
+                    log_func(f"[DEX] Legacy format regular DEX loading event")
                 if self._should_print_to_terminal():
                     # Parse and display
                     parser = parser_factory.get_parser("DEX_LOADING")
@@ -307,10 +323,17 @@ class ProfileCollector:
         if self._should_print_to_terminal() and self.formatter:
             formatted = self.formatter.format_event(event)
             if formatted:
-                self.event_logger.event(formatted)
-                # Strip ANSI codes for clean log file output and preserve newlines
-                clean_formatted = strip_ansi_codes(formatted)
-                logger.info(clean_formatted)
+                # In integrated mode (Sandroid): only use logger (goes through RichHandler)
+                # In standalone: use event_logger for terminal, logger for file
+                if self.integrated_mode:
+                    # Strip ANSI codes for Sandroid's logger
+                    clean_formatted = strip_ansi_codes(formatted)
+                    logger.info(clean_formatted)
+                else:
+                    self.event_logger.event(formatted)
+                    # Also log to file
+                    clean_formatted = strip_ansi_codes(formatted)
+                    logger.info(clean_formatted)
 
         return True
     
@@ -356,11 +379,14 @@ class ProfileCollector:
         """Handle DEX file dumping"""
         if not file_path:
             if self.verbose_mode:
-                logger.debug("[DEX] _dump_dex_file called with empty file_path")
+                log_func = logger.info if self.integrated_mode else logger.debug
+                log_func("[DEX] _dump_dex_file called with empty file_path")
             return
 
         if self.verbose_mode:
-            logger.debug(f"[DEX] _dump_dex_file called: file_path={file_path}, orig_location={self.orig_file_location}")
+            # In integrated mode, use logger.info so messages appear in Sandroid
+            log_func = logger.info if self.integrated_mode else logger.debug
+            log_func(f"[DEX] _dump_dex_file called: file_path={file_path}, orig_location={self.orig_file_location}")
 
         file_name = get_filename_from_path(file_path)
 
@@ -369,56 +395,64 @@ class ProfileCollector:
             previously_downloaded = self.downloaded_origins[self.orig_file_location]
             msg = f"[*] File '{file_name}' has already been dumped as {previously_downloaded}"
             logger.info(msg)
-            if self._should_print_to_terminal():
+            if self._should_print_to_terminal() and not self.integrated_mode:
                 self.event_logger.event(msg)
             if self.verbose_mode:
-                logger.debug(f"[DEX] Skipping duplicate dump: {self.orig_file_location}")
+                log_func = logger.info if self.integrated_mode else logger.debug
+                log_func(f"[DEX] Skipping duplicate dump: {self.orig_file_location}")
             return
 
         # Determine if benign or malicious
         is_benign = is_benign_dump(self.orig_file_location)
         if self.verbose_mode:
-            logger.debug(f"[DEX] is_benign_dump({self.orig_file_location}) = {is_benign}")
+            log_func = logger.info if self.integrated_mode else logger.debug
+            log_func(f"[DEX] is_benign_dump({self.orig_file_location}) = {is_benign}")
 
         if is_benign:
             dump_path = f"{self.benign_path}/{file_name}"
             if self.verbose_mode:
-                logger.debug(f"[DEX] Pulling benign file: {file_path} -> {dump_path}")
+                log_func = logger.info if self.integrated_mode else logger.debug
+                log_func(f"[DEX] Pulling benign file: {file_path} -> {dump_path}")
             try:
                 pull_file_from_device(file_path, dump_path)
                 msg = f"[*] Dumped benign DEX to: {dump_path}"
                 logger.info(msg)
-                if self._should_print_to_terminal():
+                if self._should_print_to_terminal() and not self.integrated_mode:
                     self.event_logger.event(f"{Fore.GREEN}{msg}")
                 if self.verbose_mode:
-                    logger.debug(f"[DEX] Successfully pulled benign file")
+                    log_func = logger.info if self.integrated_mode else logger.debug
+                    log_func(f"[DEX] Successfully pulled benign file")
             except Exception as e:
                 logger.error(f"[DEX] Failed to pull benign file: {e}")
                 if self.verbose_mode:
                     import traceback
-                    logger.debug(f"[DEX] Traceback:\n{traceback.format_exc()}")
+                    log_func = logger.info if self.integrated_mode else logger.debug
+                    log_func(f"[DEX] Traceback:\n{traceback.format_exc()}")
                 raise
         else:
             msg = "[*] Unpacking detected!"
             logger.warning(msg)
-            if self._should_print_to_terminal():
+            if self._should_print_to_terminal() and not self.integrated_mode:
                 self.event_logger.event(msg)
             dump_path = f"{self.malicious_path}/{file_name}"
             if self.verbose_mode:
-                logger.debug(f"[DEX] Pulling malicious file: {file_path} -> {dump_path}")
+                log_func = logger.info if self.integrated_mode else logger.debug
+                log_func(f"[DEX] Pulling malicious file: {file_path} -> {dump_path}")
             try:
                 pull_file_from_device(file_path, dump_path)
                 msg = f"[*] Dumped DEX payload to: {dump_path}"
                 logger.warning(msg)
-                if self._should_print_to_terminal():
+                if self._should_print_to_terminal() and not self.integrated_mode:
                     self.event_logger.event(f"{Fore.RED}{msg}")
                 if self.verbose_mode:
-                    logger.debug(f"[DEX] Successfully pulled malicious file")
+                    log_func = logger.info if self.integrated_mode else logger.debug
+                    log_func(f"[DEX] Successfully pulled malicious file")
             except Exception as e:
                 logger.error(f"[DEX] Failed to pull malicious file: {e}")
                 if self.verbose_mode:
                     import traceback
-                    logger.debug(f"[DEX] Traceback:\n{traceback.format_exc()}")
+                    log_func = logger.info if self.integrated_mode else logger.debug
+                    log_func(f"[DEX] Traceback:\n{traceback.format_exc()}")
                 raise
         
         # Record the download
