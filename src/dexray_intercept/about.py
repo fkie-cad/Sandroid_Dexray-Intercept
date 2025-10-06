@@ -2,4 +2,4 @@
 # -*- coding: utf-8 -*-
 
 __author__ = "Daniel Baier, Jan-Niclas Hilgert"
-__version__ = "1.0.1.3"
+__version__ = "1.0.1.4"
