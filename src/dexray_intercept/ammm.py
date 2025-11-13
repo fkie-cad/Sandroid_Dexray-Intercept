@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import asyncio
+import os
 
 from .appProfiling import AppProfiler, FridaBasedException, setup_frida_handler
+from .services import cert_pinning
+from .services.mitmproxy_manager import MitmproxyManager
 import sys
 import time
 import frida
 import argparse
+import subprocess
 from .about import __version__
 from .about import __author__
 from AndroidFridaManager import FridaManager
@@ -29,7 +34,6 @@ def print_logo():
 ⠀⠀⠀⠀⠀⠀⣿⣿⣿⡇⠀⠀⢸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⢀⣄⠈⠛⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠈⠉⠉⠀⠀⠀⠀⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀""")
     print(f"        version: {__version__}\n")
-
 
 
 class ArgParser(argparse.ArgumentParser):
@@ -72,7 +76,8 @@ def interactive_hook_selection():
         'process': {
             'name': 'Process Hooks',
             'description': 'Native libraries, runtime, DEX unpacking',
-            'hooks': ['dex_unpacking_hooks', 'java_dex_unpacking_hooks', 'native_library_hooks', 'process_hooks', 'runtime_hooks']
+            'hooks': ['dex_unpacking_hooks', 'java_dex_unpacking_hooks', 'native_library_hooks', 'process_hooks',
+                      'runtime_hooks']
         },
         'services': {
             'name': 'Service Hooks',
@@ -123,33 +128,33 @@ def parse_hook_config(parsed_args, use_interactive=False):
     if parsed_args.hooks_all:
         # Enable all hooks
         return {hook: True for hook in [
-            'file_system_hooks', 'database_hooks', 'dex_unpacking_hooks', 
+            'file_system_hooks', 'database_hooks', 'dex_unpacking_hooks',
             'java_dex_unpacking_hooks', 'native_library_hooks', 'shared_prefs_hooks',
             'binder_hooks', 'intent_hooks', 'broadcast_hooks', 'aes_hooks',
             'encodings_hooks', 'keystore_hooks', 'web_hooks', 'socket_hooks',
             'process_hooks', 'runtime_hooks', 'bluetooth_hooks', 'camera_hooks',
             'clipboard_hooks', 'location_hooks', 'telephony_hooks', 'bypass_hooks'
         ]}
-    
+
     if parsed_args.hooks_crypto:
         hook_config.update({
             'aes_hooks': True,
             'encodings_hooks': True,
             'keystore_hooks': True
         })
-    
+
     if parsed_args.hooks_network:
         hook_config.update({
             'web_hooks': True,
             'socket_hooks': True
         })
-    
+
     if parsed_args.hooks_filesystem:
         hook_config.update({
             'file_system_hooks': True,
             'database_hooks': True
         })
-    
+
     if parsed_args.hooks_ipc:
         hook_config.update({
             'shared_prefs_hooks': True,
@@ -157,7 +162,7 @@ def parse_hook_config(parsed_args, use_interactive=False):
             'intent_hooks': True,
             'broadcast_hooks': True
         })
-    
+
     if parsed_args.hooks_process:
         hook_config.update({
             'dex_unpacking_hooks': True,
@@ -166,7 +171,7 @@ def parse_hook_config(parsed_args, use_interactive=False):
             'process_hooks': True,
             'runtime_hooks': True
         })
-    
+
     if parsed_args.hooks_services:
         hook_config.update({
             'bluetooth_hooks': True,
@@ -175,12 +180,12 @@ def parse_hook_config(parsed_args, use_interactive=False):
             'location_hooks': True,
             'telephony_hooks': True
         })
-    
+
     if parsed_args.hooks_bypass:
         hook_config.update({
             'bypass_hooks': True
         })
-    
+
     # Handle individual hook selections
     individual_hooks = {
         'enable_aes': 'aes_hooks',
@@ -206,7 +211,7 @@ def parse_hook_config(parsed_args, use_interactive=False):
         'enable_telephony': 'telephony_hooks',
         'enable_bypass': 'bypass_hooks'
     }
-    
+
     for arg_name, hook_name in individual_hooks.items():
         if getattr(parsed_args, arg_name, False):
             hook_config[hook_name] = True
@@ -226,6 +231,7 @@ def setup_frida_server():
         afm_obj.run_frida_server()
         time.sleep(15)
 
+
 def main():
     parser = ArgParser(
         add_help=False,
@@ -239,25 +245,27 @@ Examples:
   %(prog)s --enable_spawn_gating -v <App-Name/PID>
   %(prog)s --enable-fritap --enable-aes com.example.app
   %(prog)s --enable-fritap --fritap-output-dir ./logs --hooks-all com.example.app
+  %(prog)s -acp :8080: -mp 8080 -mpa mitm_addon.py --hooks-all com.example.app
 """)
 
     args = parser.add_argument_group("Arguments")
-    args.add_argument("-f", "--frida", metavar="<version>", const=True, action="store_const", 
+    args.add_argument("-f", "--frida", metavar="<version>", const=True, action="store_const",
                       help="Install and run the frida-server to the target device. By default the latest version will be installed.")
-    args.add_argument("exec", metavar="<executable/app name/pid>", 
-                      help="target app to create the runtime profile")                
+    args.add_argument("exec", metavar="<executable/app name/pid>",
+                      help="target app to create the runtime profile")
     args.add_argument("-H", "--host", metavar="<ip:port>", required=False, default="",
                       help="Attach to a process on remote frida device")
-    args.add_argument('--version', action='version',version='Dexray Intercept v{version}'.format(version=__version__))
+    args.add_argument('--version', action='version', version='Dexray Intercept v{version}'.format(version=__version__))
     args.add_argument("-s", "--spawn", required=False, action="store_const", const=True,
                       help="Spawn the executable/app instead of attaching to a running process")
     args.add_argument("-fg", "--foreground", required=False, action="store_const", const=True,
                       help="Attaching to the foreground app")
     args.add_argument("--enable_spawn_gating", required=False, action="store_const", const=True,
                       help="Catch newly spawned processes. ATTENTION: These could be unrelated to the current process!")
-    args.add_argument("-v","--verbose", required=False, action="store_const", const=True, default=False,
+    args.add_argument("-v", "--verbose", required=False, action="store_const", const=True, default=False,
                       help="Show verbose output. This could very noisy.")
-    args.add_argument("-st", "--enable-full-stacktrace", required=False, action="store_const", const=True, default=False,
+    args.add_argument("-st", "--enable-full-stacktrace", required=False, action="store_const", const=True,
+                      default=False,
                       help="Enable full stack traces for hook invocations (shows call origin in binary)")
     args.add_argument("--non-interactive", required=False, action="store_const", const=True, default=False,
                       help="Disable interactive hook selection prompt (use with caution - no hooks will be enabled without explicit flags)")
@@ -267,7 +275,13 @@ Examples:
                       help="Directory for fritap output files (default: ./fritap_output)")
     args.add_argument("--custom-script", metavar="<path>", action="append", required=False,
                       help="Load custom Frida script file(s) alongside dexray-intercept hooks (can be used multiple times)")
-    
+    args.add_argument("-mp", "--mitmproxy", metavar="<port>", required=False,
+                      help="Start mitmproxy instance on given port (default is 8080)")
+    args.add_argument("-mpa", "--mitm_proxy_addon", metavar="<path to addon>", action="append", required=False,
+                      help="Path to optional addon to be used with MitmProxy (-mp option must be set). Can be used multiple times")
+    args.add_argument("-acp", "--anti_cert_pinning", metavar="<ip:port:path_to_cert>", required=False,
+                      help="Enable for loading scripts to disable certificate pinning. Needs IP, port and certificate of proxy.\n Leave IP empty to use local machine.\n Leave path_to_cert empty to use default mitmproxy cert path\n If no port given, default of 8080 is used")
+
     # Hook selection arguments
     hooks = parser.add_argument_group("Hook Selection (all disabled by default)")
     hooks.add_argument("--hooks-all", required=False, action="store_const", const=True, default=False,
@@ -286,7 +300,7 @@ Examples:
                        help="Enable service hooks (bluetooth, camera, clipboard, location, telephony)")
     hooks.add_argument("--hooks-bypass", required=False, action="store_const", const=True, default=False,
                        help="Enable anti-analysis bypass hooks (root, frida, debugger, emulator detection)")
-    
+
     # Individual hook arguments
     hooks.add_argument("--enable-aes", action="store_true", help="Enable AES hooks")
     hooks.add_argument("--enable-keystore", action="store_true", help="Enable keystore hooks")
@@ -310,7 +324,7 @@ Examples:
     hooks.add_argument("--enable-location", action="store_true", help="Enable location hooks")
     hooks.add_argument("--enable-telephony", action="store_true", help="Enable telephony hooks")
     hooks.add_argument("--enable-bypass", action="store_true", help="Enable anti-analysis bypass hooks")
-    
+
     parsed = parser.parse_args()
     script_name = sys.argv[0]
 
@@ -334,7 +348,7 @@ Examples:
                 pid = None  # No PID management needed when fritap spawns
             elif parsed.spawn:
                 # Normal spawn mode without fritap
-                print("[*] spawning app: "+ target_process)
+                print("[*] spawning app: " + target_process)
                 try:
                     pid = device.spawn(target_process)
                     process_session = device.attach(pid)
@@ -342,7 +356,8 @@ Examples:
                     print(f"\n[-] Failed to spawn app: {str(e)}")
                     print("\nPossible solutions:")
                     print("  1. Restart frida-server on device: adb shell killall frida-server")
-                    print("  2. Check if app is installed: adb shell pm list packages | grep {0}".format(target_process))
+                    print(
+                        "  2. Check if app is installed: adb shell pm list packages | grep {0}".format(target_process))
                     print("  3. Try attach mode instead: remove -s flag and start app manually first")
                     print("  4. Check device connection: adb devices")
                     sys.exit(1)
@@ -352,7 +367,8 @@ Examples:
                     sys.exit(1)
                 except frida.ProcessNotFoundError:
                     print(f"\n[-] App not found: {target_process}")
-                    print("  Check if package is installed: adb shell pm list packages | grep {0}".format(target_process))
+                    print(
+                        "  Check if package is installed: adb shell pm list packages | grep {0}".format(target_process))
                     sys.exit(1)
                 except Exception as e:
                     print(f"\n[-] Unexpected error while spawning app: {type(e).__name__}: {str(e)}")
@@ -368,9 +384,10 @@ Examples:
 
                     target_process = target_process.identifier
 
-                print("[*] attaching to app: "+ target_process)
+                print("[*] attaching to app: " + target_process)
                 try:
-                    process_session = device.attach(int(target_process) if target_process.isnumeric() else target_process)
+                    process_session = device.attach(
+                        int(target_process) if target_process.isnumeric() else target_process)
                     pid = None  # No PID in attach mode
                 except frida.ProcessNotFoundError:
                     print(f"\n[-] Process not found: {target_process}")
@@ -398,39 +415,60 @@ Examples:
                 print(f"[*] enabled hooks: {', '.join(enabled_hooks)}")
             else:
                 print("[*] no hooks enabled - dexray-intercept will not capture events")
-            
+
             if parsed.enable_fritap:
                 print(f"[*] fritap enabled - output directory: {parsed.fritap_output_dir}")
-            
+
             if parsed.custom_script:
                 print(f"[*] custom scripts enabled: {', '.join(parsed.custom_script)}")
-            
+
             # Create AppProfiler with target and spawn mode information
             profiler = AppProfiler(
-                process_session, 
-                parsed.verbose, 
-                output_format="CMD", 
-                base_path=None, 
-                deactivate_unlink=False, 
-                hook_config=hook_config, 
-                enable_stacktrace=parsed.enable_full_stacktrace, 
-                enable_fritap=parsed.enable_fritap, 
+                process_session,
+                parsed.verbose,
+                output_format="CMD",
+                base_path=None,
+                deactivate_unlink=False,
+                hook_config=hook_config,
+                enable_stacktrace=parsed.enable_full_stacktrace,
+                enable_fritap=parsed.enable_fritap,
                 fritap_output_dir=parsed.fritap_output_dir,
                 target_name=target_process,
                 spawn_mode=parsed.spawn,
                 custom_scripts=parsed.custom_script
             )
-            
+            if parsed.mitmproxy:
+                print("[*] mitmproxy enabled")
+                mpm = MitmproxyManager(parsed.mitmproxy, parsed.mitm_proxy_addon, parsed.verbose)
+                mpm.start_mitm_proxy()
+
+            if parsed.mitm_proxy_addon and not parsed.mitmproxy:
+                print("[-] To use MitmProxy addons you have to enable mitmproxy (set -mp option)")
+                exit(2)
+
+            if parsed.anti_cert_pinning:
+                print("[*] Anti-certificate-pinning scripts enabled")
+                acpm = cert_pinning.CertPinningManager(parsed.anti_cert_pinning, parsed.verbose)
+                acpm.build_script_details()
+                frida_compile_acp = subprocess.Popen(
+                    ["frida-compile ./agent/anticertpinning/config_custom.js -o ./agent/anticertpinning/acp.js"],
+                    shell=True)
+                frida_compile_acp.wait()
+                profiler.instrumentation.custom_scripts.append("./agent/anticertpinning/acp.js")
+
+                if parsed.mitmproxy and mpm.port != str(acpm.acp_port):
+                    print(f"[+] ACP and MitmProxy both enabled, but ports are different: ACP port: {acpm.acp_port} vs. MitmProxy port: {mpm.port}") # This is no error, this should just make the user aware, and maybe help when things don't work as expected
+
             # Handle fritap spawn mode - attach to target after fritap initializes
             if parsed.spawn and parsed.enable_fritap:
                 # Start fritap first (without dexray-intercept hooks)
                 print("[*] starting fritap first")
                 profiler._start_fritap(target_process)
-                
+
                 # Wait for fritap to spawn and initialize the target
                 print("[*] waiting for fritap to spawn target...")
                 time.sleep(5)
-                
+
                 # Now attach dexray-intercept to the fritap-spawned target
                 print(f"[*] attaching dexray-intercept to fritap-spawned target: {target_process}")
                 try:
@@ -442,7 +480,7 @@ Examples:
                     print("[-] make sure fritap successfully spawned the target")
                     profiler._stop_fritap()  # Clean up fritap on failure
                     raise
-                
+
                 # Now start dexray-intercept hooks (fritap is already running)
                 print("[*] starting dexray-intercept hooks")
                 profiler.start_profiling(target_process)
@@ -450,19 +488,18 @@ Examples:
                 # Normal profiling start (or fritap attach mode)
                 profiler.start_profiling(target_process)
 
-
-            #handle_instrumentation(process_session, parsed.verbose)
+            # handle_instrumentation(process_session, parsed.verbose)
             print("[*] press Ctrl+C to stop the profiling ...\n")
         else:
             print("\n[-] missing argument.")
             print(f"[-] Invoke it with the target process to hook:\n    {script_name} <excutable/app name/pid>")
             exit(2)
-        
+
         # Only resume if we spawned the process ourselves (not fritap)
         if parsed.spawn and not parsed.enable_fritap and pid is not None:
             device.resume(pid)
-            time.sleep(1) # without it Java.perform silently fails
-        
+            time.sleep(1)  # without it Java.perform silently fails
+
         # Wait for user input with enhanced handling for fritap coordination
         try:
             if parsed.enable_fritap:
@@ -485,24 +522,28 @@ Examples:
         print(f"[-] ProcessNotFoundError: {pe}")
         exit(2)
     except KeyboardInterrupt:
-        print("\\n[*] interrupt received - stopping profiling")
+        print("\n[*] interrupt received - stopping profiling")
         if isinstance(profiler, AppProfiler):
             # Enhanced shutdown with fritap coordination
             if parsed.enable_fritap:
                 print("[*] sending interrupt to fritap and waiting for it to finish")
                 profiler.send_interrupt_to_fritap()
-                
+
                 # Wait a bit for fritap to receive and process the interrupt
                 print("[*] waiting for fritap to complete capture...")
                 if not profiler.wait_for_fritap(timeout=15):
                     print("[-] fritap did not finish within timeout, forcing shutdown")
                 else:
                     print("[*] fritap finished successfully")
-            
+
+            if parsed.mitmproxy:
+                mpm.stop_mitm_proxy()
+
             # Stop dexray-intercept profiling
             profiler.stop_profiling()
             profiler.write_profiling_log(target_process)
         pass
+
 
 if __name__ == "__main__":
     main()
