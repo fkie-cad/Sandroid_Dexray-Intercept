@@ -1,10 +1,16 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Java } from "../utils/javalib.js"
 import { Where, bytesToHex } from "../utils/misc.js"
+import { hook_config } from "../hooking_profile_loader.js"
 
 const PROFILE_HOOKING_TYPE: string = "BLUETOOTH"
+const HOOK_NAME = 'bluetooth_hooks'
 
 function createBluetoothEvent(eventType: string, data: any): void {
+    // Check if hook is enabled at runtime
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
     const event = {
         event_type: eventType,
         timestamp: Date.now(),

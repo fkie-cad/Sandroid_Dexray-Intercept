@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from .appProfiling import AppProfiler, FridaBasedException, setup_frida_handler
+from .services.instrumentation import list_devices
 import sys
 import time
 import frida
@@ -228,7 +229,7 @@ def setup_frida_server():
 
 def main():
     parser = ArgParser(
-        add_help=False,
+        add_help=True,
         description="The Dexray Intercept is part of the dynamic Sandbox Sandroid. Its purpose is to create runtime profiles to track the behavior of an Android application.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         allow_abbrev=False,
@@ -242,12 +243,16 @@ Examples:
 """)
 
     args = parser.add_argument_group("Arguments")
-    args.add_argument("-f", "--frida", metavar="<version>", const=True, action="store_const", 
+    args.add_argument("-f", "--frida", metavar="<version>", const=True, action="store_const",
                       help="Install and run the frida-server to the target device. By default the latest version will be installed.")
-    args.add_argument("exec", metavar="<executable/app name/pid>", 
+    args.add_argument("exec", metavar="<executable/app name/pid>", nargs="?", default=None,
                       help="target app to create the runtime profile")                
     args.add_argument("-H", "--host", metavar="<ip:port>", required=False, default="",
                       help="Attach to a process on remote frida device")
+    args.add_argument("-d", "--device", metavar="<device_id>", required=False, default="",
+                      help="Connect to specific device by ID (use -l to list available devices)")
+    args.add_argument("-l", "--list-devices", required=False, action="store_true",
+                      help="List all connected devices and exit")
     args.add_argument('--version', action='version',version='Dexray Intercept v{version}'.format(version=__version__))
     args.add_argument("-s", "--spawn", required=False, action="store_const", const=True,
                       help="Spawn the executable/app instead of attaching to a running process")
@@ -318,13 +323,46 @@ Examples:
         setup_frida_server()
         exit(2)
 
+    # Handle --list-devices flag
+    if parsed.list_devices:
+        print("Connected Frida devices:\n")
+        try:
+            devices = list_devices()
+            if not devices:
+                print("  No devices found")
+            else:
+                # Find the longest device ID for formatting
+                max_id_len = max(len(d['id']) for d in devices)
+                max_name_len = max(len(d['name']) for d in devices)
+
+                print(f"  {'ID':<{max_id_len}}  {'NAME':<{max_name_len}}  TYPE")
+                print(f"  {'-' * max_id_len}  {'-' * max_name_len}  ----")
+
+                for device in devices:
+                    print(f"  {device['id']:<{max_id_len}}  {device['name']:<{max_name_len}}  {device['type']}")
+
+                print(f"\nUsage: dexray-intercept -d <device_id> <app_name>")
+        except Exception as e:
+            print(f"[-] Error listing devices: {e}")
+        exit(0)
+
+    # Validate that exec is provided when not listing devices
+    if parsed.exec is None and not parsed.foreground:
+        print("[-] Error: target app is required")
+        print("    Use: dexray-intercept <app_name>")
+        print("    Or:  dexray-intercept -l  (to list devices)")
+        exit(2)
+
     setup_frida_server()
     print_logo()
 
     try:
-        if len(sys.argv) > 1 or parsed.foreground:
+        if parsed.exec is not None or parsed.foreground:
             target_process = parsed.exec
-            device = setup_frida_handler(parsed.host, parsed.enable_spawn_gating)
+            device = setup_frida_handler(parsed.host, parsed.device, parsed.enable_spawn_gating)
+
+            # Show which device we connected to
+            print(f"[*] connected to device: {device.name} ({device.id})")
             # Handle spawn/attach coordination with fritap
             if parsed.spawn and parsed.enable_fritap:
                 # When fritap is enabled in spawn mode, fritap handles spawning

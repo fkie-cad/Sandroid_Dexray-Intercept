@@ -1,8 +1,10 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
+import { hook_config } from "../hooking_profile_loader.js"
 
 const PROFILE_HOOKING_TYPE: string = "CRYPTO_KEYSTORE"
+const HOOK_NAME = 'keystore_hooks'
 
 /**
  * https://github.com/m0bilesecurity/RMS-Runtime-Mobile-Security/blob/master/custom_scripts/Android/tracer_keystore.js
@@ -19,12 +21,24 @@ const keystoreList: any[] = [];
 let StringCls: any = null;
 
 function createKeystoreEvent(eventType: string, data: any): void {
+    // Check if hook is enabled at runtime
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
     const event = {
         event_type: eventType,
         timestamp: Date.now(),
         ...data
     };
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
+// Helper function to send messages with runtime check
+function sendKeystoreMessage(message: string): void {
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
+    am_send(PROFILE_HOOKING_TYPE, message);
 }
 
 Java.perform(() => {
@@ -133,7 +147,7 @@ function hookKeystoreStore() {
 	var keyStoreStoreStream = Java.use('java.security.KeyStore')['store'].overload('java.security.KeyStore$LoadStoreParameter');
 	/* following function hooks to a Keystore.store(java.security.KeyStore$LoadStoreParameter) */
 	keyStoreStoreStream.implementation = function (param) {
-		am_send(PROFILE_HOOKING_TYPE,"[Keystore.store()]: keystoreType: " + this.getType() + ", param: '" + param);
+		sendKeystoreMessage("[Keystore.store()]: keystoreType: " + this.getType() + ", param: '" + param);
 		this.store(param);
 	}
 }
@@ -142,7 +156,7 @@ function hookKeystoreStoreStream() {
 	var keyStoreStoreStream = Java.use('java.security.KeyStore')['store'].overload('java.io.OutputStream', '[C');
 	/* following function hooks to a Keystore.store(OutputStream stream, char[] password) */
 	keyStoreStoreStream.implementation = function (stream, charArray) {
-		am_send(PROFILE_HOOKING_TYPE,"[Keystore.store(OutputStream, char[])]: keystoreType: " + this.getType() + ", password: '" + charArrayToString(charArray) + "', outputSteam: " + stream);
+		sendKeystoreMessage("[Keystore.store(OutputStream, char[])]: keystoreType: " + this.getType() + ", password: '" + charArrayToString(charArray) + "', outputSteam: " + stream);
 		this.store(stream, charArray);
 	}
 }
@@ -161,8 +175,7 @@ function hookKeystoreGetKey(): void {
 function hookKeystoreSetEntry() {
 	var keyStoreSetKeyEntry = Java.use('java.security.KeyStore')['setEntry'].overload("java.lang.String", "java.security.KeyStore$Entry", "java.security.KeyStore$ProtectionParameter");
 	keyStoreSetKeyEntry.implementation = function (alias, entry, protection) {
-		//am_send(PROFILE_HOOKING_TYPE,"[Call] Keystore.setEntry(java.lang.String, java.security.KeyStore$Entry, java.security.KeyStore$ProtectionParameter )")
-		am_send(PROFILE_HOOKING_TYPE,"[Keystore.setEntry()]: alias: " + alias + ", entry: " + dumpKeyStoreEntry(entry) + "', protection: " + dumpProtectionParameter(protection));
+		sendKeystoreMessage("[Keystore.setEntry()]: alias: " + alias + ", entry: " + dumpKeyStoreEntry(entry) + "', protection: " + dumpProtectionParameter(protection));
 		return this.setEntry(alias, entry, protection);
 	}
 }
@@ -170,8 +183,7 @@ function hookKeystoreSetEntry() {
 function hookKeystoreSetKeyEntry() {
 	var keyStoreSetKeyEntry = Java.use('java.security.KeyStore')['setKeyEntry'].overload("java.lang.String", "java.security.Key", "[C", "[Ljava.security.cert.Certificate;");
 	keyStoreSetKeyEntry.implementation = function (alias, key, charArray, certs) {
-		//am_send(PROFILE_HOOKING_TYPE,"[Call] Keystore.setKeyEntry(java.lang.String, java.security.Key, [C, [Ljava.security.cert.Certificate; )
-		am_send(PROFILE_HOOKING_TYPE,"[Keystore.setKeyEntry()]: alias: " + alias + ", key: " + key + ", password: '" + charArrayToString(charArray) + "', certs: " + certs);
+		sendKeystoreMessage("[Keystore.setKeyEntry()]: alias: " + alias + ", key: " + key + ", password: '" + charArrayToString(charArray) + "', certs: " + certs);
 		return this.setKeyEntry(alias, key, charArray, certs);
 	}
 }
@@ -179,8 +191,7 @@ function hookKeystoreSetKeyEntry() {
 function hookKeystoreSetKeyEntry2() {
 	var keyStoreSetKeyEntry = Java.use('java.security.KeyStore')['setKeyEntry'].overload("java.lang.String", "[B", "[Ljava.security.cert.Certificate;");
 	keyStoreSetKeyEntry.implementation = function (alias, key, certs) {
-		//am_send(PROFILE_HOOKING_TYPE,"[Call] Keystore.setKeyEntry(java.lang.String, [B, [Ljava.security.cert.Certificate; )")
-		am_send(PROFILE_HOOKING_TYPE,"[Keystore.setKeyEntry2()]: alias: " + alias + ", key: " + key + "', certs: " + certs);
+		sendKeystoreMessage("[Keystore.setKeyEntry2()]: alias: " + alias + ", key: " + key + "', certs: " + certs);
 		return this.setKeyEntry(alias, key, certs);
 	}
 }
@@ -204,8 +215,7 @@ function hookKeystoreGetCertificate(): void {
 function hookKeystoreGetCertificateChain() {
 	var keyStoreGetCertificate = Java.use('java.security.KeyStore')['getCertificateChain'].overload("java.lang.String");
 	keyStoreGetCertificate.implementation = function (alias) {
-		//am_send(PROFILE_HOOKING_TYPE,"[Call] Keystore.getCertificateChain(java.lang.String )")
-		am_send(PROFILE_HOOKING_TYPE,"[Keystore.getCertificateChain()]: alias: " + alias);
+		sendKeystoreMessage("[Keystore.getCertificateChain()]: alias: " + alias);
 		return this.getCertificateChain(alias);
 	}
 }
@@ -213,10 +223,9 @@ function hookKeystoreGetCertificateChain() {
 function hookKeystoreGetEntry() {
 	var keyStoreGetEntry = Java.use('java.security.KeyStore')['getEntry'].overload("java.lang.String", "java.security.KeyStore$ProtectionParameter");
 	keyStoreGetEntry.implementation = function (alias, protection) {
-		//am_send(PROFILE_HOOKING_TYPE,"[Call] Keystore.getEntry(java.lang.String, java.security.KeyStore$ProtectionParameter )")
-		am_send(PROFILE_HOOKING_TYPE,"[Keystore.getEntry()]: alias: " + alias + ", protection: '" + dumpProtectionParameter(protection) + "'");
+		sendKeystoreMessage("[Keystore.getEntry()]: alias: " + alias + ", protection: '" + dumpProtectionParameter(protection) + "'");
 		var entry = this.getEntry(alias, protection);
-		am_send(PROFILE_HOOKING_TYPE,"[getEntry()]: Entry: " + dumpKeyStoreEntry(entry));
+		sendKeystoreMessage("[getEntry()]: Entry: " + dumpKeyStoreEntry(entry));
 		return entry;
 	}
 }
@@ -284,26 +293,26 @@ function dumpKeyStoreEntry(entry) {
 }
 
 /*
-* Dump all aliasses in keystores of all types(predefined in keystoreTypes)	
+* Dump all aliasses in keystores of all types(predefined in keystoreTypes)
 */
 function ListAliasesStatic() {
 	// BCPKCS12/PKCS12-DEF - exceptions
 	var keystoreTypes = ["AndroidKeyStore", "AndroidCAStore", /*"BCPKCS12",*/ "BKS", "BouncyCastle", "PKCS12", /*"PKCS12-DEF"*/];
 	keystoreTypes.forEach(function (entry) {
-		am_send(PROFILE_HOOKING_TYPE,"[ListAliasesStatic] keystoreType: " + entry + " \nAliases: " + ListAliasesType(entry));
+		sendKeystoreMessage("[ListAliasesStatic] keystoreType: " + entry + " \nAliases: " + ListAliasesType(entry));
 	});
 	return "[done]";
 }
 
 /*
-* Dump all aliasses in keystores of all instances obtained during app runtime. 
+* Dump all aliasses in keystores of all instances obtained during app runtime.
 * Instances that will be dumped are collected via hijacking Keystre.getInstance() -> hookKeystoreGetInstance()
 */
 function ListAliasesRuntime() {
 	Java.perform(function () {
-		am_send(PROFILE_HOOKING_TYPE,"[ListAliasesRuntime] Instances: " + keystoreList);
+		sendKeystoreMessage("[ListAliasesRuntime] Instances: " + keystoreList);
 		keystoreList.forEach(function (entry) {
-			am_send(PROFILE_HOOKING_TYPE,"[ListAliasesRuntime] keystoreObj: " + entry + " type: " + entry.getType() + " \n" + ListAliasesObj(entry));
+			sendKeystoreMessage("[ListAliasesRuntime] keystoreObj: " + entry + " type: " + entry.getType() + " \n" + ListAliasesObj(entry));
 		});
 	});
 	return "[done]";

@@ -1,16 +1,22 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Where, bytesToHex } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
+import { hook_config } from "../hooking_profile_loader.js"
 
 const PROFILE_HOOKING_TYPE: string = "CRYPTO_ENCODING"
+const HOOK_NAME = 'encodings_hooks'
 
 /**
  *  https://github.com/dpnishant/appmon/blob/master/scripts/Android/Crypto/Hash.js
  * Some parts are taken from https://github.com/Areizen/Android-Malware-Sandbox/tree/master/plugins/base64_plugin
- * 
+ *
  */
 
 function createEncodingEvent(eventType: string, data: any): void {
+    // Check if hook is enabled at runtime
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
     const event = {
         event_type: eventType,
         timestamp: Date.now(),

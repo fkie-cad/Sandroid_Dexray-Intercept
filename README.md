@@ -4,7 +4,7 @@
 </div>
 
 # Sandroid - Dexray Intercept
-![version](https://img.shields.io/badge/version-1.0.1.4-blue) [![PyPI version](https://badge.fury.io/py/dexray-intercept.svg)](https://badge.fury.io/py/dexray-intercept) [![CI](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml)
+![version](https://img.shields.io/badge/version-1.0.1.8-blue) [![PyPI version](https://badge.fury.io/py/dexray-intercept.svg)](https://badge.fury.io/py/dexray-intercept) [![CI](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/ci.yml)
 [![Ruff](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/lint.yml)
 [![Publish status](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/publish.yml)
 [![Documentation](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/fkie-cad/Sandroid_Dexray-Intercept/actions/workflows/docs.yml)
@@ -62,6 +62,35 @@ dexray-intercept -s com.example.package --hooks-crypto
 - **Process**: `--hooks-process` (DEX unpacking, native libraries, runtime)
 - **Services**: `--hooks-services` (camera, location, telephony, bluetooth)
 
+### Multi-Device Support
+
+When multiple Android devices are connected, you can list available devices and select a specific one:
+
+```bash
+# List all connected Frida devices
+dexray-intercept -l
+# or
+dexray-intercept --list-devices
+
+# Output:
+# Connected Frida devices:
+#
+#   ID               NAME                    TYPE
+#   ---------------  ----------------------  ----
+#   local            Local System            local
+#   emulator-5554    Android Emulator 5554   usb
+#   192.168.1.5:5555 Samsung Galaxy S21      usb
+#
+# Usage: dexray-intercept -d <device_id> <app_name>
+
+# Connect to a specific device by ID
+dexray-intercept -d emulator-5554 com.example.app
+dexray-intercept --device emulator-5554 --hooks-all com.example.app
+
+# Connect to remote Frida device
+dexray-intercept -H 192.168.1.100:27042 com.example.app
+```
+
 Here an example on monitoring the chrome app on our AVD:
 ```bash
 dexray-intercept Chrome
@@ -100,11 +129,19 @@ dexray-intercept Chrome
 Install Dexray Intercept as a package and use the new modular architecture:
 
 ```python
-from dexray_intercept import AppProfiler, setup_frida_device
+from dexray_intercept import AppProfiler, setup_frida_device, list_devices
 from dexray_intercept.services.hook_manager import HookManager
 
+# List available devices
+devices = list_devices()
+for d in devices:
+    print(f"{d['id']} - {d['name']} ({d['type']})")
+
 # Connect to device and get process
-device = setup_frida_device()
+device = setup_frida_device()                          # First USB device (default)
+device = setup_frida_device(device_id='emulator-5554') # Specific device by ID
+device = setup_frida_device(host='192.168.1.100:27042') # Remote device
+
 process = device.attach("com.example.app")
 
 # Configure hooks (all disabled by default for performance)
@@ -133,9 +170,12 @@ script = profiler.start_profiling()
 profile_data = profiler.get_profile_data()
 json_output = profiler.get_profiling_log_as_json()
 
-# Runtime hook management
-profiler.enable_hook('socket_hooks', True)  # Enable more hooks at runtime
-enabled_hooks = profiler.get_enabled_hooks()  # Check what's enabled
+# Runtime hook management (Hot-Reconfiguration API)
+profiler.enable_hook('socket_hooks', True)   # Enable hooks at runtime
+profiler.enable_hook('aes_hooks', False)     # Disable hooks at runtime
+profiler.enable_all_hooks()                  # Enable all hooks
+profiler.disable_all_hooks()                 # Disable all hooks
+enabled_hooks = profiler.get_enabled_hooks() # Check what's enabled
 
 # Stop profiling
 profiler.stop_profiling()
@@ -171,6 +211,53 @@ profiler.enable_all_hooks()
 # Enable hook groups
 profiler.enable_hook_group('crypto')  # Enable all crypto-related hooks
 ```
+
+### Runtime Hook Reconfiguration (Hot-Reconfiguration API)
+
+For UI developers building interfaces on top of Dexray Intercept, the hot-reconfiguration API allows enabling/disabling hooks at runtime without restarting the profiling session:
+
+```python
+from dexray_intercept import AppProfiler
+
+class MyUIProfiler(AppProfiler):
+    """Custom profiler with UI callback support."""
+
+    def _on_hook_config_changed(self, hook_name: str, enabled: bool,
+                                 success: bool, error: str = None):
+        """Called when hook configuration changes are acknowledged by the agent.
+
+        Override this method to handle UI updates when hooks are toggled.
+
+        Args:
+            hook_name: Name of the hook that was changed
+            enabled: Whether the hook was enabled or disabled
+            success: Whether the change was successful
+            error: Error message if the change failed
+        """
+        if success:
+            self.update_ui_hook_status(hook_name, enabled)
+        else:
+            self.show_error(f"Failed to change {hook_name}: {error}")
+
+# Usage
+profiler = MyUIProfiler(process, hook_config={'aes_hooks': True})
+profiler.start_profiling()
+
+# Toggle hooks at runtime - changes take effect immediately
+profiler.enable_hook('socket_hooks', True)    # Enable socket monitoring
+profiler.enable_hook('aes_hooks', False)      # Disable AES monitoring
+profiler.enable_all_hooks()                   # Enable everything
+profiler.disable_all_hooks()                  # Disable everything
+
+# Check current state
+enabled = profiler.get_enabled_hooks()        # Returns list of enabled hook names
+```
+
+**Key Features:**
+- **No Restart Required**: Hooks can be toggled while the app is running
+- **Acknowledgment Protocol**: Changes are confirmed via callback
+- **UI-Friendly**: Override `_on_hook_config_changed()` for UI integration
+- **Backward Compatible**: CLI usage remains unchanged
 
 ### Legacy API (Backward Compatibility)
 

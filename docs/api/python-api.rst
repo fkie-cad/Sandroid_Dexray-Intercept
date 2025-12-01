@@ -146,10 +146,73 @@ The main orchestrator class that coordinates Frida instrumentation, event collec
 .. py:method:: enable_all_hooks()
 
    Enable all available hook categories.
-   
+
    .. code-block:: python
-   
+
       profiler.enable_all_hooks()
+
+.. py:method:: disable_all_hooks()
+
+   Disable all available hook categories.
+
+   .. code-block:: python
+
+      profiler.disable_all_hooks()
+
+.. py:method:: enable_hook_group(group_name)
+
+   Enable all hooks in a specific group.
+
+   :param group_name: Hook group name ('crypto', 'network', 'filesystem', 'ipc', 'process', 'services')
+
+   .. code-block:: python
+
+      # Enable all crypto-related hooks
+      profiler.enable_hook_group('crypto')
+
+      # Enable all network-related hooks
+      profiler.enable_hook_group('network')
+
+**Runtime Hook Reconfiguration (Hot-Reconfiguration API):**
+
+The hot-reconfiguration API allows enabling/disabling hooks at runtime without restarting the profiling session. This is particularly useful for UI developers building interfaces on top of Dexray Intercept.
+
+.. py:method:: _on_hook_config_changed(hook_name, enabled, success, error=None)
+
+   Callback method invoked when hook configuration changes are acknowledged by the agent.
+   Override this method in a subclass to handle UI updates.
+
+   :param hook_name: Name of the hook that was changed
+   :param enabled: Whether the hook was enabled or disabled
+   :param success: Whether the change was successful
+   :param error: Error message if the change failed (optional)
+
+   .. code-block:: python
+
+      class MyUIProfiler(AppProfiler):
+          """Custom profiler with UI callback support."""
+
+          def _on_hook_config_changed(self, hook_name: str, enabled: bool,
+                                       success: bool, error: str = None):
+              """Handle hook state changes for UI updates."""
+              if success:
+                  self.update_ui_status(hook_name, enabled)
+              else:
+                  self.show_error(f"Failed to change {hook_name}: {error}")
+
+      # Usage
+      profiler = MyUIProfiler(session, hook_config={'aes_hooks': True})
+      profiler.start_profiling()
+
+      # Toggle hooks at runtime - changes take effect immediately
+      profiler.enable_hook('socket_hooks', True)
+      profiler.enable_hook('aes_hooks', False)
+
+**Key Features of Hot-Reconfiguration:**
+   - **No Restart Required**: Hooks can be toggled while the app is running
+   - **Acknowledgment Protocol**: Changes are confirmed via callback
+   - **UI-Friendly**: Override ``_on_hook_config_changed()`` for UI integration
+   - **Backward Compatible**: CLI usage remains unchanged
 
 ProfileData
 ^^^^^^^^^^^
@@ -439,18 +502,62 @@ Utility Functions
 Device Management
 ^^^^^^^^^^^^^^^^^
 
+.. py:function:: list_devices()
+
+   Enumerate all connected Frida devices.
+
+   :returns: List of device dictionaries with 'id', 'name', and 'type' keys
+   :rtype: List[Dict[str, Any]]
+
+   .. code-block:: python
+
+      from dexray_intercept import list_devices
+
+      # List all connected devices
+      devices = list_devices()
+      for d in devices:
+          print(f"{d['id']} - {d['name']} ({d['type']})")
+
+      # Output:
+      # local - Local System (local)
+      # emulator-5554 - Android Emulator 5554 (usb)
+      # 192.168.1.5:5555 - Samsung Galaxy S21 (usb)
+
+.. py:function:: setup_frida_device(host="", device_id="", enable_spawn_gating=False)
+
+   Setup and return a Frida device connection.
+
+   :param host: Remote device address in format 'ip:port'. Takes precedence over device_id.
+   :param device_id: Specific device ID to connect to (e.g., 'emulator-5554').
+   :param enable_spawn_gating: Enable spawn gating to catch newly spawned processes.
+   :returns: Frida device object
+   :rtype: frida.core.Device
+
+   **Device Selection Priority:**
+
+   1. If ``host`` is provided (>4 chars), connects to remote device at that address
+   2. If ``device_id`` is provided, connects to the device with that specific ID
+   3. Otherwise, connects to the first available USB device
+
 .. code-block:: python
 
-   from dexray_intercept.services.instrumentation import setup_frida_device
+   from dexray_intercept import setup_frida_device, list_devices
 
-   # Connect to USB device
+   # List available devices first
+   devices = list_devices()
+   print(f"Found {len(devices)} devices")
+
+   # Connect to first USB device (default)
    device = setup_frida_device()
 
-   # Connect to remote device  
-   device = setup_frida_device("192.168.1.100:27042")
+   # Connect to specific device by ID
+   device = setup_frida_device(device_id='emulator-5554')
+
+   # Connect to remote device
+   device = setup_frida_device(host="192.168.1.100:27042")
 
    # Enable spawn gating
-   device = setup_frida_device(enable_spawn_gating=True)
+   device = setup_frida_device(device_id='emulator-5554', enable_spawn_gating=True)
 
 Command Line Integration
 ^^^^^^^^^^^^^^^^^^^^^^^^

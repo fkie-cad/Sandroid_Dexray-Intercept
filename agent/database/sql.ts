@@ -2,6 +2,7 @@ import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where } from "../utils/misc.js"
 import { Java, safeJavaUse } from "../utils/javalib.js"
+import { hook_config } from "../hooking_profile_loader.js"
 
 /**
  * Some parts are taken from https://codeshare.frida.re/@ninjadiary/sqlite-database/
@@ -10,6 +11,7 @@ import { Java, safeJavaUse } from "../utils/javalib.js"
  */
 
 const PROFILE_HOOKING_TYPE: string = "DATABASE"
+const HOOK_NAME = 'database_hooks'
 
 interface DatabaseEvent {
     event_type: string;
@@ -28,12 +30,24 @@ interface DatabaseEvent {
 }
 
 function createDatabaseEvent(eventType: string, data: any): void {
+    // Check if hook is enabled at runtime
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
     const event = {
         event_type: eventType,
         timestamp: Date.now(),
         ...data
     };
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
+// Helper function for direct am_send calls to respect hook config
+function sendDatabaseMessage(message: string): void {
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
+    am_send(PROFILE_HOOKING_TYPE, message);
 }
 
 // New variables for filtering:

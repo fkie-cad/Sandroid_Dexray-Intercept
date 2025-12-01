@@ -2,24 +2,43 @@ import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
+import { hook_config } from "../hooking_profile_loader.js"
+import { hookRegistry } from "../utils/hook_registry.js"
 
 /**
- * 
+ *
  * Some parts are taken from https://github.com/Areizen/Android-Malware-Sandbox/blob/master/frida_scripts/lib/hooks.js
  * https://codeshare.frida.re/@mame82/android-tcp-trace/
- * 
+ *
  * muss noch um UDP erweitert werden
  */
 
 const PROFILE_HOOKING_TYPE: string = "NETWORK_SOCKETS"
+const HOOK_NAME = 'socket_hooks'
 
 function createSocketEvent(eventType: string, data: any): void {
+    // Check if hook is enabled at runtime
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
     const event = {
         event_type: eventType,
         timestamp: Date.now(),
         ...data
     };
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
+// Helper function for native hooks to send messages with runtime check
+function sendSocketMessage(data: any, buffer?: ArrayBuffer): void {
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
+    if (buffer) {
+        am_send(PROFILE_HOOKING_TYPE, JSON.stringify(data), buffer);
+    } else {
+        am_send(PROFILE_HOOKING_TYPE, JSON.stringify(data));
+    }
 }
 
 function getStackTrace() {
@@ -290,7 +309,7 @@ Interceptor.attach(connect_ptr, {
                local  = sockLocal;
         } else {
                 // Handle the case where sockLocal is not a TcpEndpointAddress
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(sockLocal) )
+                sendSocketMessage(sockLocal);
                 return
         }
 
@@ -367,16 +386,16 @@ Interceptor.attach(write_ptr, {
         
         // Send buffer data separately if available
         if (buffer) {
-            am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
+            sendSocketMessage({
                 event_type: "socket.native.write_data",
                 timestamp: Date.now(),
                 socket_descriptor: this.sd,
                 data_length: len
-            }), buffer);
+            }, buffer);
         }
     }
 });
-        
+
 Interceptor.attach(read_ptr, {
     onEnter: function(args) {
         
@@ -425,12 +444,12 @@ Interceptor.attach(read_ptr, {
         
         // Send buffer data separately if available
         if (buffer) {
-            am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
+            sendSocketMessage({
                 event_type: "socket.native.read_data",
                 timestamp: Date.now(),
                 socket_descriptor: this.sd,
                 data_length: len
-            }), buffer);
+            }, buffer);
         }
     }
 });
@@ -492,12 +511,12 @@ Interceptor.attach(sendto_ptr, {
             
             // Send buffer data separately if available
             if (buffer) {
-                am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
+                sendSocketMessage({
                     event_type: "socket.native.sendto_data",
                     timestamp: Date.now(),
                     socket_descriptor: this.sd,
                     data_length: len
-                }), buffer);
+                }, buffer);
             }
         } else {
 
@@ -535,12 +554,12 @@ Interceptor.attach(sendto_ptr, {
                 
                 // Send buffer data separately if available
                 if (buffer) {
-                    am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
+                    sendSocketMessage({
                         event_type: "socket.native.sendto_data",
                         timestamp: Date.now(),
                         socket_descriptor: this.sd,
                         data_length: len
-                    }), buffer);
+                    }, buffer);
                 }
             }
         }
@@ -588,7 +607,7 @@ Interceptor.attach(recvfrom_ptr, {
             // send data
             addSocketToList(this.sd, sockType);
             data = {"event_type": "Libc::recvfrom","method": "recvfrom", "sd": this.sd,  "src_ip": remote.ip,"src_port": remote.port,"dst_ip": local.ip, "dst_port": local.port, "len": len, "type": sockType};
-            am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data), buffer);
+            sendSocketMessage(data, buffer);
         } else{
             var src_addr = ptr(this.ipAddr);
             if(src_addr.isNull() == true) return; 
@@ -608,7 +627,7 @@ Interceptor.attach(recvfrom_ptr, {
                 // send data
                 addSocketToList(this.sd, sockType);
                 data = {"event_type": "Libc::recvfrom","method": "recvfrom", "sd" : this.sd,  "len": len, "src_ip": local.ip, "src_port": local.port, "dst_ip": ip_string, "dst_port": port, "dst_family": family, "type": sockType}
-                am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data), buffer);
+                sendSocketMessage(data, buffer);
             }
         }
     }
@@ -645,7 +664,7 @@ Interceptor.attach(send_ptr, {
         // send data
         addSocketToList(this.sd, sockType);
         var data = {"event_type": "Libc::send","method": "send", "sd": this.sd,  "src_ip": local.ip,"src_port": local.port,"dst_ip": remote.ip, "dst_port": remote.port, "len": len, "type": sockType};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data), buffer);
+        sendSocketMessage(data, buffer);
     }
 });
 
@@ -682,7 +701,7 @@ Interceptor.attach(recv_ptr, {
         // send data
         addSocketToList(this.sd, sockType);
         var data = {"event_type": "Libc::recv","method": "recv", "sd": this.sd,  "src_ip": remote.ip,"src_port": remote.port,"dst_ip": local.ip, "dst_port": local.port, "len": len, "type": sockType};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data), buffer);
+        sendSocketMessage(data, buffer);
     }
 });
 
@@ -746,7 +765,7 @@ Interceptor.attach(sendmsg_ptr, {
         addSocketToList(this.sd, sockType);
         var buffer;
         var data = {"event_type": "Libc::sendmsg","method": "sendmsg", "sd": this.sd,  "src_ip": local.ip,"src_port": local.port,"dst_ip": remote.ip, "dst_port": remote.port, "len": len, "type": sockType};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data), buffer);
+        sendSocketMessage(data, buffer);
     }
 });
 
@@ -800,7 +819,7 @@ Interceptor.attach(recvmsg_ptr, {
         addSocketToList(this.sd, sockType);
         var buffer;
         var data = {"event_type": "Libc::recvmsg","method": "recvmsg", "sd": this.sd,  "src_ip": remote.ip,"src_port": remote.port,"dst_ip": local.ip, "dst_port": local.port, "len": len, "type": sockType};
-        am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data));
+        sendSocketMessage(data);
     }
 });
 

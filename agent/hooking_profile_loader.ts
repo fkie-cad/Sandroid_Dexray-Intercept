@@ -21,6 +21,7 @@ import { install_location_hooks } from "./services/location.js"
 import { install_telephony_manager_hooks } from "./services/telephony.js"
 import { install_bypass_hooks } from "./security/bypass.js"
 import { am_send, log, devlog } from "./utils/logging.js"
+import { hookRegistry } from "./utils/hook_registry.js"
 
 
 export let show_verbose: boolean = false;
@@ -124,14 +125,16 @@ enable_stacktrace_recv_state.wait();
  * our final hooks gets loaded
  */ 
 
-function install_hook_conditionally(hook_name: string, install_function: () => void) {
-    if (hook_config[hook_name]) {
-        try {
-            install_function();
-            devlog(`[HOOK] Enabled: ${hook_name}`);
-        } catch (error) {
-            devlog(`[HOOK] Failed to enable ${hook_name}: ${error}`);
-        }
+/**
+ * Install a hook unconditionally with error handling
+ * Hooks are always installed but check hook_config internally before sending events
+ */
+function install_hook_unconditionally(hook_name: string, install_function: () => void) {
+    try {
+        install_function();
+        devlog(`[HOOK] Installed: ${hook_name}`);
+    } catch (error) {
+        devlog(`[HOOK] Failed to install ${hook_name}: ${error}`);
     }
 }
 
@@ -139,49 +142,110 @@ function load_profile_hooks(){
     if(enable_stacktrace){
         log("[Dexray] Stacktrace enabled");
     }
-    log("[HOOK] Loading hooks based on configuration...");
-    
+    log("[HOOK] Installing all hooks (runtime reconfiguration enabled)...");
+
     // File system hooks
-    install_hook_conditionally('file_system_hooks', install_file_system_hooks);
-    install_hook_conditionally('database_hooks', install_database_hooks);
-    
+    install_hook_unconditionally('file_system_hooks', install_file_system_hooks);
+    install_hook_unconditionally('database_hooks', install_database_hooks);
+
     // DEX and native library hooks
-    install_hook_conditionally('dex_unpacking_hooks', install_dex_unpacking_hooks);
-    install_hook_conditionally('java_dex_unpacking_hooks', install_java_dex_unpacking_hooks); // Warning: may crash certain apps
-    install_hook_conditionally('native_library_hooks', install_native_library_hooks);
-    
+    install_hook_unconditionally('dex_unpacking_hooks', install_dex_unpacking_hooks);
+    install_hook_unconditionally('java_dex_unpacking_hooks', install_java_dex_unpacking_hooks); // Warning: may crash certain apps
+    install_hook_unconditionally('native_library_hooks', install_native_library_hooks);
+
     // IPC hooks
-    install_hook_conditionally('shared_prefs_hooks', install_shared_prefs_hooks);
-    install_hook_conditionally('binder_hooks', install_binder_hooks);
-    install_hook_conditionally('intent_hooks', install_intent_hooks);
-    install_hook_conditionally('broadcast_hooks', install_broadcast_hooks);
-    
+    install_hook_unconditionally('shared_prefs_hooks', install_shared_prefs_hooks);
+    install_hook_unconditionally('binder_hooks', install_binder_hooks);
+    install_hook_unconditionally('intent_hooks', install_intent_hooks);
+    install_hook_unconditionally('broadcast_hooks', install_broadcast_hooks);
+
     // Crypto hooks
-    install_hook_conditionally('aes_hooks', install_aes_hooks);
-    install_hook_conditionally('encodings_hooks', install_encodings_hooks);
-    install_hook_conditionally('keystore_hooks', install_keystore_hooks);
-    
+    install_hook_unconditionally('aes_hooks', install_aes_hooks);
+    install_hook_unconditionally('encodings_hooks', install_encodings_hooks);
+    install_hook_unconditionally('keystore_hooks', install_keystore_hooks);
+
     // Network hooks
-    install_hook_conditionally('web_hooks', install_web_hooks);
-    install_hook_conditionally('socket_hooks', install_socket_hooks);
-    
+    install_hook_unconditionally('web_hooks', install_web_hooks);
+    install_hook_unconditionally('socket_hooks', install_socket_hooks);
+
     // Process hooks
-    install_hook_conditionally('process_hooks', install_process_hooks);
-    install_hook_conditionally('runtime_hooks', install_runtime_hooks);
-    
+    install_hook_unconditionally('process_hooks', install_process_hooks);
+    install_hook_unconditionally('runtime_hooks', install_runtime_hooks);
+
     // Service hooks
-    install_hook_conditionally('bluetooth_hooks', install_bluetooth_hooks);
-    install_hook_conditionally('telephony_hooks', install_telephony_manager_hooks);
-    install_hook_conditionally('camera_hooks', install_camera_hooks);
-    install_hook_conditionally('clipboard_hooks', install_clipboard_hooks);
-    install_hook_conditionally('location_hooks', install_location_hooks);
-    
+    install_hook_unconditionally('bluetooth_hooks', install_bluetooth_hooks);
+    install_hook_unconditionally('telephony_hooks', install_telephony_manager_hooks);
+    install_hook_unconditionally('camera_hooks', install_camera_hooks);
+    install_hook_unconditionally('clipboard_hooks', install_clipboard_hooks);
+    install_hook_unconditionally('location_hooks', install_location_hooks);
+
     // Bypass hooks
-    install_hook_conditionally('bypass_hooks', install_bypass_hooks);
-    
+    install_hook_unconditionally('bypass_hooks', install_bypass_hooks);
+
     const enabled_hooks = Object.entries(hook_config).filter(([_, enabled]) => enabled).map(([name, _]) => name);
-    log(`[HOOK] Active hooks: ${enabled_hooks.join(', ') || 'none'}`);
+    log(`[HOOK] All hooks installed. Active: ${enabled_hooks.join(', ') || 'none'}`);
 }
 
+/**
+ * Setup persistent runtime message handler for hook reconfiguration
+ * This allows enabling/disabling hooks at runtime via the Python API
+ */
+function setupRuntimeMessageHandler() {
+    function listenForConfig() {
+        recv('runtime_hook_config', (message) => {
+            try {
+                const payload = message.payload;
+
+                if (typeof payload === 'object' && payload !== null) {
+                    const { hook_name, enabled } = payload;
+
+                    if (hook_name && hook_name in hook_config) {
+                        // Update global hook_config
+                        hook_config[hook_name] = enabled;
+
+                        // Handle native hooks (detach/reattach)
+                        hookRegistry.setNativeHooksEnabled(hook_name, enabled);
+
+                        devlog(`[HOOK] Runtime update: ${hook_name} = ${enabled}`);
+
+                        // Send ACK back to Python
+                        send({
+                            profileType: 'HOOK_CONFIG_ACK',
+                            profileContent: JSON.stringify({
+                                hook_name: hook_name,
+                                enabled: enabled,
+                                success: true
+                            }),
+                            timestamp: new Date().toISOString()
+                        });
+                    } else {
+                        devlog(`[HOOK] Unknown hook name in runtime config: ${hook_name}`);
+                        send({
+                            profileType: 'HOOK_CONFIG_ACK',
+                            profileContent: JSON.stringify({
+                                hook_name: hook_name,
+                                enabled: enabled,
+                                success: false,
+                                error: 'Unknown hook name'
+                            }),
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+                }
+            } catch (e) {
+                devlog(`[HOOK] Error processing runtime config: ${e}`);
+            }
+
+            // Continue listening for more messages (Frida recv is one-shot)
+            listenForConfig();
+        });
+    }
+
+    listenForConfig();
+    devlog('[HOOK] Runtime message handler active');
+}
+
+// Load all hooks and setup runtime handler
 load_profile_hooks();
+setupRuntimeMessageHandler();
 

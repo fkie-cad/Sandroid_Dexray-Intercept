@@ -1,8 +1,10 @@
 import { am_send, log, devlog } from "../utils/logging.js"
 import { getAndroidVersion, arraybuffer2hexstr, copy_file, removeLeadingColon } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
+import { hook_config } from "../hooking_profile_loader.js"
 
 const PROFILE_HOOKING_TYPE: string = "DEX_LOADING"
+const HOOK_NAME = 'dex_unpacking_hooks'
 
 interface DEXInfo {
     magicString: string;
@@ -27,6 +29,10 @@ interface UnpackingEvent {
 }
 
 function createDEXEvent(eventType: string, data: any): void {
+    // Check if hook is enabled at runtime
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
     const event = {
         event_type: eventType,
         timestamp: Date.now(),

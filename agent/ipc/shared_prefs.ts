@@ -1,8 +1,10 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
+import { hook_config } from "../hooking_profile_loader.js"
 
 const PROFILE_HOOKING_TYPE: string = "IPC_SHARED-PREF"
+const HOOK_NAME = 'shared_prefs_hooks'
 
 interface SharedPrefEvent {
     event_type: string;
@@ -16,6 +18,10 @@ interface SharedPrefEvent {
 }
 
 function createSharedPrefEvent(eventType: string, data: Partial<SharedPrefEvent>): void {
+    // Check if hook is enabled at runtime
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
     const event: SharedPrefEvent = {
         event_type: eventType,
         timestamp: Date.now(),

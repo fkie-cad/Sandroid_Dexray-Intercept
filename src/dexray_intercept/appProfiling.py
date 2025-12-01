@@ -398,13 +398,66 @@ class AppProfiler:
             # Handle initial startup messages
             if self._handle_startup_messages(message):
                 return
-            
+
+            # Handle hook configuration ACK messages
+            if self._handle_hook_config_ack(message):
+                return
+
             # Process regular profile messages
             self.profile_collector.process_frida_message(message, data)
-            
+
         except Exception as e:
             if self.verbose_mode:
                 print(f"[-] Error in message handler: {e}")
+
+    def _handle_hook_config_ack(self, message: Dict[str, Any]) -> bool:
+        """Handle hook configuration acknowledgment messages from the Frida agent"""
+        payload = message.get('payload', {})
+
+        # Check if this is a HOOK_CONFIG_ACK message
+        if isinstance(payload, dict) and payload.get('profileType') == 'HOOK_CONFIG_ACK':
+            try:
+                import json
+                content_str = payload.get('profileContent', '{}')
+                content = json.loads(content_str) if isinstance(content_str, str) else content_str
+
+                hook_name = content.get('hook_name', 'unknown')
+                enabled = content.get('enabled', False)
+                success = content.get('success', False)
+                error = content.get('error')
+
+                if self.verbose_mode:
+                    if success:
+                        status = "enabled" if enabled else "disabled"
+                        print(f"[*] Hook '{hook_name}' {status} successfully")
+                    else:
+                        print(f"[-] Failed to update hook '{hook_name}': {error}")
+
+                # Emit callback for UI developers (can be overridden)
+                self._on_hook_config_changed(hook_name, enabled, success, error)
+
+                return True
+            except Exception as e:
+                if self.verbose_mode:
+                    print(f"[-] Error parsing HOOK_CONFIG_ACK: {e}")
+                return True
+
+        return False
+
+    def _on_hook_config_changed(self, hook_name: str, enabled: bool, success: bool, error: Optional[str] = None):
+        """
+        Callback when hook configuration changes.
+
+        Override this method to receive notifications when hooks are enabled/disabled.
+        This is useful for UI developers who need to update their interface.
+
+        Args:
+            hook_name: Name of the hook that was changed
+            enabled: Whether the hook was enabled (True) or disabled (False)
+            success: Whether the change was successful
+            error: Error message if the change failed
+        """
+        pass  # Override in subclass or set callback via set_hook_config_callback()
     
     def _handle_startup_messages(self, message: Dict[str, Any]) -> bool:
         """Handle startup configuration messages"""
@@ -460,35 +513,84 @@ class AppProfiler:
     
     # Hook management methods (delegated to HookManager)
     def enable_hook(self, hook_name: str, enabled: bool = True):
-        """Enable or disable a specific hook at runtime"""
+        """
+        Enable or disable a specific hook at runtime.
+
+        This method updates the local hook configuration and sends a runtime
+        reconfiguration message to the Frida agent. The agent will enable/disable
+        the hook without restarting the profiling session.
+
+        Args:
+            hook_name: Name of the hook (e.g., 'aes_hooks', 'web_hooks')
+            enabled: Whether to enable (True) or disable (False) the hook
+        """
         self.hook_manager.enable_hook(hook_name, enabled)
-        if self.instrumentation.is_script_loaded():
+        if self.instrumentation and self.instrumentation.is_script_loaded():
             self.instrumentation.send_message({
-                'type': 'hook_config', 
-                'payload': {hook_name: enabled}
+                'type': 'runtime_hook_config',
+                'payload': {'hook_name': hook_name, 'enabled': enabled}
             })
-    
+
     def get_enabled_hooks(self) -> List[str]:
         """Return list of currently enabled hooks"""
         return self.hook_manager.get_enabled_hooks()
-    
+
     def enable_all_hooks(self):
-        """Enable all available hooks"""
+        """
+        Enable all available hooks at runtime.
+
+        This method enables all hooks and sends runtime reconfiguration messages
+        to the Frida agent for each hook.
+        """
         self.hook_manager.enable_all_hooks()
-        if self.instrumentation.is_script_loaded():
-            self.instrumentation.send_message({
-                'type': 'hook_config', 
-                'payload': self.hook_manager.get_hook_config()
-            })
-    
+        if self.instrumentation and self.instrumentation.is_script_loaded():
+            # Send individual messages for each hook for proper ACK tracking
+            for hook_name in self.hook_manager.get_hook_config().keys():
+                self.instrumentation.send_message({
+                    'type': 'runtime_hook_config',
+                    'payload': {'hook_name': hook_name, 'enabled': True}
+                })
+
+    def disable_all_hooks(self):
+        """
+        Disable all hooks at runtime.
+
+        This method disables all hooks and sends runtime reconfiguration messages
+        to the Frida agent for each hook.
+        """
+        self.hook_manager.disable_all_hooks()
+        if self.instrumentation and self.instrumentation.is_script_loaded():
+            for hook_name in self.hook_manager.get_hook_config().keys():
+                self.instrumentation.send_message({
+                    'type': 'runtime_hook_config',
+                    'payload': {'hook_name': hook_name, 'enabled': False}
+                })
+
     def enable_hook_group(self, group_name: str):
-        """Enable a group of related hooks"""
+        """
+        Enable a group of related hooks at runtime.
+
+        Hook groups:
+        - 'crypto': aes_hooks, encodings_hooks, keystore_hooks
+        - 'network': web_hooks, socket_hooks
+        - 'filesystem': file_system_hooks, database_hooks
+        - 'ipc': shared_prefs_hooks, binder_hooks, intent_hooks, broadcast_hooks
+        - 'process': process_hooks, runtime_hooks, native_library_hooks
+        - 'dex': dex_unpacking_hooks, java_dex_unpacking_hooks
+        - 'services': bluetooth_hooks, camera_hooks, clipboard_hooks, location_hooks, telephony_hooks
+
+        Args:
+            group_name: Name of the hook group to enable
+        """
         self.hook_manager.enable_hook_group(group_name)
-        if self.instrumentation.is_script_loaded():
-            self.instrumentation.send_message({
-                'type': 'hook_config', 
-                'payload': self.hook_manager.get_hook_config()
-            })
+        if self.instrumentation and self.instrumentation.is_script_loaded():
+            # Send messages for all hooks in the group
+            for hook_name, enabled in self.hook_manager.get_hook_config().items():
+                if enabled:
+                    self.instrumentation.send_message({
+                        'type': 'runtime_hook_config',
+                        'payload': {'hook_name': hook_name, 'enabled': True}
+                    })
     
     # Profile data methods (delegated to ProfileCollector)
     def get_profile_data(self) -> ProfileData:
@@ -551,6 +653,6 @@ class FridaBasedException(FridaBasedException):
 
 
 # Legacy function for compatibility
-def setup_frida_handler(host: str = "", enable_spawn_gating: bool = False):
+def setup_frida_handler(host: str = "", device_id: str = "", enable_spawn_gating: bool = False):
     """Legacy function - use setup_frida_device() instead"""
-    return setup_frida_device(host, enable_spawn_gating)
+    return setup_frida_device(host, device_id, enable_spawn_gating)

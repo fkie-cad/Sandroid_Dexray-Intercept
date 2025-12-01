@@ -1,8 +1,10 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Where, bytesToHex } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
+import { hook_config } from "../hooking_profile_loader.js"
 
 const PROFILE_HOOKING_TYPE: string = "CRYPTO_AES"
+const HOOK_NAME = 'aes_hooks'
 
 interface CipherSession {
     id: number;
@@ -15,6 +17,10 @@ interface CipherSession {
 const activeCipherSessions = new Map<number, CipherSession>();
 
 function createAESEvent(eventType: string, data: any): void {
+    // Check if hook is enabled at runtime
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
     const event = {
         event_type: eventType,
         timestamp: Date.now(),

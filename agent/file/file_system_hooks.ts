@@ -1,11 +1,12 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { buffer2ArrayBuffer, b2s, isPatternPresent, byteArray2JString, bytesToHex } from "../utils/misc.js"
-import { show_verbose } from "../hooking_profile_loader.js"
+import { show_verbose, hook_config } from "../hooking_profile_loader.js"
 import { deactivate_unlink } from "../hooking_profile_loader.js"
 import { Java } from "../utils/javalib.js"
 
 const PROFILE_HOOKING_TYPE: string = "FILE_SYSTEM"
+const HOOK_NAME = 'file_system_hooks'
 
 // ============================================================================
 // IMPORTANT: We send the full buffer hex from TypeScript (no slicing here)
@@ -50,6 +51,10 @@ function isFileFromInterest(file_string) {
 
 
 function createFileSystemEvent(eventType: string, data: any): void {
+    // Check if hook is enabled at runtime
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
     const event = {
         event_type: eventType,
         timestamp: Date.now(),
@@ -383,7 +388,9 @@ function hook_filesystem_deletes(): void {
     if (deactivate_unlink) {
         var unlink = new NativeFunction(unlinkPtr, 'int', []);
         Interceptor.replace(unlinkPtr, new NativeCallback(function () {
-            am_send(PROFILE_HOOKING_TYPE, "unlink() encountered, skipping it.");
+            if (hook_config[HOOK_NAME]) {
+                am_send(PROFILE_HOOKING_TYPE, "unlink() encountered, skipping it.");
+            }
             return 0;
         }, 'int', []));
     }

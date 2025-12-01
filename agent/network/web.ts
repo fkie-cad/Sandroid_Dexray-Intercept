@@ -2,8 +2,10 @@ import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
+import { hook_config } from "../hooking_profile_loader.js"
 
 const PROFILE_HOOKING_TYPE: string = "WEB"
+const HOOK_NAME = 'web_hooks'
 
 // Utility functions for safe hook installation
 function safeHookClass(className: string, hookFunction: (clazz: any) => void): boolean {
@@ -36,6 +38,10 @@ interface WebEvent {
 }
 
 function createWebEvent(eventType: string, data: Partial<WebEvent>): void {
+    // Check if hook is enabled at runtime
+    if (!hook_config[HOOK_NAME]) {
+        return;
+    }
     const event: WebEvent = {
         event_type: eventType,
         timestamp: Date.now(),

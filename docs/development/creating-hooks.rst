@@ -65,9 +65,12 @@ Create the hook file at ``agent/clipboard/clipboard_monitor.ts``:
    import { log, devlog, am_send } from "../utils/logging.js"
    import { Where } from "../utils/misc.js"
    import { Java } from "../utils/javalib.js"
+   import { hook_config } from "../hooking_profile_loader.js"
 
    // Profile type identifier - must be unique
    const PROFILE_HOOKING_TYPE: string = "CLIPBOARD_MONITOR"
+   // Hook name for runtime configuration (must match key in hook_config)
+   const HOOK_NAME = 'clipboard_monitor_hooks'
 
    /**
     * Create clipboard monitoring event
@@ -75,6 +78,10 @@ Create the hook file at ``agent/clipboard/clipboard_monitor.ts``:
     * @param data Event-specific data
     */
    function createClipboardEvent(eventType: string, data: any): void {
+       // Check if hook is enabled at runtime (required for hot-reconfiguration)
+       if (!hook_config[HOOK_NAME]) {
+           return;
+       }
        const event = {
            event_type: eventType,
            timestamp: Date.now(),
@@ -181,6 +188,76 @@ Create the hook file at ``agent/clipboard/clipboard_monitor.ts``:
        devlog("Installing comprehensive clipboard hooks");
        install_clipboard_monitor_hooks();
    }
+
+Adding Runtime Support (Hot-Reconfiguration)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To support the hot-reconfiguration API (enabling/disabling hooks at runtime without restarting), your hook module must follow these patterns:
+
+**Required Elements:**
+
+1. **Import ``hook_config``** from the hook loader:
+
+   .. code-block:: typescript
+
+      import { hook_config } from "../hooking_profile_loader.js"
+
+2. **Define ``HOOK_NAME`` constant** matching the key in ``hook_config``:
+
+   .. code-block:: typescript
+
+      const HOOK_NAME = 'clipboard_monitor_hooks'
+
+3. **Gate event creation** by checking the config before sending events:
+
+   .. code-block:: typescript
+
+      function createMyEvent(eventType: string, data: any): void {
+          // Required: Check if hook is enabled at runtime
+          if (!hook_config[HOOK_NAME]) {
+              return;
+          }
+          // ... rest of event creation
+      }
+
+**For Native Hooks (Interceptor-based):**
+
+Native hooks require true detach/reattach capability. Use the ``HookRegistry``:
+
+.. code-block:: typescript
+
+   import { hookRegistry } from "../utils/hook_registry.js"
+   import { hook_config } from "../hooking_profile_loader.js"
+
+   const HOOK_NAME = 'my_native_hooks'
+
+   function install_native_hook(): void {
+       const targetPtr = Module.findExportByName("libc.so", "open");
+       if (!targetPtr) return;
+
+       // Register hook with HookRegistry for runtime management
+       hookRegistry.registerHook(HOOK_NAME, targetPtr, {
+           onEnter(args) {
+               // Hook logic here
+           },
+           onLeave(retval) {
+               // Hook logic here
+           }
+       });
+   }
+
+The ``HookRegistry`` automatically handles:
+
+- Detaching native hooks when disabled via ``profiler.enable_hook('my_native_hooks', False)``
+- Reattaching hooks when re-enabled
+- Proper cleanup of Interceptor resources
+
+**Why This Pattern Matters:**
+
+- **No restart required**: Users can toggle hooks without killing the target app
+- **UI integration**: Callbacks notify when hook state changes complete
+- **Performance**: Disabled hooks have minimal overhead (early return check)
+- **Native cleanup**: Native hooks are fully detached, not just silenced
 
 Step 3: Create Python Parser
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

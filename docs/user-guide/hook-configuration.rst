@@ -345,18 +345,84 @@ Hooks can be managed programmatically using the Python API:
 .. code-block:: python
 
    from dexray_intercept import AppProfiler
-   
+
    # Start with minimal hooks
    profiler = AppProfiler(session, hook_config={'web_hooks': True})
    profiler.start_profiling()
-   
+
    # Enable additional hooks at runtime
    profiler.enable_hook('aes_hooks', True)
    profiler.enable_hook('bypass_hooks', True)
-   
+
    # Check currently enabled hooks
    enabled = profiler.get_enabled_hooks()
    print(f"Active hooks: {enabled}")
+
+Runtime Hook Reconfiguration (Hot-Reconfiguration API)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The hot-reconfiguration API allows enabling/disabling hooks at runtime without restarting the profiling session. This is particularly useful for UI-based tools where users need to toggle hooks dynamically.
+
+**Enable/Disable Individual Hooks:**
+
+.. code-block:: python
+
+   # Enable a specific hook at runtime
+   profiler.enable_hook('socket_hooks', True)
+
+   # Disable a specific hook at runtime
+   profiler.enable_hook('aes_hooks', False)
+
+**Bulk Hook Management:**
+
+.. code-block:: python
+
+   # Enable all available hooks
+   profiler.enable_all_hooks()
+
+   # Disable all hooks
+   profiler.disable_all_hooks()
+
+   # Enable hooks by category/group
+   profiler.enable_hook_group('crypto')   # Enables aes, keystore, encodings
+   profiler.enable_hook_group('network')  # Enables web, socket hooks
+
+**UI Integration with Callbacks:**
+
+For UI developers, the ``_on_hook_config_changed()`` callback provides real-time feedback when hook state changes are acknowledged by the agent:
+
+.. code-block:: python
+
+   class MyUIProfiler(AppProfiler):
+       """Custom profiler with UI callback support."""
+
+       def _on_hook_config_changed(self, hook_name: str, enabled: bool,
+                                    success: bool, error: str = None):
+           """Handle hook state changes for UI updates."""
+           if success:
+               # Update UI to reflect new hook state
+               self.update_ui_checkbox(hook_name, enabled)
+               self.show_status(f"Hook {hook_name} {'enabled' if enabled else 'disabled'}")
+           else:
+               # Show error in UI
+               self.show_error(f"Failed to change {hook_name}: {error}")
+               # Revert UI checkbox to previous state
+               self.revert_ui_checkbox(hook_name)
+
+**How It Works:**
+
+1. Python sends a ``runtime_hook_config`` message to the Frida agent
+2. The agent updates its internal ``hook_config`` dictionary
+3. The agent sends an acknowledgment back to Python
+4. Python invokes the ``_on_hook_config_changed()`` callback
+5. Each hook module checks ``hook_config[HOOK_NAME]`` before sending events
+
+**Performance Considerations:**
+
+- Enabling/disabling hooks is lightweight (no re-instrumentation required)
+- For Java hooks, event sending is simply gated by a config check
+- Native hooks use true detach/reattach via the HookRegistry for complete cleanup
+- No session restart required for any hook state change
 
 Custom Hook Integration
 -----------------------

@@ -63,22 +63,56 @@ Target and Connection
 Device and Server Management
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+.. option:: -l, --list-devices
+
+   List all connected Frida devices and exit. Useful for identifying device IDs when multiple devices are connected.
+
+   .. code-block:: bash
+
+      dexray-intercept -l
+
+      # Output:
+      # Connected Frida devices:
+      #
+      #   ID               NAME                    TYPE
+      #   ---------------  ----------------------  ----
+      #   local            Local System            local
+      #   emulator-5554    Android Emulator 5554   usb
+      #   192.168.1.5:5555 Samsung Galaxy S21      usb
+      #
+      # Usage: dexray-intercept -d <device_id> <app_name>
+
+.. option:: -d <device_id>, --device <device_id>
+
+   Connect to a specific device by its ID. Use ``-l`` to list available device IDs.
+
+   .. code-block:: bash
+
+      # Connect to specific emulator
+      dexray-intercept -d emulator-5554 com.example.app
+
+      # Connect to specific physical device
+      dexray-intercept --device HVA12345 --hooks-all com.banking.app
+
+   .. tip::
+      Device IDs typically match the output of ``adb devices`` for USB-connected devices.
+
 .. option:: -f, --frida
 
    Install and run frida-server on the target device.
-   
+
    .. code-block:: bash
-   
+
       dexray-intercept -f  # Install frida-server and exit
 
 .. option:: --enable_spawn_gating
 
    Enable spawn gating to catch newly spawned processes.
-   
+
    .. code-block:: bash
-   
+
       dexray-intercept --enable_spawn_gating com.example.app
-   
+
    .. warning::
       This may catch unrelated processes spawned during analysis.
 
