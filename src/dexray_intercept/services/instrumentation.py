@@ -250,7 +250,7 @@ def setup_frida_device(host: str = "", device_id: str = "", enable_spawn_gating:
 
         return device
 
-    except frida.InvalidArgumentError as e:
+    except frida.InvalidArgumentError:
         if device_id:
             raise FridaBasedException(f"Device not found: '{device_id}'. Use --list-devices to see available devices.")
         raise FridaBasedException("Unable to find device")

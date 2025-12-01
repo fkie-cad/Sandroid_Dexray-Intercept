@@ -341,7 +341,7 @@ Examples:
                 for device in devices:
                     print(f"  {device['id']:<{max_id_len}}  {device['name']:<{max_name_len}}  {device['type']}")
 
-                print(f"\nUsage: dexray-intercept -d <device_id> <app_name>")
+                print("\nUsage: dexray-intercept -d <device_id> <app_name>")
         except Exception as e:
             print(f"[-] Error listing devices: {e}")
         exit(0)
