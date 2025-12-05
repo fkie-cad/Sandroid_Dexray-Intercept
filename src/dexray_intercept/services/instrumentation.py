@@ -3,13 +3,33 @@
 
 import frida
 import os
-from typing import Optional, Callable, List
+from typing import Optional, Callable, List, Dict, Any
 from datetime import datetime
 
 
 class FridaBasedException(Exception):
     """Custom exception for Frida-related errors"""
     pass
+
+
+def list_devices() -> List[Dict[str, Any]]:
+    """Enumerate all connected Frida devices.
+
+    Returns:
+        List of device dictionaries with 'id', 'name', and 'type' keys.
+    """
+    try:
+        devices = frida.enumerate_devices()
+        return [
+            {
+                'id': device.id,
+                'name': device.name,
+                'type': device.type
+            }
+            for device in devices
+        ]
+    except Exception as e:
+        raise FridaBasedException(f"Failed to enumerate devices: {str(e)}")
 
 
 class InstrumentationService:
@@ -168,12 +188,25 @@ class InstrumentationService:
         return self.load_script()
 
 
-def setup_frida_device(host: str = "", enable_spawn_gating: bool = False):
-    """Setup and return a Frida device connection"""
+def setup_frida_device(host: str = "", device_id: str = "", enable_spawn_gating: bool = False):
+    """Setup and return a Frida device connection.
+
+    Args:
+        host: Remote device address in format 'ip:port'. Takes precedence over device_id.
+        device_id: Specific device ID to connect to (e.g., 'emulator-5554', 'HVA12345').
+                   Use list_devices() to see available device IDs.
+        enable_spawn_gating: Enable spawn gating to catch newly spawned processes.
+
+    Returns:
+        Frida device object.
+    """
     try:
         if len(host) > 4:
             # Use IP address of the target machine instead of USB
             device = frida.get_device_manager().add_remote_device(host)
+        elif device_id:
+            # Use specific device by ID
+            device = frida.get_device(device_id)
         else:
             device = frida.get_usb_device()
 
@@ -191,10 +224,12 @@ def setup_frida_device(host: str = "", enable_spawn_gating: bool = False):
         if enable_spawn_gating:
             device.enable_spawn_gating()
             device.on("spawn_added", on_spawn_added)
-        
+
         return device
-    
+
     except frida.InvalidArgumentError:
+        if device_id:
+            raise FridaBasedException(f"Device not found: '{device_id}'. Use --list-devices to see available devices.")
         raise FridaBasedException("Unable to find device")
     except frida.ServerNotRunningError:
         raise FridaBasedException("Frida server not running. Start frida-server and try it again.")

@@ -26,7 +26,7 @@
     "dependencies": {
         "frida": "^17.2.0",
         "frida-fs": "^5.2.1",
-        "frida-java-bridge": "^7.0.7",
+        "frida-java-bridge": "^7.0.10",
         "frida-objc-bridge": "^8.0.5",
         "util": "^0.12.4"
     }

@@ -551,6 +551,6 @@ class FridaBasedException(FridaBasedException):
 
 
 # Legacy function for compatibility
-def setup_frida_handler(host: str = "", enable_spawn_gating: bool = False):
+def setup_frida_handler(host: str = "", device_id: str = "", enable_spawn_gating: bool = False):
     """Legacy function - use setup_frida_device() instead"""
-    return setup_frida_device(host, enable_spawn_gating)
+    return setup_frida_device(host, device_id, enable_spawn_gating)
