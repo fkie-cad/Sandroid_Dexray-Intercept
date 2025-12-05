@@ -522,8 +522,29 @@ class AppProfiler:
     
     def get_frida_script(self) -> str:
         """Get the path to the Frida script"""
+        if self.instrumentation is None:
+            # Create temporary instrumentation just to get script path
+            from .services.instrumentation import InstrumentationService
+            temp_instrumentation = InstrumentationService(None)
+            return temp_instrumentation.get_script_path()
         return self.instrumentation.get_script_path()
-    
+
+    def set_job_script(self, script: frida.core.Script):
+        """Set script reference when using external job manager (e.g., AndroidFridaManager).
+
+        This allows Sandroid to load the script via JobManager while still using
+        AppProfiler for message handling, hook config, and profile collection.
+
+        Args:
+            script: Frida script loaded by external job manager
+        """
+        if self.instrumentation is None:
+            from .services.instrumentation import InstrumentationService
+            self.instrumentation = InstrumentationService(None)
+
+        self.instrumentation.script = script
+        script.on("message", self._message_handler)
+
     def update_script(self, script):
         """Update script reference (for compatibility)"""
         # This is handled internally now
