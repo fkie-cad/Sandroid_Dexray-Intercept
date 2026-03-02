@@ -19,7 +19,7 @@ class MitmProxyThread(threading.Thread):
         self.mitm_proc = Popen(mitm_cmd, stdout=PIPE, stderr=PIPE, shell=False)
         if self.verbose:
                 for bline in self.mitm_proc.stdout:
-                    print(f"[MITMPROXY] {bline.decode("utf-8")}")
+                    print(f"[MITMPROXY] {bline.decode('utf-8')}")
 
     def stop(self):
         if self.verbose:
