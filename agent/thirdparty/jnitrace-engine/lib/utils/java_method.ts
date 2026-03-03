@@ -1,4 +1,3 @@
-import { JavaVM } from "../jni/java_vm";
 import { Types } from "./types";
 
 
@@ -55,7 +54,7 @@ class JavaMethod {
                     i = desc.nextIndex;
         }
 
-        // parse return values one by one
+        // parse the return descriptor
         if(retPart.length==0){
             throw new Error(`Missing return type in signature: ${signature}`);
         } else{
