@@ -137,51 +137,112 @@ export function run (callbackManager: JNICallbackManager): void {
     }
     
     const dlopenRef = Module.findExportByName(null, "dlopen");
+    const dlopenExtRef = Module.findExportByName(null, "android_dlopen_ext");
     const dlsymRef = Module.findExportByName(null, "dlsym");
     const dlcloseRef = Module.findExportByName(null, "dlclose");
-    
-    if (dlopenRef !== null && dlsymRef !== null && dlcloseRef !== null) {
-        const HANDLE_INDEX = 0;
-    
-        const dlopen = new NativeFunction(dlopenRef, "pointer", ["pointer", "int"]);
-        Interceptor.replace(dlopen, new NativeCallback((filename: NativePointer, mode: number): NativeReturnValue => {
-            const path = filename.readCString();
-            const retval = dlopen(filename, mode);
-    
-            if (path !== null) {
-                if (checkLibrary(path)) {
-                    // eslint-disable-next-line @typescript-eslint/no-base-to-string
-                    trackedLibs.set(retval.toString(), true);
-                } else {
-                    // eslint-disable-next-line @typescript-eslint/no-base-to-string
-                    libBlacklist.set(retval.toString(), true);
-                }
-            }
 
-            return retval;
-        }, "pointer", ["pointer", "int"]));
-    
-        const dlsym = new NativeFunction(dlsymRef, "pointer", ["pointer", "pointer"]);
+    /**
+     * Common handler for both dlopen() and android_dlopen_ext().
+     *
+     * It inspects the filename, runs checkLibrary(path), and
+     * updates trackedLibs / libBlacklist based on the returned
+     * handle. The handle is returned unchanged.
+     */
+    const handleDlopenResult = (
+        filename: NativePointer,
+        handle: NativePointer
+    ): NativePointer => {
+        const path = filename.readCString();
+
+        if (path !== null) {
+            if (checkLibrary(path)) {
+                // eslint-disable-next-line @typescript-eslint/no-base-to-string
+                trackedLibs.set(handle.toString(), true);
+            } else {
+                // eslint-disable-next-line @typescript-eslint/no-base-to-string
+                libBlacklist.set(handle.toString(), true);
+            }
+        }
+
+        return handle;
+    };
+
+    if ((dlopenRef !== null || dlopenExtRef !== null) &&
+        dlsymRef !== null &&
+        dlcloseRef !== null) {
+
+        const HANDLE_INDEX = 0;
+
+        if (dlopenRef !== null) {
+            const dlopen = new NativeFunction(
+                dlopenRef,
+                "pointer",
+                ["pointer", "int"]
+            );
+
+            Interceptor.replace(
+                dlopen,
+                new NativeCallback(
+                    (filename: NativePointer, mode: number): NativePointer => {
+                        const handle = dlopen(filename, mode);
+                        return handleDlopenResult(filename, handle);
+                    },
+                    "pointer",
+                    ["pointer", "int"]
+                )
+            );
+        }
+
+        if (dlopenExtRef !== null) {
+            const dlopenExt = new NativeFunction(
+                dlopenExtRef,
+                "pointer",
+                ["pointer", "int", "pointer"]
+            );
+
+            Interceptor.replace(
+                dlopenExt,
+                new NativeCallback(
+                    (
+                        filename: NativePointer,
+                        mode: number,
+                        extinfo: NativePointer
+                    ): NativePointer => {
+                        const handle = dlopenExt(filename, mode, extinfo);
+                        return handleDlopenResult(filename, handle);
+                    },
+                    "pointer",
+                    ["pointer", "int", "pointer"]
+                )
+            );
+        }
+
+        const dlsym = new NativeFunction(
+            dlsymRef,
+            "pointer",
+            ["pointer", "pointer"]
+        );
+
         Interceptor.attach(dlsym, {
             onEnter (args: NativePointer[]): void {
                 const SYMBOL_INDEX = 1;
-    
+
                 this.handle = ptr(args[HANDLE_INDEX].toString());
-    
+
                 if (libBlacklist.has(this.handle)) {
                     return;
                 }
-    
+
                 this.symbol = args[SYMBOL_INDEX].readCString();
             },
             onLeave (retval: NativePointer): void {
                 if (retval.isNull() || libBlacklist.has(this.handle)) {
                     return;
                 }
-    
+
                 const config = Config.getInstance();
                 const EMPTY_ARRAY_LEN = 0;
-    
+
                 if (config.includeExport.length > EMPTY_ARRAY_LEN) {
                     const included = config.includeExport.filter(
                         (i: string): boolean => (this.symbol as string).includes(i)
@@ -198,7 +259,7 @@ export function run (callbackManager: JNICallbackManager): void {
                         return;
                     }
                 }
-    
+
                 if (!trackedLibs.has(this.handle)) {
                     // Android 7 and above miss the initial dlopen call.
                     // Give it another chance in dlsym.
@@ -207,7 +268,7 @@ export function run (callbackManager: JNICallbackManager): void {
                         trackedLibs.set(this.handle, true);
                     }
                 }
-    
+
                 if (trackedLibs.has(this.handle)) {
                     const symbol = this.symbol as string;
                     if (symbol === "JNI_OnLoad") {
@@ -217,7 +278,7 @@ export function run (callbackManager: JNICallbackManager): void {
                     }
                 } else  {
                     let name = config.libraries[HANDLE_INDEX];
-    
+
                     if (name !== "*") {
                         const mod = Process.findModuleByAddress(retval);
                         if (mod === null) {
@@ -236,7 +297,7 @@ export function run (callbackManager: JNICallbackManager): void {
                 }
             }
         });
-    
+
         const dlclose = new NativeFunction(dlcloseRef, "int", ["pointer"]);
         Interceptor.attach(dlclose, {
             onEnter (args: NativePointer[]): void {
