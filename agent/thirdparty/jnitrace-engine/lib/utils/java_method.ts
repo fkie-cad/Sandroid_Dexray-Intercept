@@ -16,7 +16,26 @@ class JavaMethod {
 
     public constructor(signature: string) {
         this._signature = signature;
-        const { params, ret } = JavaMethod.parseMethodDescriptor(signature);
+        let params: string[] = [];
+        let ret = "V";
+
+        try{
+            const parsed = JavaMethod.parseMethodDescriptor(signature);
+            params = parsed.params;
+            ret = parsed.ret;
+        } catch(e){
+            // Fallback: mimic original behavior
+            // - No params
+            // - Unknown return type
+            send({
+                type: "warning",
+                message: `Failed to parse Java method signature: ${signature}`,
+                error: e instanceof Error ? e.message : String(e),
+            });
+            params = [];
+            ret = "unknown";
+        }
+        
         this._params = params;
         this._ret = ret;
     }
