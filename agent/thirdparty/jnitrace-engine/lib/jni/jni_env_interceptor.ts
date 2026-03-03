@@ -17,24 +17,60 @@ const TYPE_NAME_END = -1;
 const COPY_ARRAY_INDEX = 0;
 const JNI_ENV_INDEX = 0;
 
+/**
+ * Architecture-independent base class for JNIEnv interception.
+ *
+ * Responsibilities:
+ *  - Create a shadow JNIEnv whose function table consists of
+ *    per-method intercept stubs (normal and varargs).
+ *  - Track per-thread JNIEnv and JavaVM pointers.
+ *  - Map jmethodID → JavaMethod signatures (for decoding Java args).
+ *  - Integrate JNI calls with JNICallbackManager (before/after hooks).
+ *  - Delegate architecture-specific tasks to subclasses:
+ *      * vararg shellcode trampoline (buildVaArgParserShellcode),
+ *      * va_list decoding (setUpVaListArgExtract, extractVaListArgValue, resetVaListArgExtract).
+ */
 abstract class JNIEnvInterceptor {
+    // Keeps allocated pages/callbacks alive for the lifetime of the script.
     protected references: ReferenceManager;
 
+    // Tracks per-thread JNIEnv and JavaVM pointers
     protected threads: JNIThreadManager;
 
+    // Manages user-defined “before” and “after” JNI callbacks
     protected callbackManager: JNICallbackManager;
 
+    // Optional interceptor for JavaVM-level operations
     protected javaVMInterceptor: JavaVMInterceptor | null;
 
+    // Pointer to the shadow JNIEnv (proxy function table)
     protected shadowJNIEnv: NativePointer;
 
+    /**
+     * Maps jmethodID (as string) → JavaMethod (parsed signature).
+     * Populated when GetMethodID / GetStaticMethodID are intercepted.
+     */
     protected methods: Map<string, JavaMethod>;
 
+    /**
+     * Per-method cache of main varargs callbacks:
+     * methodId string -> NativeCallback for that JNI call.
+     */
     protected fastMethodLookup: Map<string, NativeCallback>;
 
+    /**
+     * Per-thread backtrace captured just before a varargs JNI call is
+     * handled by the shellcode trampoline.
+     */
     protected vaArgsBacktraces: Map<number, NativePointer[]>;
 
-
+    /**
+     * Constructs a new base JNIEnv interceptor instance.
+     *
+     * @param references      Global reference manager.
+     * @param threads         JNI thread manager.
+     * @param callbackManager Manager for before/after JNI callbacks.
+     */
     public constructor (
         references: ReferenceManager,
         threads: JNIThreadManager,
@@ -52,46 +88,69 @@ abstract class JNIEnvInterceptor {
         this.vaArgsBacktraces = new Map<number, NativePointer[]>();
     }
 
+    /**
+     * Returns true if a shadow JNIEnv has already been created.
+     */
     public isInitialised (): boolean {
         return !this.shadowJNIEnv.equals(NULL);
     }
 
+    /**
+     * Returns the pointer to the shadow JNIEnv (proxy function table).
+     */
     public get (): NativePointer {
         return this.shadowJNIEnv;
     }
 
+    /**
+     * Creates the shadow JNIEnv for the current thread.
+     *
+     * - Clones the layout of the original JNIEnv vtable.
+     * - For each slot, installs a small stub whose implementation is
+     *   either a normal or varargs interceptor.
+     * - The real JNI function pointers (methodPtr) are kept in the
+     *   closures of those interceptors and invoked via NativeFunction;
+     *   the shadow table itself only ever contains intercept stubs.
+     * - Stores the new JNIEnv* pointer in shadowJNIEnv.
+     *
+     * @returns Pointer to the new JNIEnv* to be returned to native code.
+     */
     public create (): NativePointer {
         const END_INDEX = 1;
         const threadId = Process.getCurrentThreadId();
         const jniEnv = this.threads.getJNIEnv(threadId);
-        const jniEnvOffset = 4;
-        const jniEnvLength = 232;
+        const jniEnvOffset = 4; // first methods to intercept
+        const jniEnvLength = 232; // number of methods in table
 
+        // Allocate space for new JNIEnv function table.
         const newJNIEnvStruct = Memory.alloc(Process.pointerSize * jniEnvLength);
         this.references.add(newJNIEnvStruct);
 
+        // Allocate JNIEnv* that points to the table.
         const newJNIEnv = Memory.alloc(Process.pointerSize);
         newJNIEnv.writePointer(newJNIEnvStruct);
         this.references.add(newJNIEnv);
 
+        // For each method slot, install a normal or varargs interceptor
         for (let i = jniEnvOffset; i < jniEnvLength; i++) {
             const method = JNI_ENV_METHODS[i];
             const offset = i * Process.pointerSize;
             const jniEnvStruct = jniEnv.readPointer();
             const methodAddr = jniEnvStruct.add(offset).readPointer();
 
+            // Last argument type determines whether this is a varargs "..."
             if (method.args[method.args.length - END_INDEX] === "...") {
                 const callback = this.createJNIVarArgIntercept(i, methodAddr);
                 const trampoline = this.createStubFunction();
                 this.references.add(trampoline);
-                // ensure the CpuContext will be populated
+                // Ensure CpuContext is populated for the callback
                 Interceptor.replace(trampoline, callback);
                 newJNIEnvStruct.add(offset).writePointer(trampoline);
             } else {
                 const callback = this.createJNIIntercept(i, methodAddr);
                 const trampoline = this.createStubFunction();
                 this.references.add(trampoline);
-                // ensure the CpuContext will be populated
+                // Ensure CpuContext is populated for the callback
                 Interceptor.replace(trampoline, callback);
                 newJNIEnvStruct.add(offset).writePointer(trampoline);
             }
@@ -102,15 +161,44 @@ abstract class JNIEnvInterceptor {
         return newJNIEnv;
     }
 
+    /**
+     * Sets the JavaVM interceptor to be used when handling GetJavaVM
+     * and JavaVM-related operations.
+     */
     public setJavaVMInterceptor (javaVMInterceptor: JavaVMInterceptor): void {
         this.javaVMInterceptor = javaVMInterceptor;
     }
 
+    /**
+     * Creates a stub function used as an Interceptor target.
+     *
+     * The default implementation is a no-op NativeCallback that
+     * immediately returns. Architecture-specific subclasses may override
+     * this (e.g. to emit a minimal RET/POP PC stub in assembly).
+     */
     public createStubFunction (): NativeCallback {
         // eslint-disable-next-line @typescript-eslint/no-empty-function
         return new NativeCallback((): void => { }, "void", []);
     }
 
+    /**
+     * Creates the vararg interceptor for a JNI method with "..." in its
+     * signature.
+     *
+     * - Allocates an executable page (`text`) and a data page (`data`).
+     * - Creates the initial parser callback (see createJNIVarArgInitialCallback).
+     * - Emits architecture-specific shellcode that:
+     *     1. captures the original call context,
+     *     2. calls the parser to get the main callback pointer,
+     *     3. calls the main callback,
+     *     4. returns to the original caller.
+     * - Attaches an Interceptor to `text` to capture a backtrace before
+     *   the shellcode modifies registers.
+     *
+     * @param id        Index into JNI_ENV_METHODS.
+     * @param methodPtr Address of the real JNI function.
+     * @returns Pointer to the shellcode entry (stored in shadowJNIEnv).
+     */
     protected createJNIVarArgIntercept (
         id: number,
         methodPtr: NativePointer
@@ -124,16 +212,20 @@ abstract class JNIEnvInterceptor {
         this.references.add(text);
         this.references.add(data);
 
+        // JS-level parser that will be called by the shellcode
         const vaArgsCallback = this.createJNIVarArgInitialCallback(
             method, methodPtr
         );
 
         this.references.add(vaArgsCallback);
 
+        // Emit arch-specific trampoline shellcode
         self.buildVaArgParserShellcode(text, data, vaArgsCallback);
 
         const config = Config.getInstance();
 
+        // Attach to the shellcode entry to capture a backtrace
+        // before registers are clobbered
         Interceptor.attach(text, function (this: InvocationContext): void {
             let backtraceType = Backtracer.ACCURATE;
             if (config.backtrace === "fuzzy") {
@@ -147,6 +239,14 @@ abstract class JNIEnvInterceptor {
         return text;
     }
 
+    /**
+     * Expands a trailing va_list / jvalue* argument into explicit Java
+     * arguments, producing a cloned argument array with all Java args
+     * appended.
+     *
+     * Used by non-vararg JNI functions that take va_list/jvalue* (e.g.
+     * the "V" and "A" JNI variants).
+     */
     private addJavaArgsForJNIIntercept (
         method: JNIMethod,
         args: NativeArgumentValue[]
@@ -157,11 +257,13 @@ abstract class JNIEnvInterceptor {
         const NON_VIRTUAL_METHOD_ID_INDEX = 3;
         let methodIndex = METHOD_ID_INDEX;
 
+        // Nonvirtual* JNI methods use a different index for jmethodID
         if (method.name.includes("Nonvirtual")) {
             methodIndex = NON_VIRTUAL_METHOD_ID_INDEX;
         }
         const lastParamType = method.args.slice(LAST_INDEX)[FIRST_INDEX];
 
+        // If no va_list/jvalue* trailing argument, nothing to expand
         if (!["va_list", "jvalue*"].includes(lastParamType)) {
             return args.slice(COPY_ARRAY_INDEX);
         }
@@ -178,23 +280,29 @@ abstract class JNIEnvInterceptor {
             return args.slice(COPY_ARRAY_INDEX);
         }
 
+        // JavaMethod contains the Java-side parameter types
         const javaMethod = this.methods.get(midPtr.toString()) as JavaMethod;
-
         const nativeJTypes = javaMethod.nativeParams;
+
+        // Pointer to va_list or jvalue* (last argument)
         const readPtr = args.slice(LAST_INDEX)[FIRST_INDEX] as NativePointer;
 
+        // For va_list, initialize architecture-specific extraction state
         if (lastParamType === "va_list") {
             this.setUpVaListArgExtract(readPtr);
         }
 
+        // size of each jvalue entry
         const UNION_SIZE = 8;
         for (let i = 0; i < nativeJTypes.length; i++) {
             const type = Types.convertNativeJTypeToFridaType(nativeJTypes[i]);
             let val = undefined;
             if (lastParamType === "va_list") {
+                // For va_list, delegate to arch-specific extractor
                 const currentPtr = this.extractVaListArgValue(javaMethod, i);
                 val = this.readValue(currentPtr, type, true);
             } else {
+                // For jvalue*, read from the jvalue array
                 val = this.readValue(readPtr.add(UNION_SIZE * i), type);
             }
 
@@ -208,6 +316,10 @@ abstract class JNIEnvInterceptor {
         return clonedArgs;
     }
 
+    /**
+     * Handles the result of GetMethodID/GetStaticMethodID by storing
+     * the mapping from returned jmethodID to its JavaMethod signature.
+     */
     private handleGetMethodResult (
         args: NativeArgumentValue[],
         ret: NativeReturnValue
@@ -221,6 +333,10 @@ abstract class JNIEnvInterceptor {
         }
     }
 
+    /**
+     * Handles the result of GetJavaVM by installing or returning an
+     * intercepted JavaVM pointer via JavaVMInterceptor.
+     */
     private handleGetJavaVM (
         args: NativeArgumentValue[],
         ret: NativeReturnValue
@@ -240,11 +356,19 @@ abstract class JNIEnvInterceptor {
                     javaVM = this.javaVMInterceptor.get();
                 }
 
+                // Replace the JavaVM* out-param with the shadow JavaVM
                 javaVMPtr.writePointer(javaVM);
             }
         }
     }
 
+    /**
+     * Handles RegisterNatives by:
+     *  - iterating over the JNI method array;
+     *  - attaching interceptors to each native method;
+     *  - on entry of a native method, swapping the real JNIEnv* for
+     *    the shadow JNIEnv*, so subsequent JNI calls go through us.
+     */
     private handleRegisterNatives (args: NativeArgumentValue[]): void {
         const METHOD_INDEX = 2;
         const SIZE_INDEX = 3;
@@ -276,13 +400,14 @@ abstract class JNIEnvInterceptor {
             if (name === null || sig === null) {
                 continue;
             }
-
+            // Attach to each native method to swap JNIEnv
             Interceptor.attach(addr, {
                 onEnter (args: NativeArgumentValue[]): void {
                     const check = name + sig;
                     const config = Config.getInstance();
                     const EMPTY_ARRAY_LEN = 0;
 
+                    // Optional include/exclude filtering by name+sig
                     if (config.includeExport.length > EMPTY_ARRAY_LEN) {
                         const included = config.includeExport.filter(
                             (i: string): boolean => check.includes(i)
@@ -300,17 +425,23 @@ abstract class JNIEnvInterceptor {
                         }
                     }
 
+                    // Track per-thread JNIEnv* if not already tracked
                     if (!self.threads.hasJNIEnv(this.threadId)) {
                         self.threads.setJNIEnv(
                             this.threadId, args[JNI_ENV_INDEX] as NativePointer
                         );
                     }
+                    // Replace JNIEnv* with the shadow JNIEnv
                     args[JNI_ENV_INDEX] = self.shadowJNIEnv;
                 }
             });
         }
     }
 
+    /**
+     * Dispatches post-processing logic based on the JNI method name
+     * (e.g. GetMethodID, GetJavaVM, RegisterNatives).
+     */
     private handleJNIInterceptResult (
         method: JNIMethod,
         args: NativeArgumentValue[],
@@ -327,6 +458,20 @@ abstract class JNIEnvInterceptor {
         }
     }
 
+    /**
+     * Creates a normal (non-vararg) interceptor for a given JNI method.
+     *
+     * The generated NativeCallback:
+     *  - replaces env with the real JNIEnv* for this thread;
+     *  - optionally expands trailing va_list/jvalue* arguments using
+     *    arch-specific helpers (addJavaArgsForJNIIntercept);
+     *  - builds a JNIInvocationContext and runs before/after callbacks;
+     *  - calls the real JNI function via NativeFunction(methodPtr, ...);
+     *  - performs any special post-processing needed for this method.
+     *
+     * @param id        Index into JNI_ENV_METHODS.
+     * @param methodPtr Address of the real JNI function.
+     */
     private createJNIIntercept (
         id: number,
         methodPtr: NativePointer
@@ -349,8 +494,10 @@ abstract class JNIEnvInterceptor {
             const jniEnv = self.threads.getJNIEnv(threadId);
             const args: NativeArgumentValue[] = [].slice.call(arguments);
 
+            // Replace env argument with the real JNIEnv* for this thread
             args[JNI_ENV_INDEX] = jniEnv;
 
+            // Optionally expand trailing va_list/jvalue* into explicit args
             const clonedArgs = self.addJavaArgsForJNIIntercept(method, args);
 
             const ctx: JNIInvocationContext = {
@@ -359,24 +506,30 @@ abstract class JNIEnvInterceptor {
                 methodDef: method,
             };
 
+            // Optional backtrace
             if (config.backtrace === "accurate") {
                 ctx.backtrace = Thread.backtrace(this.context, Backtracer.ACCURATE);
             } else if (config.backtrace === "fuzzy") {
                 ctx.backtrace = Thread.backtrace(this.context, Backtracer.FUZZY);
             }
 
+            // If argument list changed, attach JavaMethod metadata
             if (args.length !== clonedArgs.length) {
                 // eslint-disable-next-line @typescript-eslint/no-base-to-string
                 const key = args[METHOD_ID_INDEX].toString();
                 ctx.javaMethod = self.methods.get(key);
             }
 
+            // User-defined before-callback sees the expanded arguments
             self.callbackManager.doBeforeCallback(method.name, ctx, clonedArgs);
 
+            // Call the real JNI function with the original (env-fixed) args
             let ret = nativeFunction.apply(null, args);
 
+            // User-defined after-callback
             ret = self.callbackManager.doAfterCallback(method.name, ctx, ret);
 
+            // Handle post-processing for GetMethodID/GetJavaVM/RegisterNatives
             self.handleJNIInterceptResult(method, args, ret);
 
             return ret;
@@ -387,6 +540,27 @@ abstract class JNIEnvInterceptor {
         return nativeCallback;
     }
 
+    /**
+     * Creates the per-method main callback used for JNI methods with
+     * "..." (varargs).
+     *
+     * The mainCallback:
+     *  - is called from the shellcode trampoline with explicit, typed
+     *    Java arguments (no va_list);
+     *  - replaces env with the real JNIEnv*;
+     *  - attaches backtrace and JavaMethod metadata;
+     *  - runs before/after callbacks;
+     *  - calls the real JNI function via NativeFunction(methodPtr, ...);
+     *  - clears the stored backtrace.
+     *
+     * @param method             JNIMethod definition for this JNI call.
+     * @param methodPtr          Address of the real JNI function.
+     * @param initialparamTypes  Full C parameter list for NativeFunction
+     *                           (env, obj, mid, "...", Java args).
+     * @param mainParamTypes     Parameter list for the main callback
+     *                           (env, obj, mid, Java args).
+     * @param retType            Frida return type for this JNI call.
+     */
     private createJNIVarArgMainCallback (
         method: JNIMethod,
         methodPtr: NativePointer,
@@ -402,11 +576,13 @@ abstract class JNIEnvInterceptor {
             const METHOD_ID_INDEX = 2;
             const threadId = this.threadId;
             const args: NativeArgumentValue[] = [].slice.call(arguments);
+            // Recover real JNIEnv* and JavaMethod
             const jniEnv = self.threads.getJNIEnv(threadId);
             // eslint-disable-next-line @typescript-eslint/no-base-to-string
             const key = args[METHOD_ID_INDEX].toString();
             const jmethod = self.methods.get(key);
 
+            // Fix env in argument list
             args[JNI_ENV_INDEX] = jniEnv;
 
             const ctx: JNIInvocationContext = {
@@ -417,14 +593,18 @@ abstract class JNIEnvInterceptor {
                 javaMethod: jmethod
             };
 
+            // Before-callback sees the fully explicit arguments
             self.callbackManager.doBeforeCallback(method.name, ctx, args);
 
+            // Call the real JNI vararg function with the full C signature
             let ret = new NativeFunction(methodPtr,
                 retType,
                 initialparamTypes).apply(null, args);
 
+            // After-callback
             ret = self.callbackManager.doAfterCallback(method.name, ctx, ret);
 
+            // Cleanup per-thread backtrace
             self.vaArgsBacktraces.delete(this.threadId);
 
             return ret;
@@ -433,6 +613,21 @@ abstract class JNIEnvInterceptor {
         return mainCallback;
     }
 
+    /**
+     * Creates the initial parser callback used by the vararg shellcode.
+     *
+     * The parser:
+     *  - is called once per JNI vararg call from the shellcode;
+     *  - inspects the jmethodID to look up the JavaMethod metadata;
+     *  - if a mainCallback already exists for this methodID, returns it;
+     *  - otherwise, builds a new mainCallback with the correct C and
+     *    JS parameter lists, caches it, and returns it.
+     *
+     * @param method    JNI method definition from JNI_ENV_METHODS.
+     * @param methodPtr Address of the real JNI function.
+     * @returns NativeCallback that the shellcode calls to obtain the
+     *          main vararg callback pointer.
+     */
     private createJNIVarArgInitialCallback (
         method: JNIMethod,
         methodPtr: NativePointer
@@ -445,17 +640,24 @@ abstract class JNIEnvInterceptor {
             const methodId = (arguments[METHOD_ID_INDEX] as NativeArgumentValue).toString();
             const javaMethod = self.methods.get(methodId) as JavaMethod;
 
+            // Fast path: reuse existing mainCallback if already created
             if (self.fastMethodLookup.has(methodId)) {
                 return self.fastMethodLookup.get(methodId) as NativeReturnValue;
             }
 
+            // C-side parameter types up to (but excluding) the "..." part
             const originalParams = method.args
                 .slice(TYPE_NAME_START, TYPE_NAME_END)
                 .map((t: string): string => Types.convertNativeJTypeToFridaType(t));
+            // mainCallback’s parameter list initially mirrors those
             const callbackParams = originalParams.slice(COPY_ARRAY_INDEX);
 
+            // Add "..." to represent the trailing varargs in the C signature
             originalParams.push("...");
 
+            // Append Java argument types:
+            // - mainCallback sees them as Frida types (float promoted to double),
+            // - NativeFunction uses actual C types (no promotion)
             javaMethod.fridaParams.forEach((p: string): void => {
                 callbackParams.push(p === "float" ? "double" : p);
                 originalParams.push(p);
@@ -463,6 +665,7 @@ abstract class JNIEnvInterceptor {
 
             const retType = Types.convertNativeJTypeToFridaType(method.ret);
 
+            // Create per-method mainCallback and cache it
             const mainCallback = self.createJNIVarArgMainCallback(
                 method, methodPtr, originalParams, callbackParams, retType
             );
@@ -476,6 +679,13 @@ abstract class JNIEnvInterceptor {
         return vaArgsCallback;
     }
 
+    /**
+     * Reads a value of the given Frida type from a NativePointer.
+     *
+     * @param currentPtr Pointer to the value in memory.
+     * @param type       Frida type (e.g. "int", "double", "pointer").
+     * @param extend     For floats, if true, read as double (vararg promotion).
+     */
     private readValue (
         currentPtr: NativePointer,
         type: string,
@@ -495,6 +705,7 @@ abstract class JNIEnvInterceptor {
             val = currentPtr.readS64();
         } else if (type === "float") {
             if (extend === true) {
+                // For varargs, float is promoted to double
                 val = currentPtr.readDouble();
             } else {
                 val = currentPtr.readFloat();
@@ -508,19 +719,40 @@ abstract class JNIEnvInterceptor {
         return val;
     }
 
+    // ---- Architecture-specific hooks that subclasses must implement ----
+
+    /**
+     * Emits the architecture-specific shellcode that:
+     *  - saves the original call context (registers, return address);
+     *  - calls `parser` to obtain the main vararg callback pointer;
+     *  - restores the original registers;
+     *  - calls the returned main callback with the original ABI;
+     *  - jumps back to the original return address.
+     */
     protected abstract buildVaArgParserShellcode(
         text: NativePointer,
         data: NativePointer,
         parser: NativeCallback
     ): void;
 
+    /**
+     * Initializes internal state for extracting arguments from a va_list
+     * according to the platform ABI (x86, x86-64, ARM, ARM64, ...).
+     */
     protected abstract setUpVaListArgExtract(vaList: NativePointer): void;
 
+    /**
+     * Returns a pointer to the storage location of the index-th argument
+     * in the current va_list, according to the platform ABI.
+     */
     protected abstract extractVaListArgValue(
         method: JavaMethod,
         index: number
     ): NativePointer;
 
+    /**
+     * Resets internal state used for varargs extraction.
+     */
     protected abstract resetVaListArgExtract(): void;
 }
 

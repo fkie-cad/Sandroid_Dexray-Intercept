@@ -143,11 +143,40 @@ class JNIEnvInterceptorX86 extends JNIEnvInterceptor {
         });
     }
     
+     /**
+     * Initializes internal state for extracting arguments from an
+     * x86 va_list. Here va_list is treated as a linear block of
+     * arguments laid out sequentially in memory.
+     *
+     * @param vaList Pointer to the va_list structure passed to
+     *               the JNI “V” variant function.
+     */
     protected setUpVaListArgExtract (vaList: NativePointer): void {
         this.vaList = vaList;
         this.vaListOffset = 0;
     }
 
+     /**
+     * Returns a pointer to the storage location of the paramId-th
+     * Java argument in the current varargs list.
+     *
+     * On 32-bit x86, va_list is effectively a pointer into the
+     * vararg area, and va_arg() advances it by sizeof(T) each time.
+     * This implementation matches that model: it returns:
+     *
+     *   vaList + currentOffset
+     *
+     * and then advances currentOffset by the ABI size of the
+     * parameter type.
+     *
+     * The caller is responsible for reading the value with the
+     * appropriate type (see readValue()).
+     *
+     * @param method  JavaMethod describing the Java-side parameter
+     *                types for this invocation.
+     * @param paramId Zero-based index of the parameter within the
+     *                Java argument list.
+     */
     protected extractVaListArgValue (
         method: JavaMethod,
         paramId: number
@@ -157,6 +186,11 @@ class JNIEnvInterceptorX86 extends JNIEnvInterceptor {
         return currentPtr;
     }
 
+    /**
+     * Resets internal state used for varargs extraction so that
+     * subsequent uses do not retain offsets or pointers from the
+     * previous va_list.
+     */
     protected resetVaListArgExtract (): void {
         this.vaList = NULL;
         this.vaListOffset = 0;

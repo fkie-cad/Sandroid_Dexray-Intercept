@@ -3,8 +3,17 @@ import { JNIMethod } from "../jni/jni_method";
 import { JavaMethod } from "./java_method";
 
 /**
- * Container for a single JNI API invocation, including the JNIEnv/JVM
- * method definition, optional JavaMethod details, arguments, and return value.
+ * Container for a single JNI API invocation.
+ *
+ * Combines:
+ *  - the JNI method definition (JNIMethod),
+ *  - optional JavaMethod metadata (parsed Java signature),
+ *  - the raw argument list as seen by the interceptor, and
+ *  - the raw return value from the JNI call.
+ *
+ * Higher-level components (e.g. frontends, loggers) can use this to
+ * format, filter or transport trace events without needing direct
+ * access to the low-level interception logic.
  */
 class MethodData {
     private readonly _method: JNIMethod;

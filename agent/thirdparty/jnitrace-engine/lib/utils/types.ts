@@ -1,11 +1,18 @@
-/**
- * Utility functions for converting between JVM descriptors, JNI native
- * types, and Frida type strings, and for basic type-size queries.
- */
 const ARRAY_TYPE_INDEX = 1;
 const TYPE_SIZE_64_BIT = 8;
 const TYPE_SIZE_CHAR = 1;
 
+/**
+ * Utility helpers for converting between JVM descriptors (e.g. "I", "[I",
+ * "Ljava/lang/String;"), JNI native types (e.g. jint, jstring, jintArray)
+ * and Frida type strings ("int", "pointer", "double", ...), and for basic
+ * size-of queries.
+ *
+ * Note: multi-dimensional array descriptors produced by JavaMethod
+ * (e.g. "[[I") are collapsed to generic array/object pointers at the
+ * JNI/Frida type level. If exact dimensionality is needed, use the
+ * original JVM descriptor from JavaMethod.signature or JavaMethod.params.
+ */
 const Types = {
     isComplexObjectType (type: string): boolean {
         const JOBJECT = [

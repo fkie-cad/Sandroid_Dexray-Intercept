@@ -86,6 +86,7 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
         this.overflowPtr = NULL;
         this.dataPtr = NULL;
     }
+
     /**
      * Generates a small x86-64 trampoline in the given executable
      * memory region.
@@ -101,6 +102,12 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
      *    argument registers and stack layout; and
      *  - finally jumps to the original return address so that
      *    the caller observes normal control flow.
+     *
+     * Internally, the save/restore loop uses RDI as a staging
+     * register: on each iteration it stores the previous value
+     * of RDI into `data` and then loads the next register/XMM
+     * value into RDI. The reverse loop rebuilds the original
+     * register/XMM state from the contents of `data`.
      *
      * @param text   Executable memory where the trampoline code
      *               will be emitted.
@@ -138,6 +145,10 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
             let xmmOffset = 0;
 
             // Save registers
+            // The loop uses RDI as a staging register: on each iteration the
+            // previous value of RDI gets stored at data[dataOffset], then the
+            // next register/XMM value gets loaded into RDI. The reverse loop below
+            // reconstructs the original register/XMM state from data[].
             for (let i = 0; i < regs.length; i++) {
                 cw.putMovNearPtrReg(data.add(dataOffset), "rdi");
                 dataOffset += Process.pointerSize;

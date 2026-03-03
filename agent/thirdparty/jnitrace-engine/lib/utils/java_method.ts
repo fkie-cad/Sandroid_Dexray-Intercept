@@ -7,7 +7,11 @@ import { Types } from "./types";
  *   (II)I
  *   (Ljava/lang/String;[I)V
  *   ([[I[[Ljava/lang/String;)V
-
+ *
+ * Multi-dimensional array descriptors (e.g. "[[I", "[[Ljava/lang/String;")
+ * are preserved in `params`. When converted via Types.convertJTypeToNativeJType
+ * and Types.convertNativeJTypeToFridaType they are treated as generic
+ * object/array pointers at the JNI/Frida type level.
  */
 class JavaMethod {
     private readonly _signature: string;

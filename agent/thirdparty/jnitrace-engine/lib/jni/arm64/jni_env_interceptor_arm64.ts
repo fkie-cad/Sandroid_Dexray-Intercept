@@ -232,10 +232,19 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
      * Initializes internal state for extracting arguments from an
      * AArch64 va_list (AAPCS64).
      *
-     * Reads stack, gr_top, vr_top, gr_offs and vr_offs from the
-     * va_list structure and stores them in the corresponding
-     * fields, so that subsequent calls to extractVaListArgValue()
-     * emulate va_arg().
+     * This implementation assumes the toolchain’s va_list layout is:
+     *
+     *   struct {
+     *       void *stack;    // overflow_arg_area
+     *       void *gr_top;   // end of saved GPR area
+     *       void *vr_top;   // end of saved FP/SIMD area
+     *       int   gr_offs;  // byte offset into GPR area
+     *       int   vr_offs;  // byte offset into FP/SIMD area
+     *   };
+     *
+     * and reads stack, gr_top, vr_top, gr_offs and vr_offs from that
+     * structure into the corresponding fields, so that subsequent
+     * calls to extractVaListArgValue() emulate va_arg() for this ABI.
      *
      * @param vaList Pointer to the va_list structure passed to
      *               the JNI “V” variant function.

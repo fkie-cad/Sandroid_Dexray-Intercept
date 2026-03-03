@@ -1,6 +1,14 @@
 /**
- * Keeps NativePointer references alive for the lifetime of the engine
- * to prevent garbage-collection of memory and callbacks used by native code.
+ * Keeps NativePointer references alive for the lifetime of the engine.
+
+ *
+ * Native code (shellcode, shadow JNIEnv/JavaVM tables, NativeCallbacks)
+ * holds raw pointers into memory allocated via Frida. To prevent the
+ * JavaScript engine from garbage-collecting those objects while native
+ * code still uses them, store strong references here.
+ *
+ * Entries are typically added once and kept for the duration of the
+ * process; release() exists for completeness but is rarely used.
  */
 class ReferenceManager {
     private readonly references: Map<string, NativePointer>;
