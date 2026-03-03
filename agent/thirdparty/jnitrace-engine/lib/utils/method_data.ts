@@ -2,6 +2,10 @@ import { JNIMethod } from "../jni/jni_method";
 
 import { JavaMethod } from "./java_method";
 
+/**
+ * Container for a single JNI API invocation, including the JNIEnv/JVM
+ * method definition, optional JavaMethod details, arguments, and return value.
+ */
 class MethodData {
     private readonly _method: JNIMethod;
 

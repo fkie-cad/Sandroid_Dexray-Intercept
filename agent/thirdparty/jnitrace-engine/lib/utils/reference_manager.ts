@@ -1,3 +1,7 @@
+/**
+ * Keeps NativePointer references alive for the lifetime of the engine
+ * to prevent garbage-collection of memory and callbacks used by native code.
+ */
 class ReferenceManager {
     private readonly references: Map<string, NativePointer>;
 

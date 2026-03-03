@@ -1,3 +1,7 @@
+/**
+ * Utility functions for converting between JVM descriptors, JNI native
+ * types, and Frida type strings, and for basic type-size queries.
+ */
 const ARRAY_TYPE_INDEX = 1;
 const TYPE_SIZE_64_BIT = 8;
 const TYPE_SIZE_CHAR = 1;
