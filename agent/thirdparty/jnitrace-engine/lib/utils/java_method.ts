@@ -1,78 +1,141 @@
+import { JavaVM } from "../jni/java_vm";
 import { Types } from "./types";
 
-const SEMI_COLON_OFFSET = 1;
 
 /**
  * Abstracts a Java method referenced in native code.
+ * Parses a JVM method descriptor, e.g.:
+ *   (II)I
+ *   (Ljava/lang/String;[I)V
+ *   ([[I[[Ljava/lang/String;)V
+
  */
 class JavaMethod {
-    private readonly _: string;
-
+    private readonly _signature: string;
     private readonly _params: string[];
-
     private readonly _ret: string;
 
-    public constructor (signature: string) {
-        const primitiveTypes = ["B", "S", "I", "J", "F", "D", "C", "Z", "V"];
-        let isArray = false;
-        let isRet = false;
+    public constructor(signature: string) {
+        this._signature = signature;
+        const { params, ret } = JavaMethod.parseMethodDescriptor(signature);
+        this._params = params;
+        this._ret = ret;
+    }
 
-        const jParamTypes: string[] = [];
-        let jRetType = "unknown";
+     /**
+     * Parse a JVM method descriptor into parameter descriptors and return descriptor.
+     * Example:
+     *   "(II)I" -> params: ["I", "I"], ret: "I"
+     *   "(Ljava/lang/String;[I)V" -> params: ["Ljava/lang/String;", "[I"], ret: "V"
+     *   "([[I[[Ljava/lang/String;)V" -> params: ["[[I", "[[Ljava/lang/String;"], ret: "V"
+     */
+    private static parseMethodDescriptor(signature: string): {
+        params: string[];
+        ret: string;
+    } {
+        const params: string[] = [];
+        // default to void if somehow missing; spec always has a ret
+        let ret = "V";
 
-        for (var i = 0; i < signature.length; i++) {
-            if (signature.charAt(i) === "(") {
-                continue;
-            }
-
-            if (signature.charAt(i) === ")") {
-                isRet = true;
-                continue;
-            }
-
-            if (signature.charAt(i) === "[") {
-                isArray = true;
-                continue;
-            }
-
-            let jtype = "unknown";
-
-            if (primitiveTypes.includes(signature.charAt(i))) {
-                jtype = signature.charAt(i);
-            } else if (signature.charAt(i) === "L") {
-                var end = signature.indexOf(";", i) + SEMI_COLON_OFFSET;
-                jtype = signature.substring(i, end);
-                i = end - SEMI_COLON_OFFSET;
-            }
-
-            //TODO DELETE
-            if (isArray) {
-                jtype = "[" + jtype;
-            }
-
-            if (!isRet) {
-                jParamTypes.push(jtype);
-            } else {
-                jRetType = jtype;
-            }
-
-            isArray = false;
+        // Sanity check: must start with '(' and have a ')'
+        const start = signature.indexOf("(");
+        const end = signature.indexOf(")");
+        if (start === -1 || end === -1 || end < start) {
+            throw new Error(`Invalid method signature: ${signature}`);
         }
 
-        this._ = signature;
-        this._params = jParamTypes;
-        this._ret = jRetType;
+        const paramPart = signature.slice(start + 1, end);
+        const retPart = signature.slice(end + 1);
+
+        // parse parameter parameters one by one
+        let i = 0;
+        while (i < paramPart.length) {
+                    const desc = this.readTypeDescriptor(paramPart, i);
+                    params.push(desc.type);
+                    i = desc.nextIndex;
+        }
+
+        // parse return values one by one
+        if(retPart.length==0){
+            throw new Error(`Missing return type in signature: ${signature}`);
+        } else{
+            const desc = this.readTypeDescriptor(retPart, 0);
+            ret = desc.type;
+        }
+
+        return { params, ret };
+    }
+
+    /**
+     * Read a single JVM type descriptor starting at index `i`.
+     * Handles:
+     *   - primitive: B, S, I, J, F, D, C, Z, V
+     *   - object:   L...;
+     *   - arrays:   [<descriptor> (any dimensions)
+     *
+     * Returns the full type descriptor string and the next index.
+     */
+    private static readTypeDescriptor(descriptor: string, i: number): {
+        type: string;
+        nextIndex: number;
+    }{
+        const len = descriptor.length;
+        if (i >= len) {
+            throw new Error(`Unexpected end of descriptor: ${descriptor}`);
+        }
+
+        // Handle array dimensions: one or more "["
+        let arrayPrefix = "";
+        while(i < len && descriptor.charAt(i)=="["){
+            arrayPrefix += "[";
+            i++;
+        }
+
+        if (i >= len) {
+            throw new Error(`Unexpected end of descriptor after '[': ${descriptor}`);
+        }
+
+        const c = descriptor.charAt(i);
+
+        // primitive or void
+        const primitiveTypes = ["B", "S", "I", "J", "F", "D", "C", "Z", "V"];
+        if (primitiveTypes.includes(c)){
+           return{
+            type: arrayPrefix + c,
+            nextIndex: i+1
+           }
+        }
+
+        if( c=== "L"){
+            const semicolonIndex = descriptor.indexOf(";",i);
+            if (semicolonIndex === -1) {
+                throw new Error(`Unterminated object descriptor in: ${descriptor}`);
+            }
+            const base = descriptor.substring(i,semicolonIndex+1);
+
+            return{
+                type: arrayPrefix + base,
+                nextIndex: semicolonIndex + 1
+            };
+        }
+
+        // Unknown descriptor; treat as "unknown" to avoid crashing
+        return {
+            type: arrayPrefix + "unknown",
+            nextIndex: i + 1
+        };
     }
 
     /**
      * Get the Java param types for the method.
+     * E.g. ["I", "Ljava/lang/String;", "[I"]
      */
     public get params (): string[] {
         return this._params;
     }
 
     /**
-     * Get the Java param types as native jtypes.
+     * Get the Java param types as native jtypes (e.g. jint, jstring, jintArray).
      */
     public get nativeParams (): string[] {
         const nativeParams: string[] = [];
@@ -85,7 +148,7 @@ class JavaMethod {
     }
 
     /**
-     * Get the Java params as Frida native types.
+     * Get the Java params as Frida native types (e.g. "int", "pointer").
      */
     public get fridaParams (): string[] {
         const fridaParams: string[] = [];
@@ -111,6 +174,10 @@ class JavaMethod {
     public get fridaRet (): string {
         const jTypeRet = Types.convertJTypeToNativeJType(this._ret);
         return Types.convertNativeJTypeToFridaType(jTypeRet);
+    }
+
+    public get signature(): string {
+        return this._signature;
     }
 }
 
