@@ -174,47 +174,31 @@ export function run (callbackManager: JNICallbackManager): void {
         const HANDLE_INDEX = 0;
 
         if (dlopenRef !== null) {
-            const dlopen = new NativeFunction(
-                dlopenRef,
-                "pointer",
-                ["pointer", "int"]
-            );
-
-            Interceptor.replace(
-                dlopen,
-                new NativeCallback(
-                    (filename: NativePointer, mode: number): NativePointer => {
-                        const handle = dlopen(filename, mode);
-                        return handleDlopenResult(filename, handle);
-                    },
-                    "pointer",
-                    ["pointer", "int"]
-                )
-            );
+            Interceptor.attach(dlopenRef, {
+                onEnter (args: NativePointer[]): void {
+                    // Save filename pointer for use in onLeave
+                    this.filename = args[0] as NativePointer;
+                },
+                onLeave (retval: NativePointer): void {
+                    if (this.filename !== undefined) {
+                        handleDlopenResult(this.filename, retval);
+                    }
+                }
+            });
         }
 
         if (dlopenExtRef !== null) {
-            const dlopenExt = new NativeFunction(
-                dlopenExtRef,
-                "pointer",
-                ["pointer", "int", "pointer"]
-            );
-
-            Interceptor.replace(
-                dlopenExt,
-                new NativeCallback(
-                    (
-                        filename: NativePointer,
-                        mode: number,
-                        extinfo: NativePointer
-                    ): NativePointer => {
-                        const handle = dlopenExt(filename, mode, extinfo);
-                        return handleDlopenResult(filename, handle);
-                    },
-                    "pointer",
-                    ["pointer", "int", "pointer"]
-                )
-            );
+            Interceptor.attach(dlopenExtRef, {
+                onEnter (args: NativePointer[]): void {
+                    // android_dlopen_ext(const char *filename, int flags, const android_dlextinfo *extinfo)
+                    this.filename = args[0] as NativePointer;
+                },
+                onLeave (retval: NativePointer): void {
+                    if (this.filename !== undefined) {
+                        handleDlopenResult(this.filename, retval);
+                    }
+                }
+            });
         }
 
         const dlsym = new NativeFunction(
