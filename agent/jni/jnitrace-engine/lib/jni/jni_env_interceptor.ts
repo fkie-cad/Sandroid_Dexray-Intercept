@@ -138,21 +138,38 @@ abstract class JNIEnvInterceptor {
             const jniEnvStruct = jniEnv.readPointer();
             const methodAddr = jniEnvStruct.add(offset).readPointer();
 
-            // Last argument type determines whether this is a varargs "..."
-            if (method.args[method.args.length - END_INDEX] === "...") {
-                const callback = this.createJNIVarArgIntercept(i, methodAddr);
-                const trampoline = this.createStubFunction();
-                this.references.add(trampoline);
-                // Ensure CpuContext is populated for the callback
-                Interceptor.replace(trampoline, callback);
-                newJNIEnvStruct.add(offset).writePointer(trampoline);
-            } else {
-                const callback = this.createJNIIntercept(i, methodAddr);
-                const trampoline = this.createStubFunction();
-                this.references.add(trampoline);
-                // Ensure CpuContext is populated for the callback
-                Interceptor.replace(trampoline, callback);
-                newJNIEnvStruct.add(offset).writePointer(trampoline);
+            try {
+                // Last argument type determines whether this is a varargs "..."
+                if (method.args[method.args.length - END_INDEX] === "...") {
+                    const callback = this.createJNIVarArgIntercept(i, methodAddr);
+                    const trampoline = this.createStubFunction();
+                    this.references.add(trampoline);
+                    
+                    // Interceptor.replace can fail on certain memory regions
+                    Interceptor.replace(trampoline, callback);
+                    newJNIEnvStruct.add(offset).writePointer(trampoline);
+                } else {
+                    const callback = this.createJNIIntercept(i, methodAddr);
+                    const trampoline = this.createStubFunction();
+                    this.references.add(trampoline);
+                    
+                    // Interceptor.replace can fail on certain memory regions
+                    Interceptor.replace(trampoline, callback);
+                    newJNIEnvStruct.add(offset).writePointer(trampoline);
+                }
+            } catch (e) {
+                // Interceptor.replace failed - likely due to memory protection
+                // or incompatible address. Fall back to using original function.
+                // This means this particular JNI function won't be traced.
+                newJNIEnvStruct.add(offset).writePointer(methodAddr);
+                
+                // Optional: log which function couldn't be hooked
+                if (Config.getInstance().backtrace !== "none") {
+                    send({
+                        type: "warning",
+                        message: `Failed to intercept JNI function ${method.name} at ${methodAddr}: ${e}`
+                    });
+                }
             }
         }
 
@@ -185,19 +202,23 @@ abstract class JNIEnvInterceptor {
      * Creates the vararg interceptor for a JNI method with "..." in its
      * signature.
      *
-     * - Allocates an executable page (`text`) and a data page (`data`).
+     * - allocates an executable page (`text`) and a data page (`data`), `data`
+     *   only used for x64, otherwise divides `text` into shellcode and data
+     *   sections, with data at offset `text`+0x400
      * - Creates the initial parser callback (see createJNIVarArgInitialCallback).
      * - Emits architecture-specific shellcode that:
-     *     1. captures the original call context,
-     *     2. calls the parser to get the main callback pointer,
-     *     3. calls the main callback,
-     *     4. returns to the original caller.
+     *     1. captures the original call context (registers, return address),
+     *     2. calls the parser to get method-specific mainCallback pointer,
+     *     3. restores the original CPU state,
+     *     4. calls mainCallback with the original arguments,
+     *     5. returns to the original caller.
      * - Attaches an Interceptor to `text` to capture a backtrace before
-     *   the shellcode modifies registers.
+     *   the shellcode modifies registers. This backtrace is stored 
+     *   per-thread and later retrieved by the mainCallback.
      *
      * @param id        Index into JNI_ENV_METHODS.
      * @param methodPtr Address of the real JNI function.
-     * @returns Pointer to the shellcode entry (stored in shadowJNIEnv).
+     * @returns Pointer to the shellcode entry point (stored in shadowJNIEnv).
      */
     protected createJNIVarArgIntercept (
         id: number,
@@ -212,7 +233,7 @@ abstract class JNIEnvInterceptor {
         this.references.add(text);
         this.references.add(data);
 
-        // JS-level parser that will be called by the shellcode
+        // Create JS-level parser callback that will be called by the shellcode
         const vaArgsCallback = this.createJNIVarArgInitialCallback(
             method, methodPtr
         );
@@ -226,16 +247,19 @@ abstract class JNIEnvInterceptor {
 
         // Attach to the shellcode entry to capture a backtrace
         // before registers are clobbered
-        Interceptor.attach(text, function (this: InvocationContext): void {
-            let backtraceType = Backtracer.ACCURATE;
-            if (config.backtrace === "fuzzy") {
-                backtraceType = config.backtrace;
-            }
-            self.vaArgsBacktraces.set(
-                this.threadId, Thread.backtrace(this.context, backtraceType)
-            );
-        });
-
+        try {
+            Interceptor.attach(text, function (this: InvocationContext): void {
+                let backtraceType = Backtracer.ACCURATE;
+                if (config.backtrace === "fuzzy") {
+                    backtraceType = config.backtrace;
+                }
+                self.vaArgsBacktraces.set(
+                    this.threadId, Thread.backtrace(this.context, backtraceType)
+                );
+            });
+        } catch (e) {
+            // Backtrace capture failed - tracing will continue without backtrace
+        }
         return text;
     }
 
