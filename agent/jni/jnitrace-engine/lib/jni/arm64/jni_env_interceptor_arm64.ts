@@ -113,30 +113,60 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
 
     /**
      * Generates an AArch64 trampoline in the given executable
-     * memory region.
+     * memory region, that intercepts JNI varargs calls,
+     * dispatches through parser callback, and calls method-
+     * specific mainCallback
      *
+     * Trampoline must preserve both general-purpose registers
+     * (x1-x30) and floating-point registers (v0-v7) across the
+     * parser call, because:
+     *  - parser is a normal C function that may clobber all
+     *    registers
+     *  - mainCallback expects to receive the original argument 
+     *    values in both GPRs and FP registers according to the
+     *    AAPCS64 ABI
+     * 
+     * On ARM64, variadic functions pass float and double 
+     * arguments in FP registers (v0-v7) as per the AAPCS64
+     * calling convention. If these registers are not preserved,
+     * the mainCallback will read garbage values when accessing
+     * its double/float parameters.
+     * 
+     * References:
+     *  - https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#parameter-passing
+     *  - https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#appendix-variable-argument-lists
+     * 
      * The trampoline:
      *  - saves all general-purpose registers x1..x30 (including
      *    LR) into a data area embedded in the same page as `text`;
+     *  - must also preserve floating-point registers (v0-v7) 
+     *    across the parser call, v0-v7 (FP regs) to memory
      *  - loads the `parser` callback pointer from that data area
-     *    and calls it to obtain the main JNI callback;
+     *    and calls it, returns JNI  mainCallback pointer in x0;
      *  - saves the callback pointer and the current stack pointer
      *    on the stack;
-     *  - restores the original register state except for x0 and
-     *    the link register;
+     *  - restores the original register state (x1-x29 and v0-v7) 
+     *    from memory, except for x0 and the link register;
      *  - restores x0 (main callback pointer) and SP, and calls
      *    the main callback with the original call context; and
      *  - finally loads the saved LR from the data area and
      *    branches to it, effectively returning to the original
      *    caller.
      *
+     * Memory layout in text page:
+     *  - text+0x000:       Shellcode begins here
+     *  - text+0x400:       Parser callback pointer (NativeCallback)
+     *  - text+0x408-0x4f0: Saved x1-x30 (30 registers * 8 bytes)
+     *  - text+0x4f8:       Saved link register (for return)
+     *  - text+0x500-0x53f: Saved v0-v7 (8 registers * 8 bytes each)
+     * 
      * @param text   Executable memory where the trampoline code
      *               will be emitted.
      * @param _      Unused data pointer (ARM64 keeps its scratch
      *               data in the same page as `text`).
      * @param parser NativeCallback that analyzes the JNI varargs
-     *               call and returns a pointer to the main
-     *               callback that should handle it.
+     *               call and returns a pointer to the 
+     *               mainCallback that should handle it.
      */
     protected buildVaArgParserShellcode (
         text: NativePointer,
@@ -148,79 +178,148 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
         const HALF = 2;
         const NUM_REGS = 31;
         const NUM_REG_NO_LR = 30;
+        const NUM_FP_REGS = 8;  // v0-v7
+        
+        // Store parser pointer at text+0x400
         text.add(DATA_OFFSET).writePointer(parser);
 
         Memory.patchCode(text, Process.pageSize, (code: NativePointer): void => {
             const cw = new Arm64Writer(code, { pc: text });
 
-            // adrp x0, #0
+            /**
+             * Set up base pointer for data access
+             * 
+             * - adrp x0, #0
+             * - Sets x0 to the page-aligned address containing current PC (text page)
+             */
             const ADRP_X0_0 = 0x90000000;
             cw.putInstruction(ADRP_X0_0);
 
-            // back up all registers - just to be safe
-            // for i = 1..30: str x<i>, [x0, #0x408 + i*8]
+            /**
+             * Save general-purpose registers x1..x30
+             *
+             * - x0 is used as base pointer and will be overwritten multiple times
+             * - x1-x30 are saved to preserve original call arguments and link register
+             */
             for (let i = 1; i < NUM_REGS; i++) {
-                let ins = 0xF9000000;
-
-                // src reg
-                ins += i;
-
+                // Construct: STR x<i>, [x0, #(0x408 + i*8)]
+                let ins = 0xF9000000; // Base opcode for STR Xt, [Xn, #imm]
+                ins += i;             // Source register: Rt = x<i>
                 const base = 0x408;
                 const offset = base + i * Process.pointerSize;
-
-                // dst address, (offset / 8) << 10
+                // Immediate is scaled by 8 for 64-bit stores
                 ins += offset / HALF << BITS_IN_BYTE;
-
-                // str x<n>, [x0, #<offset>]
                 cw.putInstruction(ins);
             }
 
-            // ldr x0, [x0, #0x400] → load addr of parser
+            /**
+            * Save floating-point registers v0-v7
+            *
+            * - ARM64 AAPCS64: Float/double arguments are passed in v0-v7 even
+            * - for variadic functions. These must be preserved across the parser
+            * - call, otherwise mainCallback will read garbage values.
+            */
+            for (let i = 0; i < NUM_FP_REGS; i++) {
+                // Construct: STR Dt, [x0, #(0x500 + i*8)]
+                // Uses 64-bit FP store (D register = lower 64 bits of V register)
+                const FP_SAVE_BASE = 0x500;  // Start after GPR save area
+                const offset = FP_SAVE_BASE + i * 8;
+                const imm12 = offset / 8;    // Scaled immediate
+                
+                let ins = 0xFD000000;  // Base opcode for STR Dt, [Xn, #imm]
+                ins += i;              // Source register: Dt = d<i> (v<i>) (bits 0-4)
+                ins += (imm12 << 10);  // Immediate field: imm12 (bits 10-21)
+                
+                cw.putInstruction(ins);
+            }
+
+            /**
+             * Load and call parser callback
+             *
+             * - ldr x0, [x0, #0x400]
+             * - Loads parser pointer (stored at text+0x400) into x0
+             */
             const LDR_X0_X0_400 = 0xF9420000;
             cw.putInstruction(LDR_X0_X0_400);
             
-            // blr x0 → call parser
+            // blr x0
+            // Calls parser with original x1, x2, etc. (env, obj, methodID, ...)
+            // Parser clobbers all registers and returns mainCallback pointer in x0
             const BLR_X0 = 0xD63F0000;
             cw.putInstruction(BLR_X0);
 
-            // stp x0, sp, [sp, #-16]!
+            /**
+             * Preserve mainCallback pointer and stack pointer
+             *
+             * - stp x0, sp, [sp, #-16]!
+             * - Pushes mainCallback pointer (x0) and current sp onto stack
+             */
             cw.putPushRegReg("x0", "sp");
 
+            // Reload base pointer for restoration
             // adrp x0, #0
             cw.putInstruction(ADRP_X0_0);
 
-            // restore all registers - apart from lr and sp
+            
+            // Restore general-purpose registers x1-x29
+            // x30 (link register) is restored later; x0 is restored after
             for (let i = 1; i < NUM_REG_NO_LR; i++) {
                 let ins = 0xF9400000;
-
-                // src reg
                 ins += i;
-
                 const base = 0x408;
                 const offset = base + i * Process.pointerSize;
-
-                // dst address
                 ins += offset / HALF << BITS_IN_BYTE;
-
-                // ldr x<n>, [x0, #<offset>]
                 cw.putInstruction(ins);
             }
 
-            // ldp x0, sp, [sp], #16
+            /**
+             * Restore floating-point registers v0-v7
+             *
+             * - Critical: Restores original float/double argument values so that
+             *   mainCallback receives correct values in FP registers
+             */
+            for (let i = 0; i < NUM_FP_REGS; i++) {
+                // Construct: LDR Dt, [x0, #(0x500 + i*8)]
+                const FP_SAVE_BASE = 0x500;
+                const offset = FP_SAVE_BASE + i * 8;
+                const imm12 = offset / 8;
+
+                let ins = 0xFD400000;  // Base opcode for LDR Dt, [Xn, #imm]
+                ins += i;              // Destination register: Dt = d<i> (v<i>)
+                ins += (imm12 << 10);  // Immediate field
+
+                cw.putInstruction(ins);
+            }
+
+            /**
+             * Restore mainCallback pointer and call it
+             *
+             * - ldp x0, sp, [sp], #16
+             * - Restores mainCallback pointer into x0 and original sp
+             */
             cw.putPopRegReg("x0", "sp");
 
             // blr x0
+            // Calls mainCallback with fully restored register state
+            // (x1-x29, v0-v7 all contain original argument values)
             cw.putInstruction(BLR_X0);
 
-            // adrp x1, #0
+            /**
+             * Return to original caller
+             * 
+             * Reload base pointer to access saved link register
+             * adrp x1, #0
+             */
             const ADRP_X1_0 = 0x90000001;
             cw.putInstruction(ADRP_X1_0);
             
             // ldr x2, [x1, #0x4f8]
+            // Loads saved x30 (link register) from text+0x4f8
             const LDR_X2_X1_4F8 = 0xF9427C22;
             cw.putInstruction(LDR_X2_X1_4F8);
 
             // br x2
+            // Branches to original return address (restores control to caller)
             const BR_X2 = 0xD61F0040;
             cw.putInstruction(BR_X2);
 
