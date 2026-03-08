@@ -544,22 +544,31 @@ abstract class JNIEnvInterceptor {
      * Creates the per-method main callback used for JNI methods with
      * "..." (varargs).
      *
-     * The mainCallback:
-     *  - is called from the shellcode trampoline with explicit, typed
-     *    Java arguments (no va_list);
-     *  - replaces env with the real JNIEnv*;
-     *  - attaches backtrace and JavaMethod metadata;
+     * The mainCallback is called from the architecture-specific shellcode
+     * trampolin with explicit, typed Java arguments (no va_list);
+     * 
+     * This function:
+     *  - replaces the shadow env pointer with the real JNIEnv*;
+     *  - attaches backtrace and JavaMethod metadata to invocation context;
      *  - runs before/after callbacks;
      *  - calls the real JNI function via NativeFunction(methodPtr, ...);
      *  - clears the stored backtrace.
+     * 
+     * Note: Unlike non-varargs interceptors, this callback cannot rely on
+     * Frida's InvocationContext for threadId, as the shellcode calls it
+     * directly without going through Interceptor.attach/replace. Instead,
+     * Process.getCurrentThreadId() is used to retrieve the thread ID.
      *
      * @param method             JNIMethod definition for this JNI call.
      * @param methodPtr          Address of the real JNI function.
      * @param initialparamTypes  Full C parameter list for NativeFunction
-     *                           (env, obj, mid, "...", Java args).
+     *                           including "..." marker for variadic calls
+     *                           (env, obj, mid, "...", Java args), e.g.
+     *                           ["pointer", "pointer", "pointer", "...", "int", "double"]
      * @param mainParamTypes     Parameter list for the main callback
-     *                           (env, obj, mid, Java args).
+     *                           (env, obj, mid, Java args), no "..." marker
      * @param retType            Frida return type for this JNI call.
+     * @returns NativeCallback   that handles the varargs JNI invocation.
      */
     private createJNIVarArgMainCallback (
         method: JNIMethod,
@@ -570,45 +579,42 @@ abstract class JNIEnvInterceptor {
     ): NativeCallback {
         const self = this;
 
-        const mainCallback = new NativeCallback(function (
-            this: InvocationContext
-        ): NativeReturnValue {
+        const mainCallback = new NativeCallback(function (): NativeReturnValue {
             const METHOD_ID_INDEX = 2;
-            const threadId = this.threadId;
+            // Retrieve thread ID directly since shellcode does not provide InvocationContext
+            const threadId = Process.getCurrentThreadId();
+            
             const args: NativeArgumentValue[] = [].slice.call(arguments);
-            // Recover real JNIEnv* and JavaMethod
             const jniEnv = self.threads.getJNIEnv(threadId);
-            // eslint-disable-next-line @typescript-eslint/no-base-to-string
             const key = args[METHOD_ID_INDEX].toString();
             const jmethod = self.methods.get(key);
 
-            // Fix env in argument list
+            // Replace shadow env with real per-thread JNIEnv
             args[JNI_ENV_INDEX] = jniEnv;
 
             const ctx: JNIInvocationContext = {
-                backtrace: self.vaArgsBacktraces.get(this.threadId),
+                backtrace: self.vaArgsBacktraces.get(threadId),
                 jniAddress: methodPtr,
                 threadId: threadId,
                 methodDef: method,
                 javaMethod: jmethod
             };
 
-            // Before-callback sees the fully explicit arguments
             self.callbackManager.doBeforeCallback(method.name, ctx, args);
 
-            // Call the real JNI vararg function with the full C signature
-            let ret = new NativeFunction(methodPtr,
+            // Call real JNI varargs function with full C signature including "..."
+            let ret = new NativeFunction(
+                methodPtr,
                 retType,
-                initialparamTypes).apply(null, args);
+                initialparamTypes
+            ).apply(null, args);
 
-            // After-callback
             ret = self.callbackManager.doAfterCallback(method.name, ctx, ret);
 
-            // Cleanup per-thread backtrace
-            self.vaArgsBacktraces.delete(this.threadId);
+            self.vaArgsBacktraces.delete(threadId);
 
             return ret;
-        } as NativeCallbackImplementation, retType, mainParamTypes);
+        }, retType, mainParamTypes);
 
         return mainCallback;
     }
