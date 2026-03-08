@@ -620,19 +620,30 @@ abstract class JNIEnvInterceptor {
     }
 
     /**
-     * Creates the initial parser callback used by the vararg shellcode.
-     *
+     * Creates the initial parser callback used by the varargs shellcode
+     * trampoline
+     * 
      * The parser:
-     *  - is called once per JNI vararg call from the shellcode;
+     *  - is called once per JNI varargs call from the shellcode;
      *  - inspects the jmethodID to look up the JavaMethod metadata;
+     *  - checks if a mainCallback already exists for this methodID (fast path);
      *  - if a mainCallback already exists for this methodID, returns it;
      *  - otherwise, builds a new mainCallback with the correct C and
-     *    JS parameter lists, caches it, and returns it.
+     *    JS parameter lists based on the Java method signature, caches it,
+     *    and returns it.
      *
-     * @param method    JNI method definition from JNI_ENV_METHODS.
-     * @param methodPtr Address of the real JNI function.
-     * @returns NativeCallback that the shellcode calls to obtain the
-     *          main vararg callback pointer.
+     * Type list construction:
+     *  - callbackParams: Parameter types for the mainCallback (JS-level).
+     *    Uses explicit types for all Java arguments with C vararg promotions
+     *    applied (float → double).
+     *  - originalParams: Parameter types for the NativeFunction call to the
+     *    real JNI function. Includes the "..." marker to indicate variadic
+     *    calling convention, followed by the promoted Java argument types.
+     * 
+     * @param method            JNI method definition from JNI_ENV_METHODS.
+     * @param methodPtr         Address of the real JNI function.
+     * @returns NativeCallback  that the shellcode calls to obtain the
+     *                          mainCallback pointer for a specific methodID.
      */
     private createJNIVarArgInitialCallback (
         method: JNIMethod,
@@ -642,36 +653,36 @@ abstract class JNIEnvInterceptor {
 
         const vaArgsCallback = new NativeCallback(function (): NativeReturnValue {
             const METHOD_ID_INDEX = 2;
-            // eslint-disable-next-line @typescript-eslint/no-base-to-string
             const methodId = (arguments[METHOD_ID_INDEX] as NativeArgumentValue).toString();
             const javaMethod = self.methods.get(methodId) as JavaMethod;
 
-            // Fast path: reuse existing mainCallback if already created
+            // Fast path: return cached mainCallback if available
             if (self.fastMethodLookup.has(methodId)) {
                 return self.fastMethodLookup.get(methodId) as NativeReturnValue;
             }
-
-            // C-side parameter types up to (but excluding) the "..." part
+            
+            // Build parameter lists for mainCallback and NativeFunction
+            // Base parameters: JNIEnv*, jobject/jclass, jmethodID
             const originalParams = method.args
                 .slice(TYPE_NAME_START, TYPE_NAME_END)
                 .map((t: string): string => Types.convertNativeJTypeToFridaType(t));
-            // mainCallback’s parameter list initially mirrors those
+            
             const callbackParams = originalParams.slice(COPY_ARRAY_INDEX);
 
-            // Add "..." to represent the trailing varargs in the C signature
+            // Mark NativeFunction signature as variadic
             originalParams.push("...");
 
-            // Append Java argument types:
-            // - mainCallback sees them as Frida types (float promoted to double),
-            // - NativeFunction uses actual C types (no promotion)
+            // Append Java argument types with C vararg promotions
+            // float is promoted to double in C variadic functions
             javaMethod.fridaParams.forEach((p: string): void => {
-                callbackParams.push(p === "float" ? "double" : p);
-                originalParams.push(p);
+                const promotedType = (p === "float") ? "double" : p;
+                callbackParams.push(promotedType);  // mainCallback sees promoted types
+                originalParams.push(promotedType);  // NativeFunction also uses promoted types!
             });
 
             const retType = Types.convertNativeJTypeToFridaType(method.ret);
 
-            // Create per-method mainCallback and cache it
+            // Create and cache the mainCallback for this methodID
             const mainCallback = self.createJNIVarArgMainCallback(
                 method, methodPtr, originalParams, callbackParams, retType
             );
