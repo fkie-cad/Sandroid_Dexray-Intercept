@@ -210,7 +210,8 @@ def parse_hook_config(parsed_args, use_interactive=False):
         'enable_clipboard': 'clipboard_hooks',
         'enable_location': 'location_hooks',
         'enable_telephony': 'telephony_hooks',
-        'enable_bypass': 'bypass_hooks'
+        'enable_bypass': 'bypass_hooks',
+        'enable_jni_hooks': 'jni_hooks',
     }
 
     for arg_name, hook_name in individual_hooks.items():
@@ -329,6 +330,7 @@ Examples:
     hooks.add_argument("--enable-location", action="store_true", help="Enable location hooks")
     hooks.add_argument("--enable-telephony", action="store_true", help="Enable telephony hooks")
     hooks.add_argument("--enable-bypass", action="store_true", help="Enable anti-analysis bypass hooks")
+    hooks.add_argument("--enable-jni-hooks", action="store_true", help="Enable JNI API tracing hooks")
 
     parsed = parser.parse_args()
     script_name = sys.argv[0]
