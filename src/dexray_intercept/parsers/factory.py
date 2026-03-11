@@ -12,6 +12,7 @@ from .services import ServiceParser, TelephonyParser
 from .dex import DEXParser
 from .database import DatabaseParser
 from .bypass import BypassParser
+from .jni_trace import JniTraceParser
 
 
 class ParserFactory:
@@ -64,6 +65,9 @@ class ParserFactory:
         
         # Bypass hooks
         self._parsers["BYPASS_DETECTION"] = BypassParser()
+        
+        # JNI hooks
+        self._parsers["JNI_TRACE"] = JniTraceParser()
     
     def get_parser(self, category: str) -> Optional[BaseParser]:
         """Get appropriate parser for the given category"""
