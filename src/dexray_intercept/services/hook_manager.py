@@ -47,6 +47,9 @@ class HookManager:
             'clipboard_hooks': False,
             'location_hooks': False,
             'telephony_hooks': False,
+            
+            # JNI hooks
+            'jni_hooks': False,
         }
         
         if hook_config:
