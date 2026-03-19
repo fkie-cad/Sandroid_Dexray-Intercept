@@ -86,27 +86,27 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
     }
     
     /**
-     * Creates a minimal stub function that simply returns.
+     * Creates a small ARM64 stub function suitable for Interceptor.replace().
      *
-     * The stub is used as an Interceptor target so that Frida
-     * will populate an InvocationContext before invoking the
-     * actual JNI callback.
-
+     * populates page from Memory.alloc() with a NOP sled followed by a RET:
+     * - yields normal writable page that Interceptor.replace() can patch with
+     *   its trampoline
+     * - short sequence of NOPs (8 instructions) provides sufficient space for
+     *   the ARM64 trampoline while keeping the stub simple
      *
-     * @returns Pointer to executable memory containing a single
-     *          RET instruction.
+     * @returns Pointer to the beginning of the stub function.
      */
     public createStubFunction (): NativePointer {
         const stub = Memory.alloc(Process.pageSize);
+        const NOP = 0xd503201f;
+        const RET = 0xd65f03c0;
 
-        Memory.patchCode(stub, Process.pageSize, (code: NativePointer): void => {
-            const cw = new Arm64Writer(code, { pc: stub });
-
-            // ret
-            const RET = 0xd65f03c0;
-            cw.putInstruction(RET);
-
-        });
+        // NOP sled
+        for (let i = 0; i < 8; i++) {
+            stub.add(i * 4).writeU32(NOP);
+        }
+        // Final RET
+        stub.add(8 * 4).writeU32(RET);
 
         return stub;
     }
