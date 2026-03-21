@@ -133,8 +133,10 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
      * its double/float parameters.
      * 
      * References:
-     *  - https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#parameter-passing
-     *  - https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#appendix-variable-argument-lists
+     *  - https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst
+     * #parameter-passing
+     *  - https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst
+     * #appendix-variable-argument-lists
      * 
      * The trampoline:
      *  - saves all general-purpose registers x1..x30 (including
