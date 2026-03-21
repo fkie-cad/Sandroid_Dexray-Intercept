@@ -93,7 +93,7 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
         this.overflowPtr = NULL;
         this.regSavePtr = NULL;
     }
-
+    
     /**
      * Generates a small x86-64 trampoline in the given executable
      * memory region.
@@ -230,7 +230,7 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
             for (let i = regs.length - END_INDEX; i >= FIRST_ELEM_INDEX; i--) {
                 regRestoreOffset = i * Process.pointerSize;
 
-                cw.putMovRegNearPtr("rdi", data.add(regRestoreOffset));
+                cw.putMovRegNearPtr("rdi", dataBase.add(regRestoreOffset));
 
                 if (i > SKIP_FIRST_COPY) {
                     if (regs[i].includes("xmm")) {
