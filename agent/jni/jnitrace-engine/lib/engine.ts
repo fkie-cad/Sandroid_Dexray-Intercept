@@ -14,6 +14,26 @@ import { JNICallbackManager } from "./internal/jni_callback_manager";
 
 import { JNILibraryWatcher } from ".";
 
+const REGISTER_NATIVE_SYMBOLS = {
+    // art::ClassLinker::RegisterNative(art::Thread*, art::ArtMethod*, void const*)
+    // Present on Android 12+ (API 31-35).
+    classLinker: [
+        "_ZN3art11ClassLinker14RegisterNativeEPNS_6ThreadEPNS_9ArtMethodEPKv",
+    ],
+    // art::ArtMethod::RegisterNative(void const*)
+    // Modern non-mirror ArtMethod::RegisterNative used on Android 6–11.
+    //
+    // Older ART versions (Android 4.4–5.x) use mirror::ArtMethod::RegisterNative:
+    //   Android 4.4.x: void mirror::ArtMethod::RegisterNative(Thread*, const void*)
+    //   Android 5.0/5.1: void mirror::ArtMethod::RegisterNative(Thread*, const void*, bool)
+    // These mirror variants would require separate hooks with different signatures
+    // if support for those versions is needed.
+    artMethod: [
+        "_ZN3art9ArtMethod14RegisterNativeEPKv"
+        // Mirror variant symbols for Android 4.4–5.x would go here if needed, e.g.
+        //"_ZN3art6mirror9ArtMethod14RegisterNativeEPNS_6ThreadEPKv"
+    ]
+};
 
 export function run (callbackManager: JNICallbackManager): void {
     const JNI_ENV_INDEX = 0;
@@ -59,8 +79,17 @@ export function run (callbackManager: JNICallbackManager): void {
     
     const trackedLibs: Map<string, boolean> = new Map<string, boolean>();
     const libBlacklist: Map<string, boolean> = new Map<string, boolean>();
-    
-    
+    const hookedNatives = new Set<string>();
+
+    /**
+     * Determines whether a library at the given path should be traced
+     * according to the user's -l filter configuration.
+     *
+     * Also notifies JNILibraryWatcher when a library is seen.
+     *
+     * @param path Full path to the library (e.g., /data/app/.../lib/arm64/libnative.so).
+     * @returns true if the library should be traced, false otherwise.
+     */
     function checkLibrary (path: string): boolean {
         const EMPTY_ARRAY_LENGTH = 0;
         const ONE_ELEMENT_ARRAY_LENGTH = 1;
@@ -74,22 +103,52 @@ export function run (callbackManager: JNICallbackManager): void {
         JNILibraryWatcher.doCallback(path);
 
         const config = Config.getInstance();
-    
-        if (config.libraries.length === ONE_ELEMENT_ARRAY_LENGTH) {
-            if (config.libraries[LIB_TRACK_FIRST_INDEX] === "*") {
-                willFollowLib = true;
-            }
+        // Wildcard: trace all libraries
+        if (config.libraries.length === ONE_ELEMENT_ARRAY_LENGTH &&
+            config.libraries[LIB_TRACK_FIRST_INDEX] === "*") {
+            willFollowLib = true;
         }
-    
+
+        // Pattern matching: check if any filter pattern appears in path
         if (!willFollowLib) {
-            willFollowLib = config.libraries.filter(
+            willFollowLib = config.libraries.some(
                 (l: string): boolean => path.includes(l)
-            ).length > EMPTY_ARRAY_LENGTH;
+            );
         }
     
         return willFollowLib;
     }
     
+    /**
+     * Pure filter equivalent of checkLibrary(), without side effects.
+     *
+     * @param path  Full path to the library.
+     * @returns     true if the library matches current -l filters, false otherwise.
+     */
+    function isLibraryTracked (path: string): boolean {
+        if (path === null) {
+            return false;
+        }
+
+        const config = Config.getInstance();
+        const libs = config.libraries;
+
+        // Wildcard: trace all libraries
+        if (libs.length === 1 && libs[LIB_TRACK_FIRST_INDEX] === "*") {
+            return true;
+        }
+
+        // Pattern matching: any filter pattern contained in the path
+        return libs.some((pattern: string): boolean => path.includes(pattern));
+    }
+
+    /**
+     * Intercepts a JNI_OnLoad function to swap the JavaVM pointer
+     * with a shadow JavaVM that allows tracing of JavaVM API calls.
+     *
+     * @param jniOnLoadAddr Address of the JNI_OnLoad function.
+     * @returns             InvocationListener for the installed hook.
+     */
     function interceptJNIOnLoad (jniOnLoadAddr: NativePointer): InvocationListener {
         return Interceptor.attach(jniOnLoadAddr, {
             onEnter (args: NativePointer[]): void {
@@ -111,31 +170,240 @@ export function run (callbackManager: JNICallbackManager): void {
         });
     }
     
+    /**
+     * Intercepts a native JNI function (e.g., Java_* export or ART stub)
+     * to swap the JNIEnv pointer with a shadow JNIEnv so that subsequent JNI
+     * calls made by the native code are traced.
+     *
+     * @param jniFunctionAddr Address of the native function to intercept
+     * @returns               InvocationListener for the installed hook
+     */
     function interceptJNIFunction (jniFunctionAddr: NativePointer): InvocationListener {
         return Interceptor.attach(jniFunctionAddr, {
             onEnter (args: NativePointer[]): void {
                 if (jniEnvInterceptor === undefined) {
                     return;
                 }
-    
+
                 const threadId = this.threadId;
                 const jniEnv = ptr(args[JNI_ENV_INDEX].toString());
-    
-                let shadowJNIEnv = NULL;
-    
+
                 threads.setJNIEnv(threadId, jniEnv);
-    
-                if (!jniEnvInterceptor.isInitialised()) {
-                    shadowJNIEnv = jniEnvInterceptor.create();
-                } else {
-                    shadowJNIEnv = jniEnvInterceptor.get();
-                }
-    
+
+                const shadowJNIEnv = jniEnvInterceptor.isInitialised()
+                    ? jniEnvInterceptor.get()
+                    : jniEnvInterceptor.create();
+
                 args[JNI_ENV_INDEX] = shadowJNIEnv;
             }
         });
     }
-    
+
+    /**
+     * Attempts to hook ClassLinker::RegisterNative or ArtMethod::RegisterNative
+     * in libart.so so that native registrations are observed and their
+     * entrypoints can be intercepted.
+     *
+     * @returns true if a RegisterNative symbol was found and hooked, false otherwise.
+     */
+    function setupRegisterNativeHook(): boolean {
+        const libart = Process.findModuleByName("libart.so");
+        if (libart === null) {
+            return false;
+        }
+
+        let hookAddress: NativePointer | null = null;
+        let strategy: "ClassLinker" | "ArtMethod" | null = null;
+
+        // Try ClassLinker symbols first (Android 12+)
+        for (const symbol of REGISTER_NATIVE_SYMBOLS.classLinker) {
+            hookAddress = Module.findExportByName("libart.so", symbol);
+            if (hookAddress !== null) {
+                strategy = "ClassLinker";
+                break;
+            }
+        }
+
+        // Fallback to ArtMethod symbols (Android 8-11)
+        if (hookAddress === null) {
+            for (const symbol of REGISTER_NATIVE_SYMBOLS.artMethod) {
+                hookAddress = Module.findExportByName("libart.so", symbol);
+                if (hookAddress !== null) {
+                    strategy = "ArtMethod";
+                    break;
+                }
+            }
+        }
+
+        // Give up if not found
+        if (hookAddress === null || strategy === null) {
+            return false;
+        }
+
+        // Install the hook
+        try {
+            if (strategy === "ClassLinker") {
+                installClassLinkerHook(hookAddress);
+            } else {
+                installArtMethodHook(hookAddress);
+            }
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Installs a hook on ClassLinker::RegisterNative (Android 12+).
+     *
+     * C++ signature:
+     *   const void* ClassLinker::RegisterNative(Thread* self,
+     *                                           ArtMethod* method,
+     *                                           const void* native_method);
+     *
+     * The hook uses the returned const void* (retval) as the final
+     * native entrypoint when non-null, falling back to the input
+     * native_method argument if retval is null.
+     *
+     * @param address Address of ClassLinker::RegisterNative in libart.so.
+     * @returns       void.
+     */
+    function installClassLinkerHook(address: NativePointer): void {
+        Interceptor.attach(address, {
+            onEnter(args: NativePointer[]): void {
+                // C++ member function:
+                // args[0] = ClassLinker* (this)
+                // args[1] = Thread* self
+                // args[2] = ArtMethod* method
+                // args[3] = const void* native_method (input)
+                this.nativePtr = args[3];
+            },
+            onLeave(retval: NativePointer): void {
+                // Prefer returned entrypoint; fall back to input if retval is null
+                const finalEntryPoint = retval.isNull()
+                    ? (this.nativePtr as NativePointer)
+                    : retval;
+
+                // Apply filtering
+                if (!shouldHookNative(finalEntryPoint)) {
+                    return;
+                }
+
+                // Hook the final entry point
+                try {
+                    interceptJNIFunction(finalEntryPoint);
+                } catch (e) {
+                    // Failed to attach; skip
+                }
+            }
+        });
+    }
+
+    /**
+     * Installs a hook on ArtMethod::RegisterNative (Android 8-11).
+     *
+     * C++ signature:
+     *   const void* ArtMethod::RegisterNative(const void* native_method);
+     *
+     * The hook uses the returned const void* (retval) as the final
+     * native entrypoint when non-null, falling back to the input
+     * native_method argument if retval is null.
+     *
+     * @param address Address of ArtMethod::RegisterNative in libart.so.
+     * @returns       void.
+     */
+    function installArtMethodHook(address: NativePointer): void {
+        Interceptor.attach(address, {
+            onEnter(args: NativePointer[]): void {
+                // C++ member function: this pointer is args[0]
+                // args[0] = ArtMethod* (this)
+                // args[1] = const void* native_method (input)
+                this.nativePtr = args[1];
+            },
+            onLeave(retval: NativePointer): void {
+                const finalEntryPoint = retval.isNull()
+                    ? (this.nativePtr as NativePointer)
+                    : retval;
+
+                // Apply filtering
+                if (!shouldHookNative(finalEntryPoint)) {
+                    return;
+                }
+
+                // Hook the final entry point
+                try {
+                    interceptJNIFunction(finalEntryPoint);
+                } catch (e) {
+                    // Failed to attach; skip
+                }
+            }
+        });
+    }
+
+    /**
+     * Multi-stage filter to decide if a native function should be hooked.
+     *
+     * Stage 1: module filter against -l patterns.
+     * Stage 2: deduplication against already hooked addresses.
+     * Stage 3: includeExport / excludeExport symbol filtering.
+     *
+     * @param nativePtr Address of the candidate native function.
+     * @returns         true if the function should be hooked, false otherwise.
+     */
+    function shouldHookNative(nativePtr: NativePointer): boolean {
+        // Stage 1: Module check
+        const module = Process.findModuleByAddress(nativePtr);
+        if (module === null) {
+            return false;
+        }
+
+        if (!isLibraryTracked(module.path)) {
+            return false;
+        }
+
+        // Stage 2: Deduplication
+        const key = nativePtr.toString();
+        if (hookedNatives.has(key)) {
+            return false;
+        }
+
+        // Stage 3: Symbol filter
+        const symbol = DebugSymbol.fromAddress(nativePtr);
+        const symbolName = symbol?.name || "<unknown>";
+
+        if (symbolName !== "<unknown>") {
+            const config = Config.getInstance();
+            const check = symbolName;
+
+            // Include filter
+            if (config.includeExport.length > 0) {
+                const included = config.includeExport.some(
+                    (p: string): boolean => check.indexOf(p) !== -1
+                );
+                if (!included) {
+                    return false;
+                }
+            }
+
+            // Exclude filter
+            if (config.excludeExport.length > 0) {
+                const excluded = config.excludeExport.some(
+                    (p: string): boolean => check.indexOf(p) !== -1
+                );
+                if (excluded) {
+                    return false;
+                }
+            }
+        }
+
+        // Mark as hooked
+        hookedNatives.add(key);
+        return true;
+    }
+
+    // Install RegisterNative hook; dlsym and JNIEnv::RegisterNatives remain as backstops.
+    setupRegisterNativeHook();
+
     const dlopenRef = Module.findExportByName(null, "dlopen");
     const dlopenExtRef = Module.findExportByName(null, "android_dlopen_ext");
     const dlsymRef = Module.findExportByName(null, "dlsym");
@@ -144,9 +412,12 @@ export function run (callbackManager: JNICallbackManager): void {
     /**
      * Common handler for both dlopen() and android_dlopen_ext().
      *
-     * It inspects the filename, runs checkLibrary(path), and
-     * updates trackedLibs / libBlacklist based on the returned
-     * handle. The handle is returned unchanged.
+     * Inspects the filename, applies -l filters, and updates trackedLibs /
+     * libBlacklist based on the handle.
+     *
+     * @param filename Pointer to the filename string.
+     * @param handle   Library handle returned by dlopen/android_dlopen_ext.
+     * @returns        The handle (unchanged).
      */
     const handleDlopenResult = (
         filename: NativePointer,
@@ -211,7 +482,7 @@ export function run (callbackManager: JNICallbackManager): void {
             onEnter (args: NativePointer[]): void {
                 const SYMBOL_INDEX = 1;
 
-                this.handle = ptr(args[HANDLE_INDEX].toString());
+                this.handle = args[HANDLE_INDEX].toString();
 
                 if (libBlacklist.has(this.handle)) {
                     return;
@@ -253,15 +524,24 @@ export function run (callbackManager: JNICallbackManager): void {
                     }
                 }
 
+                const symbol = this.symbol as string;
+
                 if (trackedLibs.has(this.handle)) {
-                    const symbol = this.symbol as string;
                     if (symbol === "JNI_OnLoad") {
                         interceptJNIOnLoad(ptr(retval.toString()));
                     } else if (symbol.startsWith("Java_")) {
-                        interceptJNIFunction(ptr(retval.toString()));
+                        const addr = ptr(retval.toString());
+                        const key = addr.toString();
+
+                        if (hookedNatives.has(key)) {
+                            return;
+                        }
+
+                        hookedNatives.add(key);
+                        interceptJNIFunction(addr);
                     }
                 } else  {
-                    let name = config.libraries[HANDLE_INDEX];
+                    let name = config.libraries[LIB_TRACK_FIRST_INDEX];
 
                     if (name !== "*") {
                         const mod = Process.findModuleByAddress(retval);
@@ -276,7 +556,15 @@ export function run (callbackManager: JNICallbackManager): void {
                     }
 
                     if (config.libraries.includes(name) || name === "*") {
-                        interceptJNIFunction(ptr(retval.toString()));
+                        const addr = ptr(retval.toString());
+                        const key = addr.toString();
+
+                        if (hookedNatives.has(key)) {
+                            return;
+                        }
+
+                        hookedNatives.add(key);
+                        interceptJNIFunction(addr);
                     }
                 }
             }
@@ -292,7 +580,7 @@ export function run (callbackManager: JNICallbackManager): void {
             },
             onLeave (retval: NativePointer): void {
                 if (this.handle !== undefined) {
-                    if (retval.isNull()) {
+                    if (retval.toInt32() === 0) {
                         trackedLibs.delete(this.handle);
                     }
                 }
