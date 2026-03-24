@@ -247,7 +247,7 @@ abstract class JNIEnvInterceptor {
             Interceptor.attach(text, function (this: InvocationContext): void {
                 let backtraceType = Backtracer.ACCURATE;
                 if (config.backtrace === "fuzzy") {
-                    backtraceType = config.backtrace;
+                    backtraceType = Backtracer.FUZZY;
                 }
                 self.vaArgsBacktraces.set(
                     this.threadId, Thread.backtrace(this.context, backtraceType)
