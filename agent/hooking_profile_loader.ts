@@ -20,6 +20,7 @@ import { install_clipboard_hooks } from "./services/clipboard.js"
 import { install_location_hooks } from "./services/location.js"
 import { install_telephony_manager_hooks } from "./services/telephony.js"
 import { install_bypass_hooks } from "./security/bypass.js"
+import { install_jni_hooks } from "./jni/jni_trace.js";
 import { am_send, log, devlog } from "./utils/logging.js"
 
 
@@ -70,6 +71,9 @@ export let hook_config: HookConfig = {
     
     // Bypass hooks
     'bypass_hooks': false,
+
+    // JNI hooks
+    'jni_hooks' : false,
 };
 
 /* TODO
@@ -178,6 +182,9 @@ function load_profile_hooks(){
     
     // Bypass hooks
     install_hook_conditionally('bypass_hooks', install_bypass_hooks);
+
+    // JNI hooks
+    install_hook_conditionally('jni_hooks', install_jni_hooks);
     
     const enabled_hooks = Object.entries(hook_config).filter(([_, enabled]) => enabled).map(([name, _]) => name);
     log(`[HOOK] Active hooks: ${enabled_hooks.join(', ') || 'none'}`);

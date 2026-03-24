@@ -371,3 +371,17 @@ class DatabaseEvent(Event):
                 data[field] = value
                 
         return data
+    
+class JNIEvent(Event):
+    """JNI operation event"""
+    def __init__(self, event_type: str, timestamp: str):
+        super().__init__(event_type, timestamp)
+
+    def get_event_data(self) -> Dict[str, Any]:
+        data = {}
+        fields = []
+        for field in fields:
+            value = getattr(self, field)
+            if value is not None:
+                data[field] = value
+        return data
