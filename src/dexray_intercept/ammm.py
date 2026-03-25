@@ -222,7 +222,20 @@ def parse_hook_config(parsed_args, use_interactive=False):
     if not hook_config and use_interactive:
         hook_config = interactive_hook_selection()
 
-    return hook_config
+    # Build JNI config (for jnitrace-engine)
+    jni_config = {
+        "libraries": parsed_args.jni_lib or ["*"],
+        "backtrace": parsed_args.jni_backtrace,
+        "include": parsed_args.jni_include or [],
+        "exclude": parsed_args.jni_exclude or [],
+        "include_export": parsed_args.jni_include_export or [],
+        "exclude_export": parsed_args.jni_exclude_export or [],
+        "hide_data": parsed_args.jni_hide_data,
+        "env": not parsed_args.jni_ignore_env,
+        "vm": not parsed_args.jni_ignore_vm,
+    }
+
+    return hook_config, jni_config
 
 
 def setup_frida_server():
@@ -306,6 +319,25 @@ Examples:
                        help="Enable service hooks (bluetooth, camera, clipboard, location, telephony)")
     hooks.add_argument("--hooks-bypass", required=False, action="store_const", const=True, default=False,
                        help="Enable anti-analysis bypass hooks (root, frida, debugger, emulator detection)")
+    # JNI tracing options
+    hooks.add_argument("--jni-lib", action="append", metavar="PATTERN",
+                       help="JNI: limit tracing to libraries whose path contains this string (can be used multiple times)")
+    hooks.add_argument("--jni-backtrace", choices=["none", "fuzzy", "accurate"], default="none",
+                       help="JNI: backtrace mode for JNI calls (default: none)")
+    hooks.add_argument("--jni-include", action="append", default=[],
+                       help="JNI: regex filter to include JNI method names (e.g., Get, CallIntMethod)")
+    hooks.add_argument("--jni-exclude", action="append", default=[],
+                       help="JNI: regex filter to exclude JNI method names")
+    hooks.add_argument("--jni-include-export", action="append", default=[],
+                       help="JNI: include only native exports whose name contains this substring")
+    hooks.add_argument("--jni-exclude-export", action="append", default=[],
+                       help="JNI: exclude native exports whose name contains this substring")
+    hooks.add_argument("--jni-hide-data", action="store_true",
+                       help="JNI: reduce data in output (do not decode strings/buffers)")
+    hooks.add_argument("--jni-ignore-env", action="store_true",
+                       help="JNI: do not trace JNIEnv calls")
+    hooks.add_argument("--jni-ignore-vm", action="store_true",
+                       help="JNI: do not trace JavaVM calls")
 
     # Individual hook arguments
     hooks.add_argument("--enable-aes", action="store_true", help="Enable AES hooks")
@@ -450,7 +482,7 @@ Examples:
             # Parse hook configuration from CLI arguments
             # Enable interactive mode if no hooks specified on command line (unless --non-interactive flag set)
             use_interactive = not parsed.non_interactive
-            hook_config = parse_hook_config(parsed, use_interactive=use_interactive)
+            hook_config, jni_config = parse_hook_config(parsed, use_interactive=use_interactive)
             enabled_hooks = [hook for hook, enabled in hook_config.items() if enabled]
             if enabled_hooks:
                 print(f"[*] enabled hooks: {', '.join(enabled_hooks)}")
@@ -476,7 +508,8 @@ Examples:
                 fritap_output_dir=parsed.fritap_output_dir,
                 target_name=target_process,
                 spawn_mode=parsed.spawn,
-                custom_scripts=parsed.custom_script
+                custom_scripts=parsed.custom_script,
+                jni_config=jni_config,
             )
             if parsed.mitmproxy:
                 print("[*] mitmproxy enabled")
