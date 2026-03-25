@@ -6,7 +6,9 @@
     "main": "agent/hooking_profile_loader.ts",
     "scripts": {
         "prepare": "npm run build",
-        "build": "frida-compile agent/hooking_profile_loader.ts -o src/dexray_intercept/profiling.js",
+        "build:jnitrace-engine": "npm --prefix agent/jni/jnitrace-engine run build",
+        "build:agent": "frida-compile agent/hooking_profile_loader.ts -o src/dexray_intercept/profiling.js",
+        "build": "npm run build:jnitrace-engine && npm run build:agent",
         "watch": "frida-compile agent/hooking_profile_loader.ts -o src/dexray_intercept/profiling.js -w"
     },
     "keywords": [
@@ -23,11 +25,12 @@
         "frida-compile": "^19.0.4",
         "source-map": "^0.7.4"
     },
-    "dependencies": {
-        "frida": "^17.2.0",
-        "frida-fs": "^5.2.1",
-        "frida-java-bridge": "^7.0.10",
-        "frida-objc-bridge": "^8.0.5",
-        "util": "^0.12.4"
-    }
+  "dependencies": {
+    "frida": "^17.2.0",
+    "frida-fs": "^5.2.1",
+    "frida-java-bridge": "^7.0.10",
+    "frida-objc-bridge": "^8.0.5",
+    "util": "^0.12.4",
+    "jnitrace-engine": "file:agent/jni/jnitrace-engine"
+  }
 }

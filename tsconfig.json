@@ -10,6 +10,10 @@
     "esModuleInterop": true,
     "noImplicitAny": false,
     "strictNullChecks": false,
-    "skipLibCheck": true
-  }
+    "skipLibCheck": true,
+  },
+  "exclude": [
+    "node_modules",
+    "agent/jni/jnitrace-engine"
+  ]
 }
