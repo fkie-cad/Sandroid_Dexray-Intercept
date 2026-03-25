@@ -64,7 +64,7 @@ def hexdump(hex_string: str, header: bool = True, ansi: bool = True, truncate: b
 
     # Header row
     if header:
-        header_line = f"{colors['gray']}           00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f{colors['reset']}"
+        header_line = f"{colors['gray']}          00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f{colors['reset']}"
         result.append(header_line)
 
     # Process 16 bytes per line
