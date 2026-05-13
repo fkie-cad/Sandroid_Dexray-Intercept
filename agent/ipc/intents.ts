@@ -1,6 +1,7 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
+import { safePerform, safeUse, safeDeferred } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "IPC_INTENT"
 
@@ -115,15 +116,16 @@ function hookGetIntent(this: any): any {
 }
 
 
-function intent_hooks(){
-setTimeout(() => {
-    Java.perform(() => {
-        const Intent = Java.use("android.content.Intent");
-        Intent.getData.implementation = hookGetData;
-        // const Activity = Java.use("android.app.Activity");
-        // Activity.getIntent.implementation = hookGetIntent;
-    });
-}, 0);
+function intent_hooks() {
+    setTimeout(safeDeferred("intents:intent_hooks", () => {
+        safePerform("intents:intent_hooks", () => {
+            const Intent = safeUse("android.content.Intent", "intents:intent_hooks");
+            if (!Intent) return;
+            Intent.getData.implementation = hookGetData;
+            // const Activity = Java.use("android.app.Activity");
+            // Activity.getIntent.implementation = hookGetIntent;
+        });
+    }), 0);
 }
 
 

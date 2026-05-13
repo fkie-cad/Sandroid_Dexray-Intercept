@@ -1,7 +1,8 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where } from "../utils/misc.js"
-import { Java, safeJavaUse } from "../utils/javalib.js"
+import { Java} from "../utils/javalib.js"
+import { safePerform, safeUse, safeDeferred } from "../utils/safe_java.js"
 
 /**
  * Some parts are taken from https://codeshare.frida.re/@ninjadiary/sqlite-database/
@@ -89,11 +90,14 @@ recv("path_filters", (message) => {
  export { set_airplane_mode };
 
 
-
-function hook_java_sql(){
-    setImmediate(function() {
-        Java.perform(function() {
-            var sqliteDatabase = Java.use("android.database.sqlite.SQLiteDatabase");
+function hook_java_sql() {
+    setImmediate(safeDeferred("database:hook_java_sql", () => {
+        safePerform("database:hook_java_sql", () => {
+            const sqliteDatabase = safeUse(
+                "android.database.sqlite.SQLiteDatabase",
+                "database:hook_java_sql"
+            );
+            if (!sqliteDatabase) return;
     
             // execSQL(String sql)
             sqliteDatabase.execSQL.overload('java.lang.String').implementation = function(var0) {
@@ -723,16 +727,20 @@ function hook_java_sql(){
 
     
         });
-    });
+    }));
 
 }
 
 function hook_SQLCipher() {
-    setImmediate(function() {
-        Java.perform(function() {
-            const SQLiteOpenHelper = safeJavaUse('net.sqlcipher.database.SQLiteOpenHelper');
+    setImmediate(safeDeferred("database:hook_SQLCipher", () => {
+        safePerform("database:hook_SQLCipher", () => {
+            // safeJavaUse replaced with safeUse — null check pattern preserved
+            const SQLiteOpenHelper = safeUse(
+                'net.sqlcipher.database.SQLiteOpenHelper',
+                "database:hook_SQLCipher"
+            );
             if (SQLiteOpenHelper) {
-                SQLiteOpenHelper.getWritableDatabase.overload('java.lang.String').implementation = function (password) {
+                SQLiteOpenHelper.getWritableDatabase.overload('java.lang.String').implementation = function(password) {
                     createDatabaseEvent("database.sqlcipher.open", {
                         method: "SQLiteOpenHelper.getWritableDatabase(String)",
                         password: password,
@@ -744,7 +752,10 @@ function hook_SQLCipher() {
                 }
             }
 
-            const SQLiteDatabase = safeJavaUse("net.sqlcipher.database.SQLiteDatabase");
+            const SQLiteDatabase = safeUse(
+                "net.sqlcipher.database.SQLiteDatabase",
+                "database:hook_SQLCipher"
+            );
             if (!SQLiteDatabase) {
                 return;
             }
@@ -879,7 +890,7 @@ function hook_SQLCipher() {
 
         });
 
-    });
+    }));
 
 }
 
@@ -888,20 +899,21 @@ function hook_sql_related_stuff(){
 
 }
 
-
-function hook_room_library(){
-    // the room library is a famous SQL library on Android
-    setImmediate(function () {
-        Java.perform(function () {
+ // the room library is a famous SQL library on Android
+function hook_room_library() {
+    setImmediate(safeDeferred("database:hook_room_library", () => {
+        safePerform("database:hook_room_library", () => {
             //console.log("ROOM hooks being installed");
 
             // Hook the Room.databaseBuilder method
-            const Room = safeJavaUse("androidx.room.Room");
+            const Room = safeUse("androidx.room.Room", "database:hook_room_library");
             if (!Room) {
                 return;
             }
 
-            Room.databaseBuilder.overload("android.content.Context", "java.lang.Class", "java.lang.String").implementation = function (context, klass, dbName) {
+            Room.databaseBuilder.overload(
+                "android.content.Context", "java.lang.Class", "java.lang.String"
+            ).implementation = function(context, klass, dbName) {
                 createDatabaseEvent("database.room.builder", {
                     method: "Room.databaseBuilder(Context, Class, String)",
                     database_name: dbName,
@@ -914,148 +926,157 @@ function hook_room_library(){
             };
 
             // Hook SQLiteDatabase.openOrCreateDatabase (only if SQLCipher is present)
-            const SQLiteDatabase = safeJavaUse("net.sqlcipher.database.SQLiteDatabase");
+            const SQLiteDatabase = safeUse(
+                "net.sqlcipher.database.SQLiteDatabase",
+                "database:hook_room_library"
+            );
             if (SQLiteDatabase) {
+                SQLiteDatabase.openOrCreateDatabase.overload("java.io.File", "java.lang.String").implementation = function (file, password) {
+                    const methodVal = "SQLiteDatabase.openOrCreateDatabase(File, String), ";
+                    const logVal = `Opening or creating database with file: ${file.getAbsolutePath()} and password: ${password}`;
+                    am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
+                    //console.log(logVal);
+                    return this.openOrCreateDatabase(file, password);
+                };
 
-            SQLiteDatabase.openOrCreateDatabase.overload("java.io.File", "java.lang.String").implementation = function (file, password) {
-                const methodVal = "SQLiteDatabase.openOrCreateDatabase(File, String), ";
-                const logVal = `Opening or creating database with file: ${file.getAbsolutePath()} and password: ${password}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
-                //console.log(logVal);
-                return this.openOrCreateDatabase(file, password);
-            };
+                SQLiteDatabase.openOrCreateDatabase.overload("java.lang.String", "java.lang.String").implementation = function (path, password) {
+                    const methodVal = "SQLiteDatabase.openOrCreateDatabase(String, String), ";
+                    const logVal = `Opening or creating database with path: ${path} and password: ${password}`;
+                    am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
+                    //console.log(logVal);
+                    return this.openOrCreateDatabase(path, password);
+                };
 
-            SQLiteDatabase.openOrCreateDatabase.overload("java.lang.String", "java.lang.String").implementation = function (path, password) {
-                const methodVal = "SQLiteDatabase.openOrCreateDatabase(String, String), ";
-                const logVal = `Opening or creating database with path: ${path} and password: ${password}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
-                //console.log(logVal);
-                return this.openOrCreateDatabase(path, password);
-            };
-
-            // Hook PRAGMA key setting for SQLCipher
-            SQLiteDatabase.execSQL.overload("java.lang.String").implementation = function (sql) {
-                if (sql.toLowerCase().includes("pragma key")) {
-                    createDatabaseEvent("database.sqlcipher.pragma", {
-                        method: "SQLiteDatabase.execSQL(String)",
-                        sql: sql,
-                        pragma_type: "key",
-                        database_type: "SQLCipher"
-                    });
-                }
-                return this.execSQL(sql);
-            };
+                // Hook PRAGMA key setting for SQLCipher
+                SQLiteDatabase.execSQL.overload("java.lang.String").implementation = function (sql) {
+                    if (sql.toLowerCase().includes("pragma key")) {
+                        createDatabaseEvent("database.sqlcipher.pragma", {
+                            method: "SQLiteDatabase.execSQL(String)",
+                            sql: sql,
+                            pragma_type: "key",
+                            database_type: "SQLCipher"
+                        });
+                    }
+                    return this.execSQL(sql);
+                };
             } // End if (SQLiteDatabase)
 
             // Hook SupportSQLiteOpenHelper.Callback onCreate
-            const SupportSQLiteOpenHelper_Callback = safeJavaUse("androidx.sqlite.db.SupportSQLiteOpenHelper$Callback");
+            const SupportSQLiteOpenHelper_Callback = safeUse(
+                "androidx.sqlite.db.SupportSQLiteOpenHelper$Callback",
+                "database:hook_room_library"
+            );
             if (SupportSQLiteOpenHelper_Callback) {
 
-            SupportSQLiteOpenHelper_Callback.onCreate.implementation = function (db) {
-                createDatabaseEvent("database.room.callback", {
-                    method: "SupportSQLiteOpenHelper.Callback.onCreate(SupportSQLiteDatabase)",
-                    database_object: db.toString(),
-                    callback_type: "onCreate",
-                    database_type: "Room"
-                });
-                return this.onCreate(db);
-            };
+                SupportSQLiteOpenHelper_Callback.onCreate.implementation = function (db) {
+                    createDatabaseEvent("database.room.callback", {
+                        method: "SupportSQLiteOpenHelper.Callback.onCreate(SupportSQLiteDatabase)",
+                        database_object: db.toString(),
+                        callback_type: "onCreate",
+                        database_type: "Room"
+                    });
+                    return this.onCreate(db);
+                };
 
-            // Hook SupportSQLiteOpenHelper.Callback onOpen
-            SupportSQLiteOpenHelper_Callback.onOpen.implementation = function (db) {
-                createDatabaseEvent("database.room.callback", {
-                    method: "SupportSQLiteOpenHelper.Callback.onOpen(SupportSQLiteDatabase)",
-                    database_object: db.toString(),
-                    callback_type: "onOpen",
-                    database_type: "Room"
-                });
-                return this.onOpen(db);
-            };
+                // Hook SupportSQLiteOpenHelper.Callback onOpen
+                SupportSQLiteOpenHelper_Callback.onOpen.implementation = function (db) {
+                    createDatabaseEvent("database.room.callback", {
+                        method: "SupportSQLiteOpenHelper.Callback.onOpen(SupportSQLiteDatabase)",
+                        database_object: db.toString(),
+                        callback_type: "onOpen",
+                        database_type: "Room"
+                    });
+                    return this.onOpen(db);
+                };
             } // End if (SupportSQLiteOpenHelper_Callback)
 
 
             // Hook DAO methods (insert, update, delete)
-            const Dao = safeJavaUse("androidx.room.RoomDatabase");
+            const Dao = safeUse("androidx.room.RoomDatabase", "database:hook_room_library");
             if (Dao) {
-            Dao.insert.overload("java.lang.Object").implementation = function (entity) {
-                createDatabaseEvent("database.room.dao", {
-                    method: "RoomDatabase.insert(Object)",
-                    entity: entity.toString(),
-                    dao_operation: "insert",
-                    database_type: "Room"
-                });
-                return this.insert(entity);
-            };
+                Dao.insert.overload("java.lang.Object").implementation = function (entity) {
+                    createDatabaseEvent("database.room.dao", {
+                        method: "RoomDatabase.insert(Object)",
+                        entity: entity.toString(),
+                        dao_operation: "insert",
+                        database_type: "Room"
+                    });
+                    return this.insert(entity);
+                };
 
-            Dao.update.overload("java.lang.Object").implementation = function (entity) {
-                createDatabaseEvent("database.room.dao", {
-                    method: "RoomDatabase.update(Object)",
-                    entity: entity.toString(),
-                    dao_operation: "update",
-                    database_type: "Room"
-                });
-                return this.update(entity);
-            };
+                Dao.update.overload("java.lang.Object").implementation = function (entity) {
+                    createDatabaseEvent("database.room.dao", {
+                        method: "RoomDatabase.update(Object)",
+                        entity: entity.toString(),
+                        dao_operation: "update",
+                        database_type: "Room"
+                    });
+                    return this.update(entity);
+                };
 
-            Dao.delete.overload("java.lang.Object").implementation = function (entity) {
-                createDatabaseEvent("database.room.dao", {
-                    method: "RoomDatabase.delete(Object)",
-                    entity: entity.toString(),
-                    dao_operation: "delete",
-                    database_type: "Room"
-                });
-                return this.delete(entity);
-            };
+                Dao.delete.overload("java.lang.Object").implementation = function (entity) {
+                    createDatabaseEvent("database.room.dao", {
+                        method: "RoomDatabase.delete(Object)",
+                        entity: entity.toString(),
+                        dao_operation: "delete",
+                        database_type: "Room"
+                    });
+                    return this.delete(entity);
+                };
             } // End if (Dao)
 
             // Hook query execution (using same Dao reference as RoomDatabase)
             if (Dao) {
-            Dao.query.overload("androidx.sqlite.db.SupportSQLiteQuery").implementation = function (query) {
-                const methodVal = "RoomDatabase.query, ";
-                const logVal = `Query executed: ${query.toString()}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
-                return this.query(query);
-            };
+                Dao.query.overload("androidx.sqlite.db.SupportSQLiteQuery").implementation = function (query) {
+                    const methodVal = "RoomDatabase.query, ";
+                    const logVal = `Query executed: ${query.toString()}`;
+                    am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
+                    return this.query(query);
+                };
             } // End if (Dao)
 
             // Hook SupportSQLiteDatabase execSQL
-            const SupportSQLiteDatabase = safeJavaUse("androidx.sqlite.db.SupportSQLiteDatabase");
+            const SupportSQLiteDatabase = safeUse(
+                "androidx.sqlite.db.SupportSQLiteDatabase",
+                "database:hook_room_library"
+            );
             if (SupportSQLiteDatabase) {
-            SupportSQLiteDatabase.execSQL.overload("java.lang.String").implementation = function (sql) {
-                const methodVal = "SupportSQLiteDatabase.execSQL, ";
-                const logVal = `Executing SQL: ${sql}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
-                return this.execSQL(sql);
-            };
+                SupportSQLiteDatabase.execSQL.overload("java.lang.String").implementation = function (sql) {
+                    const methodVal = "SupportSQLiteDatabase.execSQL, ";
+                    const logVal = `Executing SQL: ${sql}`;
+                    am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
+                    return this.execSQL(sql);
+                };
             } // End if (SupportSQLiteDatabase)
 
             // Hook LiveData observe
-            const LiveData = safeJavaUse("androidx.lifecycle.LiveData");
+            const LiveData = safeUse("androidx.lifecycle.LiveData", "database:hook_room_library");
             if (LiveData) {
-            LiveData.observe.overload("androidx.lifecycle.LifecycleOwner", "androidx.lifecycle.Observer").implementation = function (owner, observer) {
-                const methodVal = "LiveData.observe, ";
-                const logVal = `LiveData observed with LifecycleOwner: ${owner.toString()}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: Room.LiveData, ${methodVal}${logVal}`);
-                return this.observe(owner, observer);
-            };
+                LiveData.observe.overload("androidx.lifecycle.LifecycleOwner", "androidx.lifecycle.Observer").implementation = function (owner, observer) {
+                    const methodVal = "LiveData.observe, ";
+                    const logVal = `LiveData observed with LifecycleOwner: ${owner.toString()}`;
+                    am_send(PROFILE_HOOKING_TYPE, `event_type: Room.LiveData, ${methodVal}${logVal}`);
+                    return this.observe(owner, observer);
+                };
             } // End if (LiveData)
 
             // Hook Flow collect
-            const FlowCollector = safeJavaUse("kotlinx.coroutines.flow.FlowCollector");
+             const FlowCollector = safeUse(
+                "kotlinx.coroutines.flow.FlowCollector",
+                "database:hook_room_library"
+            );
             if (FlowCollector) {
-            FlowCollector.emit.overload("java.lang.Object").implementation = function (value) {
-                const methodVal = "FlowCollector.emit, ";
-                const logVal = `Flow emitted value: ${value}`;
-                am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Flow, ${methodVal}${logVal}`);
-                //console.log(logVal);
-                return this.emit(value);
-            };
+                FlowCollector.emit.overload("java.lang.Object").implementation = function (value) {
+                    const methodVal = "FlowCollector.emit, ";
+                    const logVal = `Flow emitted value: ${value}`;
+                    am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Flow, ${methodVal}${logVal}`);
+                    //console.log(logVal);
+                    return this.emit(value);
+                };
             } // End if (FlowCollector)
 
         });
-    });
-
-
+    }));
 }
 
 function hook_native_sqlite() {
@@ -1229,9 +1250,12 @@ function hook_native_sqlite() {
 
 
 function hook_wcdb() {
-    setImmediate(function() {
-        Java.perform(function() {
-            const wcdbDatabase = safeJavaUse("com.tencent.wcdb.database.SQLiteDatabase");
+    setImmediate(safeDeferred("database:hook_wcdb", () => {
+        safePerform("database:hook_wcdb", () => {
+            const wcdbDatabase = safeUse(
+                "com.tencent.wcdb.database.SQLiteDatabase",
+                "database:hook_wcdb"
+            );
             if (!wcdbDatabase) {
                 return;
             }
@@ -1589,7 +1613,7 @@ function hook_wcdb() {
                     return this.setTransactionSuccessful();
                 };
         });
-    });
+    }));
 }
 
 
