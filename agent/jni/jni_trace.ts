@@ -824,7 +824,7 @@ const jniEnvCallback: JNIInvocationCallback = {
                             eventData.field_signature = sig;
                         }
                         if (name && sig) {
-                            eventData.field_descriptor = `${name}:${sig}`; // like jnitrace
+                            eventData.field_descriptor = `${name}:${sig}`;
                         }
                         break;
                     }
