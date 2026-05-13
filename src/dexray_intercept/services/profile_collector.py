@@ -325,15 +325,12 @@ class ProfileCollector:
             if formatted:
                 # In integrated mode (Sandroid): only use logger (goes through RichHandler)
                 # In standalone: use event_logger for terminal, logger for file
+                clean_formatted = strip_ansi_codes(formatted)
                 if self.integrated_mode:
-                    # Strip ANSI codes for Sandroid's logger
-                    clean_formatted = strip_ansi_codes(formatted)
                     logger.info(clean_formatted)
                 else:
+                    # Standalone: only print to terminal
                     self.event_logger.event(formatted)
-                    # Also log to file
-                    clean_formatted = strip_ansi_codes(formatted)
-                    logger.info(clean_formatted)
 
         return True
     
