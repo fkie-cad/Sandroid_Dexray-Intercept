@@ -2,6 +2,7 @@ import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
 import { Where } from "../utils/misc.js"
+import { safePerform, safeUse } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "PROCESS_CREATION"
 
@@ -15,75 +16,65 @@ function createProcessEvent(eventType: string, data: any): void {
 }
 
 function hook_java_process_creation() {
-    Java.perform(() => {
-        try {
-            const Process = Java.use('android.os.Process');
-            const threadDef = Java.use('java.lang.Thread');
-            const threadInstance = threadDef.$new();
+    safePerform("process:hook_java_process_creation", () => {
+        const Process = safeUse('android.os.Process', "process:hook_java_process_creation");
+        if (!Process) return;
 
-            if (Process.start) {
-                Process.start.implementation = function (
-                    processClass: any, niceName: string, uid: number,
-                    gid: number, gids: any, debugFlags: number, mountExternal: number,
-                    targetSdkVersion: number, seInfo: string, abi: string,
-                    instructionSet: string, appDataDir: string, zygoteArgs: any
-                ) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    
-                    createProcessEvent("process.creation", {
-                        library: 'android.os.Process',
-                        method: 'start',
-                        process_class: processClass ? processClass.toString() : null,
-                        nice_name: niceName,
-                        uid: uid,
-                        gid: gid,
-                        gids: gids ? (Array.isArray(gids) ? gids : gids.toString()) : null,
-                        debug_flags: debugFlags,
-                        mount_external: mountExternal,
-                        target_sdk_version: targetSdkVersion,
-                        selinux_info: seInfo,
-                        abi: abi,
-                        instruction_set: instructionSet,
-                        app_data_dir: appDataDir,
-                        zygote_args: zygoteArgs ? zygoteArgs.toString() : null,
-                        stack_trace: Where(stack)
-                    });
+        const threadDef = safeUse('java.lang.Thread', "process:hook_java_process_creation");
+        if (!threadDef) return;
+        const threadInstance = threadDef.$new();
 
-                    return this.start.apply(this, arguments);
-                };
-            }
+        if (Process.start) {
+            Process.start.implementation = function(
+                processClass: any, niceName: string, uid: number,
+                gid: number, gids: any, debugFlags: number, mountExternal: number,
+                targetSdkVersion: number, seInfo: string, abi: string,
+                instructionSet: string, appDataDir: string, zygoteArgs: any
+            ) {
+                const stack = threadInstance.currentThread().getStackTrace();
+                createProcessEvent("process.creation", {
+                    library: 'android.os.Process',
+                    method: 'start',
+                    process_class: processClass ? processClass.toString() : null,
+                    nice_name: niceName,
+                    uid: uid,
+                    gid: gid,
+                    gids: gids ? (Array.isArray(gids) ? gids : gids.toString()) : null,
+                    debug_flags: debugFlags,
+                    mount_external: mountExternal,
+                    target_sdk_version: targetSdkVersion,
+                    selinux_info: seInfo,
+                    abi: abi,
+                    instruction_set: instructionSet,
+                    app_data_dir: appDataDir,
+                    zygote_args: zygoteArgs ? zygoteArgs.toString() : null,
+                    stack_trace: Where(stack)
+                });
+                return this.start.apply(this, arguments);
+            };
+        }
 
-            // Hook additional process methods
-            if (Process.killProcess) {
-                Process.killProcess.implementation = function (pid: number) {
-                    createProcessEvent("process.kill", {
-                        library: 'android.os.Process',
-                        method: 'killProcess',
-                        target_pid: pid
-                    });
+        if (Process.killProcess) {
+            Process.killProcess.implementation = function(pid: number) {
+                createProcessEvent("process.kill", {
+                    library: 'android.os.Process',
+                    method: 'killProcess',
+                    target_pid: pid
+                });
+                return this.killProcess(pid);
+            };
+        }
 
-                    return this.killProcess(pid);
-                };
-            }
-
-            if (Process.sendSignal) {
-                Process.sendSignal.implementation = function (pid: number, signal: number) {
-                    createProcessEvent("process.signal", {
-                        library: 'android.os.Process',
-                        method: 'sendSignal',
-                        target_pid: pid,
-                        signal: signal
-                    });
-
-                    return this.sendSignal(pid, signal);
-                };
-            }
-
-        } catch (error) {
-            createProcessEvent("process.error", {
-                error_message: (error as Error).toString(),
-                error_type: "hook_java_process_creation"
-            });
+        if (Process.sendSignal) {
+            Process.sendSignal.implementation = function(pid: number, signal: number) {
+                createProcessEvent("process.signal", {
+                    library: 'android.os.Process',
+                    method: 'sendSignal',
+                    target_pid: pid,
+                    signal: signal
+                });
+                return this.sendSignal(pid, signal);
+            };
         }
     });
 }
