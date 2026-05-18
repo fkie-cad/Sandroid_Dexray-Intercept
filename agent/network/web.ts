@@ -2,21 +2,11 @@ import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
+import { safePerform, safeUse, safeOverload } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "WEB"
 
-// Utility functions for safe hook installation
-function safeHookClass(className: string, hookFunction: (clazz: any) => void): boolean {
-    try {
-        const clazz = Java.use(className);
-        hookFunction(clazz);
-        devlog(`Successfully hooked ${className}`);
-        return true;
-    } catch (e) {
-        devlog(`Class ${className} not available: ${e}`);
-        return false;
-    }
-}
+// safeHookClass removed => replaced by safeUse + safePerform
 
 interface WebEvent {
     event_type: string;
@@ -47,215 +37,243 @@ function createWebEvent(eventType: string, data: Partial<WebEvent>): void {
 function install_url_hooks() {
     devlog("Installing URL hooks");
     
-    Java.perform(() => {
-        safeHookClass("java.net.URL", (URL: any) => {
+    safePerform("web:install_url_hooks", () => {
+        const URL = safeUse("java.net.URL", "web:install_url_hooks");
+        if (URL) {
             // Hook URL constructor
-            URL.$init.overload('java.lang.String').implementation = function (urlString: string) {
-                const result = this.$init(urlString);
-                
-                if (!urlString.startsWith("null")) {
-                    createWebEvent("url.creation", {
-                        url: urlString,
-                        req_method: "GET"
-                    });
-                }
-                return result;
-            };
+            const urlInit = safeOverload(URL.$init, "web:URL.$init", 'java.lang.String');
+            if (urlInit) {
+                urlInit.implementation = function(urlString: string) {
+                    const result = this.$init(urlString);
+                    if (!urlString.startsWith("null")) {
+                        createWebEvent("url.creation", {
+                            url: urlString,
+                            req_method: "GET"
+                        });
+                    }
+                    return result;
+                };
+            }
 
             // Hook URL openConnection
-            URL.openConnection.overload().implementation = function() {
-                const result = this.openConnection();
-                
-                createWebEvent("url.open_connection", {
-                    url: result.getURL().toString(),
-                    req_method: "GET"
-                });
-                return result;
-            };
-        });
+            const openConnection = safeOverload(URL.openConnection, "web:URL.openConnection");
+            if (openConnection) {
+                openConnection.implementation = function() {
+                    const result = this.openConnection();
+                    createWebEvent("url.open_connection", {
+                        url: result.getURL().toString(),
+                        req_method: "GET"
+                    });
+                    return result;
+                };
+            }
+        }
 
-        safeHookClass("java.net.HttpURLConnection", (HttpURLConnection: any) => {
+        const HttpURLConnection = safeUse("java.net.HttpURLConnection", "web:install_url_hooks");
+        if (HttpURLConnection) {
+            // note: connect is also hooked in install_http_hooks below with more detail
+            // second assignment will overwrite this one
             // Hook connection
             HttpURLConnection.connect.implementation = function() {
                 createWebEvent("url.connection", {
-                    url: this.getURL().toString(),
+                    url: this.getURL ? this.getURL().toString() : "unknown",
                     req_method: this.getRequestMethod ? this.getRequestMethod() : "GET"
                 });
                 return this.connect();
             };
-        });
+        }
 
-        safeHookClass("java.net.URI", (URI: any) => {
+        const URI = safeUse("java.net.URI", "web:install_url_hooks");
+        if (URI) {
             // Hook URI constructor
-            URI.$init.overload('java.lang.String').implementation = function(uriString: string) {
-                const result = this.$init(uriString);
-                
-                createWebEvent("uri.creation", {
-                    class: "java.net.URI",
-                    method: "URI(String)",
-                    uri: uriString
-                });
-                
-                return result;
-            };
-        });
+            const uriInit = safeOverload(URI.$init, "web:URI.$init", 'java.lang.String');
+            if (uriInit) {
+                uriInit.implementation = function(uriString: string) {
+                    const result = this.$init(uriString);
+                    createWebEvent("uri.creation", {
+                        class: "java.net.URI",
+                        method: "URI(String)",
+                        uri: uriString
+                    });
+                    return result;
+                };
+            }
+        }
     });
 }
 
 function install_http_hooks() {
     devlog("Installing HTTP communication hooks");
     
-    Java.perform(() => {
-        safeHookClass("java.net.HttpURLConnection", (HttpURLConnection: any) => {
-            // Hook request method setting
-            HttpURLConnection.setRequestMethod.implementation = function(method: string) {
-                createWebEvent("http.request_method", {
-                    method: method,
-                    url: this.getURL ? this.getURL().toString() : "unknown"
+    safePerform("web:install_http_hooks", () => {
+        const HttpURLConnection = safeUse(
+            "java.net.HttpURLConnection",
+            "web:install_http_hooks"
+        );
+        if (!HttpURLConnection) return;
+        // Hook request method setting
+        HttpURLConnection.setRequestMethod.implementation = function(method: string) {
+            createWebEvent("http.request_method", {
+                method: method,
+                url: this.getURL ? this.getURL().toString() : "unknown"
+            });
+            return this.setRequestMethod(method);
+        };
+
+        // Hook connection
+        HttpURLConnection.connect.implementation = function() {
+            const result = this.connect();
+            // inner try-catch intentional: getResponseCode() can throw on some implementations
+            try {
+                const responseCode = this.getResponseCode();
+                createWebEvent("http.connect", {
+                    url: this.getURL ? this.getURL().toString() : "unknown",
+                    status_code: responseCode,
+                    method: this.getRequestMethod ? this.getRequestMethod() : "GET"
                 });
-                return this.setRequestMethod(method);
-            };
-
-            // Hook connection
-            HttpURLConnection.connect.implementation = function() {
-                const result = this.connect();
-                try {
-                    const responseCode = this.getResponseCode();
-                    createWebEvent("http.connect", {
-                        url: this.getURL ? this.getURL().toString() : "unknown",
-                        status_code: responseCode,
-                        method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                    });
-                } catch (e) {
-                    createWebEvent("http.connect", {
-                        url: this.getURL ? this.getURL().toString() : "unknown",
-                        method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                    });
-                }
-                return result;
-            };
-
-            // Hook output stream (for request body)
-            HttpURLConnection.getOutputStream.implementation = function() {
-                const outputStream = this.getOutputStream();
-                createWebEvent("http.output_stream", {
+            } catch (e) {
+                createWebEvent("http.connect", {
                     url: this.getURL ? this.getURL().toString() : "unknown",
                     method: this.getRequestMethod ? this.getRequestMethod() : "GET"
                 });
-                return outputStream;
-            };
+            }
+            return result;
+        };
 
-            // Hook input stream (for response body)
-            HttpURLConnection.getInputStream.implementation = function() {
-                const inputStream = this.getInputStream();
-                const url = this.getURL ? this.getURL().toString() : "unknown";
-                const method = this.getRequestMethod ? this.getRequestMethod() : "GET";
-                
-                createWebEvent("http.input_stream", {
-                    url: url,
-                    method: method
-                });
-                
-                return inputStream;
-            };
-        });
+        // Hook output stream (for request body)
+        HttpURLConnection.getOutputStream.implementation = function() {
+            const outputStream = this.getOutputStream();
+            createWebEvent("http.output_stream", {
+                url: this.getURL ? this.getURL().toString() : "unknown",
+                method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+            });
+            return outputStream;
+        };
+
+        // Hook input stream (for response body)
+        HttpURLConnection.getInputStream.implementation = function() {
+            const inputStream = this.getInputStream();
+            createWebEvent("http.input_stream", {
+                url: this.getURL ? this.getURL().toString() : "unknown",
+                method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+            });
+            return inputStream;
+        };
     });
 }
 
 function install_https_hooks() {
     devlog("Installing HTTPS communication hooks");
-    
-    Java.perform(() => {
-        safeHookClass("javax.net.ssl.HttpsURLConnection", (HttpsURLConnection: any) => {
-            // Hook HTTPS request method setting
-            HttpsURLConnection.setRequestMethod.implementation = function(method: string) {
-                createWebEvent("https.request_method", {
-                    method: method,
-                    url: this.getURL ? this.getURL().toString() : "unknown"
-                });
-                return this.setRequestMethod(method);
-            };
 
-            // Hook HTTPS connection
-            HttpsURLConnection.connect.implementation = function() {
-                const result = this.connect();
-                try {
-                    const responseCode = this.getResponseCode();
-                    createWebEvent("https.connect", {
-                        url: this.getURL ? this.getURL().toString() : "unknown",
-                        status_code: responseCode,
-                        method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                    });
-                } catch (e) {
-                    createWebEvent("https.connect", {
-                        url: this.getURL ? this.getURL().toString() : "unknown",
-                        method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                    });
-                }
-                return result;
-            };
+    safePerform("web:install_https_hooks", () => {
+        const HttpsURLConnection = safeUse(
+            "javax.net.ssl.HttpsURLConnection",
+            "web:install_https_hooks"
+        );
+        if (!HttpsURLConnection) return;
 
-            // Hook HTTPS input stream
-            HttpsURLConnection.getInputStream.implementation = function() {
-                const inputStream = this.getInputStream();
-                const url = this.getURL ? this.getURL().toString() : "unknown";
-                const method = this.getRequestMethod ? this.getRequestMethod() : "GET";
-                
-                createWebEvent("https.input_stream", {
-                    url: url,
-                    method: method
+        // Hook HTTPS request method setting
+        HttpsURLConnection.setRequestMethod.implementation = function(method: string) {
+            createWebEvent("https.request_method", {
+                method: method,
+                url: this.getURL ? this.getURL().toString() : "unknown"
+            });
+            return this.setRequestMethod(method);
+        };
+
+        // Hook HTTPS connection
+        HttpsURLConnection.connect.implementation = function() {
+            const result = this.connect();
+            try {
+                const responseCode = this.getResponseCode();
+                createWebEvent("https.connect", {
+                    url: this.getURL ? this.getURL().toString() : "unknown",
+                    status_code: responseCode,
+                    method: this.getRequestMethod ? this.getRequestMethod() : "GET"
                 });
-                
-                return inputStream;
-            };
-        });
+            } catch (e) {
+                createWebEvent("https.connect", {
+                    url: this.getURL ? this.getURL().toString() : "unknown",
+                    method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+                });
+            }
+            return result;
+        };
+
+
+        // Hook HTTPS input stream
+        HttpsURLConnection.getInputStream.implementation = function() {
+            const inputStream = this.getInputStream();
+            createWebEvent("https.input_stream", {
+                url: this.getURL ? this.getURL().toString() : "unknown",
+                method: this.getRequestMethod ? this.getRequestMethod() : "GET"
+            });
+            return inputStream;
+        };
     });
 }
 
 function install_okhttp_hooks(){
     devlog("Installing OkHTTP hooks");
     
-    Java.perform(() => {
+    safePerform("web:install_okhttp_hooks", () => {
         // Hook OkHttp3 client
-        safeHookClass('okhttp3.OkHttpClient', (OkHttpClient: any) => {
-            OkHttpClient.newCall.overload('okhttp3.Request').implementation = function (request: any) {
-                const headers: Record<string, string> = {};
-                try {
-                    const requestHeaders = request.headers();
-                    const headerNames = requestHeaders.names().toArray();
-                    
-                    for (let i = 0; i < headerNames.length; i++) {
-                        headers[headerNames[i]] = requestHeaders.get(headerNames[i]);
+        const OkHttpClient = safeUse('okhttp3.OkHttpClient', "web:install_okhttp_hooks");
+        if (OkHttpClient) {
+            const newCall = safeOverload(
+                OkHttpClient.newCall,
+                "web:OkHttpClient.newCall",
+                'okhttp3.Request'
+            );
+            if (newCall) {
+                newCall.implementation = function(request: any) {
+                    const headers: Record<string, string> = {};
+                    try {
+                        const requestHeaders = request.headers();
+                        const headerNames = requestHeaders.names().toArray();
+                        for (let i = 0; i < headerNames.length; i++) {
+                            headers[headerNames[i]] = requestHeaders.get(headerNames[i]);
+                        }
+                    } catch (e) {
+                        devlog(`Error reading OkHttp headers: ${e}`);
                     }
-                } catch (e) {
-                    devlog(`Error reading OkHttp headers: ${e}`);
-                }
-
-                createWebEvent("okhttp.request", {
-                    url: request.url().toString(),
-                    method: request.method(),
-                    headers: headers,
-                    body: request.body() ? request.body().toString() : null
-                });
-
-                return this.newCall(request);
-            };
-        });
+                    createWebEvent("okhttp.request", {
+                        url: request.url().toString(),
+                        method: request.method(),
+                        headers: headers,
+                        body: request.body() ? request.body().toString() : null
+                    });
+                    return this.newCall(request);
+                };
+            }
+        }
 
         // Hook legacy OkHttp client
-        safeHookClass('okhttp.OkHttpClient', (OkHttpClientOld: any) => {
-            OkHttpClientOld.newCall.overload('okhttp.Request').implementation = function (request: any) {
-                createWebEvent("okhttp_old.request", {
-                    url: request.url().toString(),
-                    method: request.method()
-                });
-                return this.newCall(request);
-            };
-        });
+        const OkHttpClientOld = safeUse('okhttp.OkHttpClient', "web:install_okhttp_hooks");
+        if (OkHttpClientOld) {
+            const newCallOld = safeOverload(
+                OkHttpClientOld.newCall,
+                "web:okhttp.OkHttpClient.newCall",
+                'okhttp.Request'
+            );
+            if (newCallOld) {
+                newCallOld.implementation = function(request: any) {
+                    createWebEvent("okhttp_old.request", {
+                        url: request.url().toString(),
+                        method: request.method()
+                    });
+                    return this.newCall(request);
+                };
+            }
+        }
 
         // Hook HttpURLConnectionImpl from OkHttp
-        safeHookClass("com.android.okhttp.internal.huc.HttpURLConnectionImpl", (HttpURLConnectionImpl: any) => {
-            HttpURLConnectionImpl.setRequestProperty.implementation = function (name: string, value: string) {
+        const HttpURLConnectionImpl = safeUse(
+            "com.android.okhttp.internal.huc.HttpURLConnectionImpl",
+            "web:install_okhttp_hooks"
+        );
+        if (HttpURLConnectionImpl) {
+            HttpURLConnectionImpl.setRequestProperty.implementation = function(name: string, value: string) {
                 createWebEvent("okhttp.request_property", {
                     url: this.getURL ? this.getURL().toString() : "unknown",
                     method: "setRequestProperty",
@@ -264,34 +282,48 @@ function install_okhttp_hooks(){
                 return this.setRequestProperty(name, value);
             };
 
-            HttpURLConnectionImpl.setRequestMethod.implementation = function (method: string) {
+            HttpURLConnectionImpl.setRequestMethod.implementation = function(method: string) {
                 createWebEvent("okhttp.request_method", {
                     url: this.getURL ? this.getURL().toString() : "unknown",
                     method: method
                 });
                 return this.setRequestMethod(method);
             };
-        });
+        }
     });
 }
 
 function install_webview_hooks(){
     devlog("Installing WebView hooks");
     
-    Java.perform(() => {
-        safeHookClass("android.webkit.WebView", (WebView: any) => {
-            // Hook WebView.loadUrl (single argument)
-            WebView.loadUrl.overload('java.lang.String').implementation = function(url: string) {
-                createWebEvent("webview.load_url", {
-                    url: url,
-                    method: "loadUrl"
-                });
-                return this.loadUrl(url);
-            };
-
-            // Hook WebView.loadUrl (with headers) 
-            if (WebView.loadUrl.overloads.length > 1) {
-                WebView.loadUrl.overload('java.lang.String', 'java.util.Map').implementation = function(url: string, additionalHttpHeaders: any) {
+    safePerform("web:install_webview_hooks", () => {
+        // Hook WebView.loadUrl (single argument)
+        const WebView = safeUse("android.webkit.WebView", "web:install_webview_hooks");
+        if (WebView) {
+            const loadUrlBasic = safeOverload(
+                WebView.loadUrl,
+                "web:WebView.loadUrl",
+                'java.lang.String'
+            );
+            if (loadUrlBasic) {
+                loadUrlBasic.implementation = function(url: string) {
+                    createWebEvent("webview.load_url", {
+                        url: url,
+                        method: "loadUrl"
+                    });
+                    return this.loadUrl(url);
+                };
+            }
+        
+            // safeOverload replaces the original overloads.length > 1 check
+            // Hook WebView.loadUrl (with headers)
+            const loadUrlWithHeaders = safeOverload(
+                WebView.loadUrl,
+                "web:WebView.loadUrl",
+                'java.lang.String', 'java.util.Map'
+            );
+            if (loadUrlWithHeaders) {
+                loadUrlWithHeaders.implementation = function(url: string, additionalHttpHeaders: any) {
                     createWebEvent("webview.load_url_with_headers", {
                         url: url,
                         headers: additionalHttpHeaders || {},
@@ -312,9 +344,15 @@ function install_webview_hooks(){
                 return this.loadData(data, mimeType, encoding);
             };
 
+            // safeOverload replaces the original if (WebView.postUrl) check
             // Hook WebView.postUrl
-            if (WebView.postUrl) {
-                WebView.postUrl.implementation = function(url: string, postData: any) {
+            const postUrl = safeOverload(
+                WebView.postUrl,
+                "web:WebView.postUrl",
+                'java.lang.String', '[B'
+            );
+            if (postUrl) {
+                postUrl.implementation = function(url: string, postData: any) {
                     createWebEvent("webview.post_url", {
                         url: url,
                         method: "postUrl",
@@ -323,10 +361,11 @@ function install_webview_hooks(){
                     return this.postUrl(url, postData);
                 };
             }
-        });
+        }
 
         // Hook WebViewClient callbacks
-        safeHookClass("android.webkit.WebViewClient", (WebViewClient: any) => {
+        const WebViewClient = safeUse("android.webkit.WebViewClient", "web:install_webview_hooks");
+        if (WebViewClient) {
             WebViewClient.onPageStarted.implementation = function(view: any, url: string, favicon: any) {
                 createWebEvent("webview.page_started", {
                     url: url,
@@ -343,22 +382,30 @@ function install_webview_hooks(){
                 return this.onPageFinished(view, url);
             };
 
-            WebViewClient.shouldOverrideUrlLoading.overload('android.webkit.WebView', 'java.lang.String').implementation = function(view: any, url: string) {
-                createWebEvent("webview.url_override", {
-                    url: url,
-                    method: "shouldOverrideUrlLoading"
-                });
-                return this.shouldOverrideUrlLoading(view, url);
-            };
-        });
+            const shouldOverride = safeOverload(
+                WebViewClient.shouldOverrideUrlLoading,
+                "web:WebViewClient.shouldOverrideUrlLoading",
+                'android.webkit.WebView', 'java.lang.String'
+            );
+            if (shouldOverride) {
+                shouldOverride.implementation = function(view: any, url: string) {
+                    createWebEvent("webview.url_override", {
+                        url: url,
+                        method: "shouldOverrideUrlLoading"
+                    });
+                    return this.shouldOverrideUrlLoading(view, url);
+                };
+            }
+        }
     });
 }
 
 function install_retrofit_hooks() {
     devlog("Installing Retrofit hooks");
-    
-    Java.perform(() => {
-        safeHookClass('retrofit2.OkHttpCall', (OkHttpCall: any) => {
+
+    safePerform("web:install_retrofit_hooks", () => {
+        const OkHttpCall = safeUse('retrofit2.OkHttpCall', "web:install_retrofit_hooks");
+        if (OkHttpCall) {
             OkHttpCall.execute.implementation = function() {
                 const request = this.request();
                 if (request) {
@@ -376,9 +423,10 @@ function install_retrofit_hooks() {
                 }
                 return response;
             };
-        });
+        }
 
-        safeHookClass('retrofit2.Call', (Call: any) => {
+        const Call = safeUse('retrofit2.Call', "web:install_retrofit_hooks");
+        if (Call) {
             Call.enqueue.implementation = function(callback: any) {
                 const request = this.request();
                 if (request) {
@@ -389,25 +437,43 @@ function install_retrofit_hooks() {
                 }
                 return this.enqueue(callback);
             };
-        });
+        }
     });
 }
 
 function install_volley_hooks() {
     devlog("Installing Volley hooks");
-    
-    Java.perform(() => {
-        safeHookClass('com.android.volley.toolbox.StringRequest', (StringRequest: any) => {
-            StringRequest.$init.overload('int', 'java.lang.String', 'com.android.volley.Response$Listener', 'com.android.volley.Response$ErrorListener').implementation = function(method: number, url: string, listener: any, errorListener: any) {
-                createWebEvent("volley.string_request", {
-                    url: url,
-                    method: method === 0 ? "GET" : method === 1 ? "POST" : method === 2 ? "PUT" : method === 3 ? "DELETE" : "UNKNOWN"
-                });
-                return this.$init(method, url, listener, errorListener);
-            };
-        });
 
-        safeHookClass('com.android.volley.RequestQueue', (RequestQueue: any) => {
+    safePerform("web:install_volley_hooks", () => {
+        const StringRequest = safeUse(
+            'com.android.volley.toolbox.StringRequest',
+            "web:install_volley_hooks"
+        );
+        if (StringRequest) {
+            const volleyInit = safeOverload(
+                StringRequest.$init,
+                "web:StringRequest.$init",
+                'int', 'java.lang.String',
+                'com.android.volley.Response$Listener',
+                'com.android.volley.Response$ErrorListener'
+            );
+            if (volleyInit) {
+                volleyInit.implementation = function(method: number, url: string, listener: any, errorListener: any) {
+                    createWebEvent("volley.string_request", {
+                        url: url,
+                        method: method === 0 ? "GET" : method === 1 ? "POST" : method === 2 ? "PUT" : method === 3 ? "DELETE" : "UNKNOWN"
+                    });
+                    return this.$init(method, url, listener, errorListener);
+                };
+            }
+        }
+
+        const RequestQueue = safeUse(
+            'com.android.volley.RequestQueue',
+            "web:install_volley_hooks"
+        );
+        if (RequestQueue) {
+            // single overload — direct assignment
             RequestQueue.add.implementation = function(request: any) {
                 if (request.getUrl) {
                     createWebEvent("volley.queue_request", {
@@ -417,25 +483,37 @@ function install_volley_hooks() {
                 }
                 return this.add(request);
             };
-        });
+        }
     });
 }
 
 function install_websocket_hooks() {
     devlog("Installing WebSocket hooks");
-    
-    Java.perform(() => {
-        safeHookClass('okhttp3.WebSocket', (WebSocket: any) => {
-            WebSocket.send.overload('java.lang.String').implementation = function(text: string) {
-                createWebEvent("websocket.send_text", {
-                    data: text.length > 200 ? text.substring(0, 200) + "..." : text,
-                    method: "send"
-                });
-                return this.send(text);
-            };
-        });
 
-        safeHookClass('okhttp3.WebSocketListener', (WebSocketListener: any) => {
+    safePerform("web:install_websocket_hooks", () => {
+        const WebSocket = safeUse('okhttp3.WebSocket', "web:install_websocket_hooks");
+        if (WebSocket) {
+            const sendText = safeOverload(
+                WebSocket.send,
+                "web:WebSocket.send",
+                'java.lang.String'
+            );
+            if (sendText) {
+                sendText.implementation = function(text: string) {
+                    createWebEvent("websocket.send_text", {
+                        data: text.length > 200 ? text.substring(0, 200) + "..." : text,
+                        method: "send"
+                    });
+                    return this.send(text);
+                };
+            }
+        }
+
+        const WebSocketListener = safeUse(
+            'okhttp3.WebSocketListener',
+            "web:install_websocket_hooks"
+        );
+        if (WebSocketListener) {
             WebSocketListener.onOpen.implementation = function(webSocket: any, response: any) {
                 createWebEvent("websocket.opened", {
                     status_code: response.code(),
@@ -444,13 +522,20 @@ function install_websocket_hooks() {
                 return this.onOpen(webSocket, response);
             };
 
-            WebSocketListener.onMessage.overload('okhttp3.WebSocket', 'java.lang.String').implementation = function(webSocket: any, text: string) {
-                createWebEvent("websocket.message_received", {
-                    data: text.length > 200 ? text.substring(0, 200) + "..." : text
-                });
-                return this.onMessage(webSocket, text);
-            };
-        });
+            const onMessageText = safeOverload(
+                WebSocketListener.onMessage,
+                "web:WebSocketListener.onMessage",
+                'okhttp3.WebSocket', 'java.lang.String'
+            );
+            if (onMessageText) {
+                onMessageText.implementation = function(webSocket: any, text: string) {
+                    createWebEvent("websocket.message_received", {
+                        data: text.length > 200 ? text.substring(0, 200) + "..." : text
+                    });
+                    return this.onMessage(webSocket, text);
+                };
+            }
+        }
     });
 }
 

@@ -2,6 +2,7 @@ import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
+import { safePerform, safeUse, safeOverload } from "../utils/safe_java.js"
 
 /**
  * 
@@ -33,98 +34,142 @@ function getStackTrace() {
     return 'ip' in address;
 }
 
-function hook_java_socket_communication(){
+function hook_java_socket_communication() {
+    // was missing Java.perform entirely, all Java.use calls were unprotected
+    safePerform("sockets:hook_java_socket_communication", () => {
+        const ServerSocket = safeUse(
+            'java.net.ServerSocket',
+            "sockets:hook_java_socket_communication"
+        );
+        const Socket = safeUse(
+            'java.net.Socket',
+            "sockets:hook_java_socket_communication"
+        );
+        const LocalServerSocket = safeUse(
+            'android.net.LocalServerSocket',
+            "sockets:hook_java_socket_communication"
+        );
+        const DatagramSocket = safeUse(
+            'java.net.DatagramSocket',
+            "sockets:hook_java_socket_communication"
+        );
 
-    var ServerSocket = Java.use('java.net.ServerSocket');
-    var Socket = Java.use('java.net.Socket');
-    var LocalServerSocket =  Java.use('android.net.LocalServerSocket');
-    var DatagramSocket = Java.use('java.net.DatagramSocket');
-    var threadef = Java.use('java.lang.Thread');
-    var threadinstance = threadef.$new();
+        if (ServerSocket) {
+            const accept = safeOverload(ServerSocket.accept, "sockets:ServerSocket.accept");
+            if (accept) {
+                accept.implementation = function() {
+                    var result = this.accept();
+                    createSocketEvent("socket.java.server_accept", {
+                        class: "java.net.ServerSocket",
+                        method: "accept",
+                        server_info: this.toString(),
+                        stack_trace: getStackTrace()
+                    });
+                    return result;
+                };
+            }
+        }
 
-    ServerSocket.accept.overload().implementation = function(){
-        var result = this.accept();
-        
-        createSocketEvent("socket.java.server_accept", {
-            class: "java.net.ServerSocket",
-            method: "accept",
-            server_info: this.toString(),
-            stack_trace: getStackTrace()
-        });
-        
-        return result;
-    }
+        if (Socket) {
+            const socketInit = safeOverload(
+                Socket.$init,
+                "sockets:Socket.$init",
+                'java.lang.String', 'int'
+            );
+            if (socketInit) {
+                socketInit.implementation = function(host, port) {
+                    var result = this.$init(host, port);
+                    createSocketEvent("socket.java.init", {
+                        class: "java.net.Socket",
+                        method: "$init",
+                        host: host,
+                        port: port,
+                        connection_string: `${host}:${port}`,
+                        stack_trace: getStackTrace()
+                    });
+                    return result;
+                };
+            }
 
-    Socket.$init.overload('java.lang.String', 'int').implementation = function(host, port){
-        var result = this.$init(host, port);
-        
-        createSocketEvent("socket.java.init", {
-            class: "java.net.Socket",
-            method: "$init",
-            host: host,
-            port: port,
-            connection_string: `${host}:${port}`,
-            stack_trace: getStackTrace()
-        });
-        
-        return result;
-    }
+            const connectWithTimeout = safeOverload(
+                Socket.connect,
+                "sockets:Socket.connect",
+                'java.net.SocketAddress', 'int'
+            );
+            if (connectWithTimeout) {
+                connectWithTimeout.implementation = function(p_endpoint, p_timeout) {
+                    var result = this.connect(p_endpoint, p_timeout);
+                    createSocketEvent("socket.java.connect", {
+                        class: "java.net.Socket",
+                        method: "connect",
+                        endpoint: p_endpoint.toString(),
+                        timeout: p_timeout,
+                        stack_trace: getStackTrace()
+                    });
+                    return result;
+                };
+            }
 
-    Socket.connect.overload('java.net.SocketAddress', 'int').implementation = function(p_endpoint, p_timeout){
-        var result = this.connect(p_endpoint, p_timeout);
-        
-        createSocketEvent("socket.java.connect", {
-            class: "java.net.Socket",
-            method: "connect",
-            endpoint: p_endpoint.toString(),
-            timeout: p_timeout,
-            stack_trace: getStackTrace()
-        });
-        
-        return result;
-    }
+            const connectBasic = safeOverload(
+                Socket.connect,
+                "sockets:Socket.connect",
+                'java.net.SocketAddress'
+            );
+            if (connectBasic) {
+                connectBasic.implementation = function(p_endpoint) {
+                    var result = this.connect(p_endpoint);
+                    createSocketEvent("socket.java.connect", {
+                        class: "java.net.Socket",
+                        method: "connect",
+                        endpoint: p_endpoint.toString(),
+                        stack_trace: getStackTrace()
+                    });
+                    return result;
+                };
+            }
+        }
 
-    Socket.connect.overload('java.net.SocketAddress').implementation = function(p_endpoint){
-        var result = this.connect(p_endpoint);
-        
-        createSocketEvent("socket.java.connect", {
-            class: "java.net.Socket",
-            method: "connect",
-            endpoint: p_endpoint.toString(),
-            stack_trace: getStackTrace()
-        });
-        
-        return result;
-    }
+        if (LocalServerSocket) {
+            const localAccept = safeOverload(
+                LocalServerSocket.accept,
+                "sockets:LocalServerSocket.accept"
+            );
+            if (localAccept) {
+                localAccept.implementation = function() {
+                    var result = this.accept();
+                    createSocketEvent("socket.java.local_accept", {
+                        class: "android.net.LocalServerSocket",
+                        method: "accept",
+                        server_info: this.toString(),
+                        stack_trace: getStackTrace()
+                    });
+                    return result;
+                };
+            }
+        }
 
-    LocalServerSocket.accept.overload().implementation = function(){
-        var result = this.accept();
-        
-        createSocketEvent("socket.java.local_accept", {
-            class: "android.net.LocalServerSocket",
-            method: "accept",
-            server_info: this.toString(),
-            stack_trace: getStackTrace()
-        });
-        
-        return result;
-    }
-
-    DatagramSocket.connect.overload('java.net.InetAddress','int').implementation = function(address, port){
-        var result = this.connect(address, port);
-        
-        createSocketEvent("socket.java.datagram_connect", {
-            class: "java.net.DatagramSocket",
-            method: "connect",
-            address: address.toString(),
-            port: port,
-            connection_string: `${address}:${port}`,
-            stack_trace: getStackTrace()
-        });
-        
-        return result;
-    }
-
+        if (DatagramSocket) {
+            const datagramConnect = safeOverload(
+                DatagramSocket.connect,
+                "sockets:DatagramSocket.connect",
+                'java.net.InetAddress', 'int'
+            );
+            if (datagramConnect) {
+                datagramConnect.implementation = function(address, port) {
+                    var result = this.connect(address, port);
+                    createSocketEvent("socket.java.datagram_connect", {
+                        class: "java.net.DatagramSocket",
+                        method: "connect",
+                        address: address.toString(),
+                        port: port,
+                        connection_string: `${address}:${port}`,
+                        stack_trace: getStackTrace()
+                    });
+                    return result;
+                };
+            }
+        }
+    });
 }
 
 
@@ -219,8 +264,6 @@ Interceptor.attach(socket_ptr, {
                 // add socket to list
                 socket_list.unshift(sd);
 
-                
-                
                 // send socket data
                 var data = {"event_type": "Libc::socket","method": "socket", "sd": sd, "type": sockType};
                 //am_send(PROFILE_HOOKING_TYPE,JSON.stringify(data));
