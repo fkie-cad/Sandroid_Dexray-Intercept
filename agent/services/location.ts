@@ -2,6 +2,7 @@ import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
 import { Where } from "../utils/misc.js"
+import { safePerform, safeUse, safeOverload } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "LOCATION_ACCESS"
 
@@ -15,72 +16,96 @@ function createLocationEvent(eventType: string, data: any): void {
 }
 
 /**
- * 
- * 
  * https://github.com/iddoeldor/frida-snippets?tab=readme-ov-file#change-location
  */
 
-function hook_location(){
-    Java.perform(() => {
-        try {
-            const LocationManager = Java.use('android.location.LocationManager');
-            const Location = Java.use('android.location.Location');
-            const threadDef = Java.use('java.lang.Thread');
-            const threadInstance = threadDef.$new();
+function hook_location() {
+    safePerform("location:hook_location", () => {
+        const LocationManager = safeUse('android.location.LocationManager', "location:hook_location");
+        const Location = safeUse('android.location.Location', "location:hook_location");
+        const threadDef = safeUse('java.lang.Thread', "location:hook_location");
+        if (!threadDef) return;
+        const threadInstance = threadDef.$new();
 
-            // Hook LocationManager's getLastKnownLocation method
-            LocationManager.getLastKnownLocation.overload('java.lang.String').implementation = function (provider: string) {
-                const result = this.getLastKnownLocation(provider);
-                const stack = threadInstance.currentThread().getStackTrace();
-                
-                if (result !== null) {
-                    const latitude = result.getLatitude();
-                    const longitude = result.getLongitude();
-                    const accuracy = result.getAccuracy();
+        // Hook LocationManager's getLastKnownLocation method
+        if (LocationManager) {
+            const getLastKnown = safeOverload(
+                LocationManager.getLastKnownLocation,
+                "location:LocationManager.getLastKnownLocation",
+                'java.lang.String'
+            );
+            if (getLastKnown) {
+                getLastKnown.implementation = function(provider: string) {
+                    const result = this.getLastKnownLocation(provider);
+                    const stack = threadInstance.currentThread().getStackTrace();
                     
-                    createLocationEvent("location.last_known_location", {
-                        library: 'android.location.LocationManager',
-                        method: 'getLastKnownLocation',
-                        provider: provider,
-                        latitude: latitude,
-                        longitude: longitude,
-                        accuracy: accuracy,
-                        has_location: true,
-                        stack_trace: Where(stack)
-                    });
-                } else {
-                    createLocationEvent("location.last_known_location", {
-                        library: 'android.location.LocationManager',
-                        method: 'getLastKnownLocation',
-                        provider: provider,
-                        has_location: false,
-                        stack_trace: Where(stack)
-                    });
-                }
-                
-                return result;
-            };
+                    if (result !== null) {
+                        const latitude = result.getLatitude();
+                        const longitude = result.getLongitude();
+                        const accuracy = result.getAccuracy();
+                        
+                        createLocationEvent("location.last_known_location", {
+                            library: 'android.location.LocationManager',
+                            method: 'getLastKnownLocation',
+                            provider: provider,
+                            latitude: latitude,
+                            longitude: longitude,
+                            accuracy: accuracy,
+                            has_location: true,
+                            stack_trace: Where(stack)
+                        });
+                    } else {
+                        createLocationEvent("location.last_known_location", {
+                            library: 'android.location.LocationManager',
+                            method: 'getLastKnownLocation',
+                            provider: provider,
+                            has_location: false,
+                            stack_trace: Where(stack)
+                        });
+                    }
+
+                    return result;
+                };
+            }
 
             // Hook LocationManager's requestLocationUpdates method
-            LocationManager.requestLocationUpdates.overload('java.lang.String', 'long', 'float', 'android.location.LocationListener').implementation = function (provider: string, minTime: number, minDistance: number, listener: any) {
-                const stack = threadInstance.currentThread().getStackTrace();
-                
-                createLocationEvent("location.request_updates", {
-                    library: 'android.location.LocationManager',
-                    method: 'requestLocationUpdates',
-                    provider: provider,
-                    min_time_ms: minTime,
-                    min_distance_m: minDistance,
-                    has_listener: listener !== null,
-                    overload: 'basic',
-                    stack_trace: Where(stack)
-                });
-                
-                return this.requestLocationUpdates(provider, minTime, minDistance, listener);
-            };
+            const requestUpdatesBasic = safeOverload(
+                LocationManager.requestLocationUpdates,
+                "location:LocationManager.requestLocationUpdates",
+                'java.lang.String', 'long', 'float', 'android.location.LocationListener'
+            );
+            if (requestUpdatesBasic) {
+                requestUpdatesBasic.implementation = function(
+                    provider: string, minTime: number, minDistance: number, listener: any
+                ) {
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    createLocationEvent("location.request_updates", {
+                                library: 'android.location.LocationManager',
+                                method: 'requestLocationUpdates',
+                                provider: provider,
+                                min_time_ms: minTime,
+                                min_distance_m: minDistance,
+                                has_listener: listener !== null,
+                                overload: 'basic',
+                                stack_trace: Where(stack)
+                            });
 
-            if (LocationManager.requestLocationUpdates.overload('java.lang.String', 'long', 'float', 'android.location.LocationListener', 'android.os.Looper')) {
-                LocationManager.requestLocationUpdates.overload('java.lang.String', 'long', 'float', 'android.location.LocationListener', 'android.os.Looper').implementation = function (provider: string, minTime: number, minDistance: number, listener: any, looper: any) {
+                            return this.requestLocationUpdates(provider, minTime, minDistance, listener);
+                        };
+                    }
+
+            // API-level conditional — safeOverload returns null gracefully if absent
+            const requestUpdatesLooper = safeOverload(
+                LocationManager.requestLocationUpdates,
+                "location:LocationManager.requestLocationUpdates",
+                'java.lang.String', 'long', 'float',
+                'android.location.LocationListener', 'android.os.Looper'
+            );
+            if (requestUpdatesLooper) {
+                requestUpdatesLooper.implementation = function(
+                    provider: string, minTime: number, minDistance: number,
+                    listener: any, looper: any
+                ) {
                     const stack = threadInstance.currentThread().getStackTrace();
                     
                     createLocationEvent("location.request_updates", {
@@ -98,74 +123,74 @@ function hook_location(){
                     return this.requestLocationUpdates(provider, minTime, minDistance, listener, looper);
                 };
             }
-
-            // Hook Location's getLatitude and getLongitude methods
-            Location.getLatitude.implementation = function () {
-                const latitude = this.getLatitude();
-                const stack = threadInstance.currentThread().getStackTrace();
-                
-                createLocationEvent("location.get_latitude", {
-                    library: 'android.location.Location',
-                    method: 'getLatitude',
-                    latitude: latitude,
-                    stack_trace: Where(stack)
-                });
-                
-                return latitude;
-            };
-
-            Location.getLongitude.implementation = function () {
-                const longitude = this.getLongitude();
-                const stack = threadInstance.currentThread().getStackTrace();
-                
-                createLocationEvent("location.get_longitude", {
-                    library: 'android.location.Location',
-                    method: 'getLongitude',
-                    longitude: longitude,
-                    stack_trace: Where(stack)
-                });
-                
-                return longitude;
-            };
-
-        } catch (error) {
-            createLocationEvent("location.error", {
-                error_message: (error as Error).toString(),
-                error_type: "hook_location"
-            });
         }
-    });
-}
+        
+            // Hook Location's getLatitude and getLongitude methods
+            if (Location) {
+                Location.getLatitude.implementation = function() {
+                    const latitude = this.getLatitude();
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    createLocationEvent("location.get_latitude", {
+                        library: 'android.location.Location',
+                        method: 'getLatitude',
+                        latitude: latitude,
+                        stack_trace: Where(stack)
+                    });
 
-function hook_playstore_location_api(){
-    Java.perform(() => {
-        try {
-            const FusedLocationProviderClient = Java.use('com.google.android.gms.location.FusedLocationProviderClient');
-            const threadDef = Java.use('java.lang.Thread');
-            const threadInstance = threadDef.$new();
+                    return latitude;
+                };
 
-            // Hook FusedLocationProviderClient's getLastLocation method
-            FusedLocationProviderClient.getLastLocation.overload().implementation = function () {
+                Location.getLongitude.implementation = function () {
+                    const longitude = this.getLongitude();
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    
+                    createLocationEvent("location.get_longitude", {
+                        library: 'android.location.Location',
+                        method: 'getLongitude',
+                        longitude: longitude,
+                        stack_trace: Where(stack)
+                    });
+
+                    return longitude;
+                };
+            }
+        });
+    }
+
+
+function hook_playstore_location_api() {
+    safePerform("location:hook_playstore_location_api", () => {
+        // optional class — safeUse returns null if GMS not present
+        const FusedLocationProviderClient = safeUse(
+            'com.google.android.gms.location.FusedLocationProviderClient',
+            "location:hook_playstore_location_api"
+        );
+        if (!FusedLocationProviderClient) return;
+
+        const threadDef = safeUse('java.lang.Thread', "location:hook_playstore_location_api");
+        if (!threadDef) return;
+        const threadInstance = threadDef.$new();
+
+        // zero-argument overload — safeOverload called with no signatures
+        const getLastLocation = safeOverload(
+            FusedLocationProviderClient.getLastLocation,
+            "location:FusedLocationProviderClient.getLastLocation"
+        );
+        if (getLastLocation) {
+            getLastLocation.implementation = function() {
                 const stack = threadInstance.currentThread().getStackTrace();
                 const result = this.getLastLocation();
-                
                 createLocationEvent("location.fused_provider.get_last_location", {
                     library: 'com.google.android.gms.location.FusedLocationProviderClient',
                     method: 'getLastLocation',
                     provider: 'google_play_services',
                     stack_trace: Where(stack)
                 });
-                
                 return result;
             };
-
-        } catch (error) {
-            // Google Play Services location API may not be available
-            devlog("Google Play Services location API not available: " + (error as Error).toString());
         }
     });
 }
-
 
 
 export function install_location_hooks(){
