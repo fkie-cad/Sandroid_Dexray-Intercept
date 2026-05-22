@@ -1,14 +1,13 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Where, bytesToHex } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
-import { safePerform, safeUse, safeOverload } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "CRYPTO_ENCODING"
 
 /**
- *  https://github.com/dpnishant/appmon/blob/master/scripts/Android/Crypto/Hash.js
+ * https://github.com/dpnishant/appmon/blob/master/scripts/Android/Crypto/Hash.js
  * Some parts are taken from https://github.com/Areizen/Android-Malware-Sandbox/tree/master/plugins/base64_plugin
- * 
  */
 
 function createEncodingEvent(eventType: string, data: any): void {
@@ -45,161 +44,202 @@ function install_base64_hooks(): void {
         if (!threadDef) return;
         const threadInstance = threadDef.$new();
 
-       const decodeStrInt = safeOverload(base64.decode, "encodings:Base64.decode", 'java.lang.String', 'int');
+        const decodeStrInt = safeOverload(
+            base64.decode, "encodings:Base64.decode", 'java.lang.String', 'int'
+        );
         if (decodeStrInt) {
-            decodeStrInt.implementation = function(str: string, flag: number) {
-                const result = this.decode(str, flag);
-                if (result.length !== 0) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createEncodingEvent("crypto.base64.decode", {
-                        method: "decode(String, int)",
-                        input_string: str,
-                        flag: flag,
-                        input_length: str.length,
-                        output_length: result.length,
-                        output_hex: bytesToHexSafe(result),
-                        decoded_content: bytesToStringSafe(result),
-                        stack_trace: Where(stack)
-                    });
+            decodeStrInt.implementation = safeImplementation(
+                "encodings:Base64.decode[String,int]",
+                decodeStrInt,
+                function(original, str: string, flag: number) {
+                    const result = original.call(this, str, flag);
+                    if (result.length !== 0) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createEncodingEvent("crypto.base64.decode", {
+                            method: "decode(String, int)",
+                            input_string: str,
+                            flag: flag,
+                            input_length: str.length,
+                            output_length: result.length,
+                            output_hex: bytesToHexSafe(result),
+                            decoded_content: bytesToStringSafe(result),
+                            stack_trace: Where(stack)
+                        });
+                    }
+                    return result;
                 }
-                return result;
-            };
+            );
         }
 
-        const decodeByteInt = safeOverload(base64.decode, "encodings:Base64.decode", '[B', 'int');
+        const decodeByteInt = safeOverload(
+            base64.decode, "encodings:Base64.decode", '[B', 'int'
+        );
         if (decodeByteInt) {
-            decodeByteInt.implementation = function(input: number[], flag: number) {
-                const result = this.decode(input, flag);
-                if (result.length !== 0) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createEncodingEvent("crypto.base64.decode", {
-                        method: "decode(byte[], int)",
-                        flag: flag,
-                        input_length: input.length,
-                        input_hex: bytesToHexSafe(input),
-                        output_length: result.length,
-                        output_hex: bytesToHexSafe(result),
-                        decoded_content: bytesToStringSafe(result),
-                        stack_trace: Where(stack)
-                    });
+            decodeByteInt.implementation = safeImplementation(
+                "encodings:Base64.decode[byte[],int]",
+                decodeByteInt,
+                function(original, input: number[], flag: number) {
+                    const result = original.call(this, input, flag);
+                    if (result.length !== 0) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createEncodingEvent("crypto.base64.decode", {
+                            method: "decode(byte[], int)",
+                            flag: flag,
+                            input_length: input.length,
+                            input_hex: bytesToHexSafe(input),
+                            output_length: result.length,
+                            output_hex: bytesToHexSafe(result),
+                            decoded_content: bytesToStringSafe(result),
+                            stack_trace: Where(stack)
+                        });
+                    }
+                    return result;
                 }
-                return result;
-            };
+            );
         }
 
-        const decodeByteIntIntInt = safeOverload(base64.decode, "encodings:Base64.decode", '[B', 'int', 'int', 'int');
+        const decodeByteIntIntInt = safeOverload(
+            base64.decode, "encodings:Base64.decode", '[B', 'int', 'int', 'int'
+        );
         if (decodeByteIntIntInt) {
-            decodeByteIntIntInt.implementation = function(input: number[], offset: number, len: number, flags: number) {
-                const result = this.decode(input, offset, len, flags);
-                if (result.length !== 0) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createEncodingEvent("crypto.base64.decode", {
-                        method: "decode(byte[], int, int, int)",
-                        offset: offset,
-                        length: len,
-                        flags: flags,
-                        input_length: input.length,
-                        input_hex: bytesToHexSafe(input.slice(offset, offset + len)),
-                        output_length: result.length,
-                        output_hex: bytesToHexSafe(result),
-                        decoded_content: bytesToStringSafe(result),
-                        stack_trace: Where(stack)
-                    });
+            decodeByteIntIntInt.implementation = safeImplementation(
+                "encodings:Base64.decode[byte[],int,int,int]",
+                decodeByteIntIntInt,
+                function(original, input: number[], offset: number, len: number, flags: number) {
+                    const result = original.call(this, input, offset, len, flags);
+                    if (result.length !== 0) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createEncodingEvent("crypto.base64.decode", {
+                            method: "decode(byte[], int, int, int)",
+                            offset: offset,
+                            length: len,
+                            flags: flags,
+                            input_length: input.length,
+                            input_hex: bytesToHexSafe(input.slice(offset, offset + len)),
+                            output_length: result.length,
+                            output_hex: bytesToHexSafe(result),
+                            decoded_content: bytesToStringSafe(result),
+                            stack_trace: Where(stack)
+                        });
+                    }
+                    return result;
                 }
-                return result;
-            };
+            );
         }
 
-        const encodeByteInt = safeOverload(base64.encode, "encodings:Base64.encode", '[B', 'int');
+        const encodeByteInt = safeOverload(
+            base64.encode, "encodings:Base64.encode", '[B', 'int'
+        );
         if (encodeByteInt) {
-            encodeByteInt.implementation = function(input: number[], flags: number) {
-                const result = this.encode(input, flags);
-                if (input.length !== 0) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createEncodingEvent("crypto.base64.encode", {
-                        method: "encode(byte[], int)",
-                        flags: flags,
-                        input_length: input.length,
-                        input_hex: bytesToHexSafe(input),
-                        input_content: bytesToStringSafe(input),
-                        output_length: result.length,
-                        output_hex: bytesToHexSafe(result),
-                        stack_trace: Where(stack)
-                    });
+            encodeByteInt.implementation = safeImplementation(
+                "encodings:Base64.encode[byte[],int]",
+                encodeByteInt,
+                function(original, input: number[], flags: number) {
+                    const result = original.call(this, input, flags);
+                    if (input.length !== 0) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createEncodingEvent("crypto.base64.encode", {
+                            method: "encode(byte[], int)",
+                            flags: flags,
+                            input_length: input.length,
+                            input_hex: bytesToHexSafe(input),
+                            input_content: bytesToStringSafe(input),
+                            output_length: result.length,
+                            output_hex: bytesToHexSafe(result),
+                            stack_trace: Where(stack)
+                        });
+                    }
+                    return result;
                 }
-                return result;
-            };
+            );
         }
-        
-        const encodeByteIntIntInt = safeOverload(base64.encode, "encodings:Base64.encode", '[B', 'int', 'int', 'int');
+
+        const encodeByteIntIntInt = safeOverload(
+            base64.encode, "encodings:Base64.encode", '[B', 'int', 'int', 'int'
+        );
         if (encodeByteIntIntInt) {
-            encodeByteIntIntInt.implementation = function(input: number[], offset: number, len: number, flags: number) {
-                const result = this.encode(input, offset, len, flags);
-                if (input.length !== 0) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createEncodingEvent("crypto.base64.encode", {
-                        method: "encode(byte[], int, int, int)",
-                        offset: offset,
-                        length: len,
-                        flags: flags,
-                        input_length: input.length,
-                        input_hex: bytesToHexSafe(input.slice(offset, offset + len)),
-                        input_content: bytesToStringSafe(input.slice(offset, offset + len)),
-                        output_length: result.length,
-                        output_hex: bytesToHexSafe(result),
-                        stack_trace: Where(stack)
-                    });
+            encodeByteIntIntInt.implementation = safeImplementation(
+                "encodings:Base64.encode[byte[],int,int,int]",
+                encodeByteIntIntInt,
+                function(original, input: number[], offset: number, len: number, flags: number) {
+                    const result = original.call(this, input, offset, len, flags);
+                    if (input.length !== 0) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createEncodingEvent("crypto.base64.encode", {
+                            method: "encode(byte[], int, int, int)",
+                            offset: offset,
+                            length: len,
+                            flags: flags,
+                            input_length: input.length,
+                            input_hex: bytesToHexSafe(input.slice(offset, offset + len)),
+                            input_content: bytesToStringSafe(input.slice(offset, offset + len)),
+                            output_length: result.length,
+                            output_hex: bytesToHexSafe(result),
+                            stack_trace: Where(stack)
+                        });
+                    }
+                    return result;
                 }
-                return result;
-            };
+            );
         }
 
-        const encodeToStringIntIntInt = safeOverload(base64.encodeToString, "encodings:Base64.encodeToString", '[B', 'int', 'int', 'int');
+        const encodeToStringIntIntInt = safeOverload(
+            base64.encodeToString, "encodings:Base64.encodeToString", '[B', 'int', 'int', 'int'
+        );
         if (encodeToStringIntIntInt) {
-            encodeToStringIntIntInt.implementation = function(input: number[], offset: number, len: number, flags: number) {
-                const result = this.encodeToString(input, offset, len, flags);
-                if (input.length !== 0) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createEncodingEvent("crypto.base64.encode_to_string", {
-                        method: "encodeToString(byte[], int, int, int)",
-                        offset: offset,
-                        length: len,
-                        flags: flags,
-                        input_length: input.length,
-                        input_hex: bytesToHexSafe(input.slice(offset, offset + len)),
-                        input_content: bytesToStringSafe(input.slice(offset, offset + len)),
-                        output_string: result,
-                        output_length: result.length,
-                        stack_trace: Where(stack)
-                    });
+            encodeToStringIntIntInt.implementation = safeImplementation(
+                "encodings:Base64.encodeToString[byte[],int,int,int]",
+                encodeToStringIntIntInt,
+                function(original, input: number[], offset: number, len: number, flags: number) {
+                    const result = original.call(this, input, offset, len, flags);
+                    if (input.length !== 0) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createEncodingEvent("crypto.base64.encode_to_string", {
+                            method: "encodeToString(byte[], int, int, int)",
+                            offset: offset,
+                            length: len,
+                            flags: flags,
+                            input_length: input.length,
+                            input_hex: bytesToHexSafe(input.slice(offset, offset + len)),
+                            input_content: bytesToStringSafe(input.slice(offset, offset + len)),
+                            output_string: result,
+                            output_length: result.length,
+                            stack_trace: Where(stack)
+                        });
+                    }
+                    return result;
                 }
-                return result;
-            };
+            );
         }
 
-        const encodeToStringByteInt = safeOverload(base64.encodeToString, "encodings:Base64.encodeToString", '[B', 'int');
+        const encodeToStringByteInt = safeOverload(
+            base64.encodeToString, "encodings:Base64.encodeToString", '[B', 'int'
+        );
         if (encodeToStringByteInt) {
-            encodeToStringByteInt.implementation = function(input: number[], flags: number) {
-                const result = this.encodeToString(input, flags);
-                if (input.length !== 0) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createEncodingEvent("crypto.base64.encode_to_string", {
-                        method: "encodeToString(byte[], int)",
-                        flags: flags,
-                        input_length: input.length,
-                        input_hex: bytesToHexSafe(input),
-                        input_content: bytesToStringSafe(input),
-                        output_string: result,
-                        output_length: result.length,
-                        stack_trace: Where(stack)
-                    });
+            encodeToStringByteInt.implementation = safeImplementation(
+                "encodings:Base64.encodeToString[byte[],int]",
+                encodeToStringByteInt,
+                function(original, input: number[], flags: number) {
+                    const result = original.call(this, input, flags);
+                    if (input.length !== 0) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createEncodingEvent("crypto.base64.encode_to_string", {
+                            method: "encodeToString(byte[], int)",
+                            flags: flags,
+                            input_length: input.length,
+                            input_hex: bytesToHexSafe(input),
+                            input_content: bytesToStringSafe(input),
+                            output_string: result,
+                            output_length: result.length,
+                            stack_trace: Where(stack)
+                        });
+                    }
+                    return result;
                 }
-                return result;
-            };
+            );
         }
     });
 }
-
 
 export function install_encodings_hooks(): void {
     devlog("\n");
