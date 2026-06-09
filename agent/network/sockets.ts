@@ -2,14 +2,15 @@ import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
-import { safePerform, safeUse, safeOverload } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+
 
 /**
  * 
  * Some parts are taken from https://github.com/Areizen/Android-Malware-Sandbox/blob/master/frida_scripts/lib/hooks.js
  * https://codeshare.frida.re/@mame82/android-tcp-trace/
  * 
- * muss noch um UDP erweitert werden
+ * must still be extended for UDP
  */
 
 const PROFILE_HOOKING_TYPE: string = "NETWORK_SOCKETS"
@@ -30,7 +31,7 @@ function getStackTrace() {
 }
 
 // we need this in order to handle the compiling 
- function isTcpEndpointAddress(address: SocketEndpointAddress): address is TcpEndpointAddress {
+function isTcpEndpointAddress(address: SocketEndpointAddress): address is TcpEndpointAddress {
     return 'ip' in address;
 }
 
@@ -55,18 +56,25 @@ function hook_java_socket_communication() {
         );
 
         if (ServerSocket) {
-            const accept = safeOverload(ServerSocket.accept, "sockets:ServerSocket.accept");
+            const accept = safeOverload(
+                ServerSocket.accept,
+                "sockets:ServerSocket.accept"
+            );
             if (accept) {
-                accept.implementation = function() {
-                    var result = this.accept();
-                    createSocketEvent("socket.java.server_accept", {
-                        class: "java.net.ServerSocket",
-                        method: "accept",
-                        server_info: this.toString(),
-                        stack_trace: getStackTrace()
-                    });
-                    return result;
-                };
+                accept.implementation = safeImplementation(
+                    "sockets:ServerSocket.accept",
+                    accept,
+                    function(original) {
+                        var result = original.call(this);
+                        createSocketEvent("socket.java.server_accept", {
+                            class: "java.net.ServerSocket",
+                            method: "accept",
+                            server_info: this.toString(),
+                            stack_trace: getStackTrace()
+                        });
+                        return result;
+                    }
+                );
             }
         }
 
@@ -77,18 +85,22 @@ function hook_java_socket_communication() {
                 'java.lang.String', 'int'
             );
             if (socketInit) {
-                socketInit.implementation = function(host, port) {
-                    var result = this.$init(host, port);
-                    createSocketEvent("socket.java.init", {
-                        class: "java.net.Socket",
-                        method: "$init",
-                        host: host,
-                        port: port,
-                        connection_string: `${host}:${port}`,
-                        stack_trace: getStackTrace()
-                    });
-                    return result;
-                };
+                socketInit.implementation = safeImplementation(
+                    "sockets:Socket.$init",
+                    socketInit,
+                    function(original, host, port) {
+                        var result = original.call(this, host, port);
+                        createSocketEvent("socket.java.init", {
+                            class: "java.net.Socket",
+                            method: "$init",
+                            host: host,
+                            port: port,
+                            connection_string: `${host}:${port}`,
+                            stack_trace: getStackTrace()
+                        });
+                        return result;
+                    }
+                );
             }
 
             const connectWithTimeout = safeOverload(
@@ -97,17 +109,21 @@ function hook_java_socket_communication() {
                 'java.net.SocketAddress', 'int'
             );
             if (connectWithTimeout) {
-                connectWithTimeout.implementation = function(p_endpoint, p_timeout) {
-                    var result = this.connect(p_endpoint, p_timeout);
-                    createSocketEvent("socket.java.connect", {
-                        class: "java.net.Socket",
-                        method: "connect",
-                        endpoint: p_endpoint.toString(),
-                        timeout: p_timeout,
-                        stack_trace: getStackTrace()
-                    });
-                    return result;
-                };
+                connectWithTimeout.implementation = safeImplementation(
+                    "sockets:Socket.connect[SocketAddress,int]",
+                    connectWithTimeout,
+                    function(original, p_endpoint, p_timeout) {
+                        var result = original.call(this, p_endpoint, p_timeout);
+                        createSocketEvent("socket.java.connect", {
+                            class: "java.net.Socket",
+                            method: "connect",
+                            endpoint: p_endpoint.toString(),
+                            timeout: p_timeout,
+                            stack_trace: getStackTrace()
+                        });
+                        return result;
+                    }
+                );
             }
 
             const connectBasic = safeOverload(
@@ -116,16 +132,20 @@ function hook_java_socket_communication() {
                 'java.net.SocketAddress'
             );
             if (connectBasic) {
-                connectBasic.implementation = function(p_endpoint) {
-                    var result = this.connect(p_endpoint);
-                    createSocketEvent("socket.java.connect", {
-                        class: "java.net.Socket",
-                        method: "connect",
-                        endpoint: p_endpoint.toString(),
-                        stack_trace: getStackTrace()
-                    });
-                    return result;
-                };
+                connectBasic.implementation = safeImplementation(
+                    "sockets:Socket.connect[SocketAddress]",
+                    connectBasic,
+                    function(original, p_endpoint) {
+                        var result = original.call(this, p_endpoint);
+                        createSocketEvent("socket.java.connect", {
+                            class: "java.net.Socket",
+                            method: "connect",
+                            endpoint: p_endpoint.toString(),
+                            stack_trace: getStackTrace()
+                        });
+                        return result;
+                    }
+                );
             }
         }
 
@@ -135,16 +155,20 @@ function hook_java_socket_communication() {
                 "sockets:LocalServerSocket.accept"
             );
             if (localAccept) {
-                localAccept.implementation = function() {
-                    var result = this.accept();
-                    createSocketEvent("socket.java.local_accept", {
-                        class: "android.net.LocalServerSocket",
-                        method: "accept",
-                        server_info: this.toString(),
-                        stack_trace: getStackTrace()
-                    });
-                    return result;
-                };
+                localAccept.implementation = safeImplementation(
+                    "sockets:LocalServerSocket.accept",
+                    localAccept,
+                    function(original) {
+                        var result = original.call(this);
+                        createSocketEvent("socket.java.local_accept", {
+                            class: "android.net.LocalServerSocket",
+                            method: "accept",
+                            server_info: this.toString(),
+                            stack_trace: getStackTrace()
+                        });
+                        return result;
+                    }
+                );
             }
         }
 
@@ -155,18 +179,22 @@ function hook_java_socket_communication() {
                 'java.net.InetAddress', 'int'
             );
             if (datagramConnect) {
-                datagramConnect.implementation = function(address, port) {
-                    var result = this.connect(address, port);
-                    createSocketEvent("socket.java.datagram_connect", {
-                        class: "java.net.DatagramSocket",
-                        method: "connect",
-                        address: address.toString(),
-                        port: port,
-                        connection_string: `${address}:${port}`,
-                        stack_trace: getStackTrace()
-                    });
-                    return result;
-                };
+                datagramConnect.implementation = safeImplementation(
+                    "sockets:DatagramSocket.connect",
+                    datagramConnect,
+                    function(original, address, port) {
+                        var result = original.call(this, address, port);
+                        createSocketEvent("socket.java.datagram_connect", {
+                            class: "java.net.DatagramSocket",
+                            method: "connect",
+                            address: address.toString(),
+                            port: port,
+                            connection_string: `${address}:${port}`,
+                            stack_trace: getStackTrace()
+                        });
+                        return result;
+                    }
+                );
             }
         }
     });
@@ -176,23 +204,23 @@ function hook_java_socket_communication() {
 function hook_bionic_socket_commuication(){
     //TCP/UDP Funktionen:
     const libcModule = Process.getModuleByName("libc.so");
-var socket_ptr = libcModule.findExportByName("socket");
-var bind_ptr = libcModule.findExportByName("bind");
-//var listen_ptr = libcModule.findExportByName("listen");
-//var accept_ptr = libcModule.findExportByName("accept");
-var connect_ptr = libcModule.findExportByName("connect");
-var read_ptr = libcModule.findExportByName("read");
-var write_ptr = libcModule.findExportByName("write"); 
-var close_ptr = libcModule.findExportByName("close");
-var sendto_ptr = libcModule.findExportByName("sendto");
-var recvfrom_ptr = libcModule.findExportByName("recvfrom");
-var send_ptr = libcModule.findExportByName("send");
-var recv_ptr = libcModule.findExportByName("recv");
-var sendmsg_ptr = libcModule.findExportByName("sendmsg");
-var recvmsg_ptr = libcModule.findExportByName("recvmsg");
+    var socket_ptr = libcModule.findExportByName("socket");
+    var bind_ptr = libcModule.findExportByName("bind");
+    //var listen_ptr = libcModule.findExportByName("listen");
+    //var accept_ptr = libcModule.findExportByName("accept");
+    var connect_ptr = libcModule.findExportByName("connect");
+    var read_ptr = libcModule.findExportByName("read");
+    var write_ptr = libcModule.findExportByName("write"); 
+    var close_ptr = libcModule.findExportByName("close");
+    var sendto_ptr = libcModule.findExportByName("sendto");
+    var recvfrom_ptr = libcModule.findExportByName("recvfrom");
+    var send_ptr = libcModule.findExportByName("send");
+    var recv_ptr = libcModule.findExportByName("recv");
+    var sendmsg_ptr = libcModule.findExportByName("sendmsg");
+    var recvmsg_ptr = libcModule.findExportByName("recvmsg");
 
-// save sockets
-const socket_list = [];
+    // save sockets
+    const socket_list = [];
 
 // Hilfsfunktionen
 function swap16(val) {
