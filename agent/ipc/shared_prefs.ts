@@ -115,80 +115,87 @@ function hook_datastore() {
     devlog("Installing DataStore hooks");
 
     safePerform("shared_prefs:hook_datastore", () => {
-        // Hook the DataStore class
         const DataStore = safeUse(
             "androidx.datastore.core.DataStore",
             "shared_prefs:hook_datastore"
         );
-        if (DataStore) {
-            // Hook updateData
-            const updateData = safeOverload(
-                DataStore.updateData,
-                "shared_prefs:DataStore.updateData",
-                "kotlin.coroutines.Continuation"
-            );
-            if (updateData) {
-                updateData.implementation = safeImplementation(
-                    "shared_prefs:DataStore.updateData",
-                    updateData,
-                    function(original, continuation) {
-                        // Log the result if possible
-                        const result = original.call(this, continuation);
-                        // Promise-like result, same behavior as original
-                        result.then((data: any) => {
-                            createSharedPrefEvent("datastore.update", {
-                                method: "updateData",
-                                data: data ? data.toString() : null
-                            });
+        if (DataStore && (DataStore as any).updateData && (DataStore as any).updateData.overloads) {
+            (DataStore as any).updateData.overloads.forEach((overload: any, index: number) => {
+                overload.implementation = safeImplementation(
+                    `shared_prefs:DataStore.updateData[${index}]`,
+                    overload,
+                    function (original, ...args: any[]) {
+                        createSharedPrefEvent("datastore.update", {
+                            method: "updateData"
                         });
-                        return result;
+                        return original.apply(this, args);
+                    }
+                );
+            });
+        }
+
+        if (DataStore && (DataStore as any).getData) {
+            const getData = safeOverload(
+                (DataStore as any).getData,
+                "shared_prefs:DataStore.getData"
+            );
+            if (getData) {
+                getData.implementation = safeImplementation(
+                    "shared_prefs:DataStore.getData",
+                    getData,
+                    function (original) {
+                        const flow = original.call(this);
+                        createSharedPrefEvent("datastore.get", {
+                            method: "getData"
+                        });
+                        return flow;
                     }
                 );
             }
-
-            // Hook data (flow)
-            if (DataStore.getData) {
-                const getData = safeOverload(
-                    DataStore.getData,
-                    "shared_prefs:DataStore.getData"
-                );
-                if (getData) {
-                    getData.implementation = safeImplementation(
-                        "shared_prefs:DataStore.getData",
-                        getData,
-                        function(original) {
-                            const flow = original.call(this);
-                            flow.collect((data: any) => {
-                                createSharedPrefEvent("datastore.get", {
-                                    method: "getData",
-                                    data: data ? data.toString() : null
-                                });
-                            });
-                            return flow;
-                        }
-                    );
-                }
-            }
         }
 
-        // Hook Preferences DataStore (key-value)
         const Preferences = safeUse(
             "androidx.datastore.preferences.core.Preferences",
             "shared_prefs:hook_datastore"
         );
         if (Preferences) {
             const prefsGet = safeOverload(
-                Preferences.get,
+                (Preferences as any).get,
                 "shared_prefs:Preferences.get",
                 "androidx.datastore.preferences.core.Preferences$Key"
             );
-
-            // Hook Preferences.Key class
             if (prefsGet) {
                 prefsGet.implementation = safeImplementation(
                     "shared_prefs:Preferences.get",
                     prefsGet,
-                    function(original, key) {
+                    function (original, key: any) {
+                        const value = original.call(this, key);
+                        createSharedPrefEvent("datastore_prefs.get", {
+                            method: "get",
+                            key: key ? key.toString() : "unknown",
+                            value: value ? value.toString() : null
+                        });
+                        return value;
+                    }
+                );
+            }
+        }
+
+        const MutablePreferences = safeUse(
+            "androidx.datastore.preferences.core.MutablePreferences",
+            "shared_prefs:hook_datastore"
+        );
+        if (MutablePreferences) {
+            const mutableGet = safeOverload(
+                (MutablePreferences as any).get,
+                "shared_prefs:MutablePreferences.get",
+                "androidx.datastore.preferences.core.Preferences$Key"
+            );
+            if (mutableGet) {
+                mutableGet.implementation = safeImplementation(
+                    "shared_prefs:MutablePreferences.get",
+                    mutableGet,
+                    function (original, key: any) {
                         const value = original.call(this, key);
                         createSharedPrefEvent("datastore_prefs.get", {
                             method: "get",
@@ -215,7 +222,7 @@ function hook_datastore() {
                 keyInit.implementation = safeImplementation(
                     "shared_prefs:Preferences$Key.$init",
                     keyInit,
-                    function(original, keyName) {
+                    function (original, keyName: string) {
                         createSharedPrefEvent("datastore_prefs.key_init", {
                             method: "$init",
                             key: keyName
