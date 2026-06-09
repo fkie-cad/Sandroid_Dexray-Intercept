@@ -1,7 +1,7 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
-import { safePerform, safeUse, safeDeferred } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeDeferred, safeImplementation } from "../utils/safe_java.js";
 
 const PROFILE_HOOKING_TYPE: string = "IPC_INTENT"
 
@@ -90,16 +90,16 @@ function extractIntentData(intent: any): any {
     return intentData;
 }
 
-function hookGetData(this: any): any {
+function hookGetData(this: any, original: any): any {
     const intentData = extractIntentData(this);
-    
+
     createIntentEvent("intent.data_accessed", {
         intent: intentData,
         method: 'getData',
         stack_trace: getStackTrace()
     });
-    
-    return this.getData();
+
+    return original.call(this);
 }
 
 function hookGetIntent(this: any): any {
@@ -121,7 +121,14 @@ function intent_hooks() {
         safePerform("intents:intent_hooks", () => {
             const Intent = safeUse("android.content.Intent", "intents:intent_hooks");
             if (!Intent) return;
-            Intent.getData.implementation = hookGetData;
+
+            const getDataRef = Intent.getData;
+            getDataRef.implementation = safeImplementation(
+                "intents:Intent.getData",
+                getDataRef,
+                hookGetData
+            );
+
             // const Activity = Java.use("android.app.Activity");
             // Activity.getIntent.implementation = hookGetIntent;
         });
