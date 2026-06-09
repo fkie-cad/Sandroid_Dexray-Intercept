@@ -2,7 +2,7 @@ import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd, java_stack_trace } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
 import { Where } from "../utils/misc.js"
-import { safePerform, safeUse, safeOverload } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "RUNTIME_HOOKS"
 
@@ -20,7 +20,7 @@ function createRuntimeEvent(eventType: string, data: any): void {
  * https://github.com/Ch0pin/medusa/blob/master/modules/runtime/runtime.med
  */
 
-function hook_runtime(){
+function hook_runtime() {
     safePerform("runtime:hook_runtime", () => {
         const Runtime = safeUse('java.lang.Runtime', "runtime:hook_runtime");
         if (!Runtime) return;
@@ -28,77 +28,84 @@ function hook_runtime(){
         const threadDef = safeUse('java.lang.Thread', "runtime:hook_runtime");
         if (!threadDef) return;
         const threadInstance = threadDef.$new();
-        
-        // Hook Runtime.exec overloads
-        // exec: iterate all available overloads — no hardcoded count
+
+        // exec: hook all overloads
         Runtime.exec.overloads.forEach((overload: any, index: number) => {
-            overload.implementation = function(command: any, envp: any, dir: any) {
-                const stack = threadInstance.currentThread().getStackTrace();
+            overload.implementation = safeImplementation(
+                `runtime:Runtime.exec[${index}]`,
+                overload,
+                function(original, ...args: any[]) {
+                    const stack = threadInstance.currentThread().getStackTrace();
 
-                let commandStr = null;
-                if (command) {
-                    if (Array.isArray(command)) {
-                        commandStr = command.join(' ');
-                    } else {
-                        commandStr = command.toString();
+                    let commandStr = null;
+                    const command = args[0];
+                    const envp = args[1];
+                    const dir = args[2];
+
+                    if (command) {
+                        if (Array.isArray(command)) {
+                            commandStr = command.join(' ');
+                        } else {
+                            commandStr = command.toString();
+                        }
                     }
+
+                    createRuntimeEvent("runtime.exec", {
+                        library: 'java.lang.Runtime',
+                        method: 'exec',
+                        overload_index: index,
+                        command: commandStr,
+                        environment: envp ? envp.toString() : null,
+                        working_directory: dir ? dir.toString() : null,
+                        stack_trace: Where(stack)
+                    });
+
+                    return original.apply(this, args);
                 }
-
-                createRuntimeEvent("runtime.exec", {
-                    library: 'java.lang.Runtime',
-                    method: 'exec',
-                    overload_index: index,
-                    command: commandStr,
-                    environment: envp ? envp.toString() : null,
-                    working_directory: dir ? dir.toString() : null,
-                    stack_trace: Where(stack)
-                });
-
-                return overload.apply(this, arguments);
-            };
+            );
         });
-    
-        // Hook Runtime.loadLibrary overloads
+
+        // loadLibrary: all overloads
         Runtime.loadLibrary.overloads.forEach((overload: any, index: number) => {
-            overload.implementation = function(libname: any) {
-                const stack = threadInstance.currentThread().getStackTrace();
-
-                createRuntimeEvent("runtime.load_library", {
-                    library: 'java.lang.Runtime',
-                    method: 'loadLibrary',
-                    overload_index: index,
-                    library_name: libname ? libname.toString() : null,
-                    stack_trace: Where(stack)
-                });
-
-                return overload.apply(this, arguments);
-            };
+            overload.implementation = safeImplementation(
+                `runtime:Runtime.loadLibrary[${index}]`,
+                overload,
+                function(original, libname: any) {
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    createRuntimeEvent("runtime.load_library", {
+                        library: 'java.lang.Runtime',
+                        method: 'loadLibrary',
+                        overload_index: index,
+                        library_name: libname ? libname.toString() : null,
+                        stack_trace: Where(stack)
+                    });
+                    return original.call(this, libname);
+                }
+            );
         });
     
-        // Hook Runtime.load overloads
         // load: iterate all available overloads
         Runtime.load.overloads.forEach((overload: any, index: number) => {
-            overload.implementation = function(filename: any) {
-                const stack = threadInstance.currentThread().getStackTrace();
-
-                createRuntimeEvent("runtime.load", {
-                    library: 'java.lang.Runtime',
-                    method: 'load',
-                    overload_index: index,
-                    filename: filename ? filename.toString() : null,
-                    stack_trace: Where(stack)
-                });
-
-                return overload.apply(this, arguments);
-            };
+            overload.implementation = safeImplementation(
+                `runtime:Runtime.load[${index}]`,
+                overload,
+                function(original, filename: any) {
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    createRuntimeEvent("runtime.load", {
+                        library: 'java.lang.Runtime',
+                        method: 'load',
+                        overload_index: index,
+                        filename: filename ? filename.toString() : null,
+                        stack_trace: Where(stack)
+                    });
+                    return original.call(this, filename);
+                }
+            );
         });
     });
 }
 
 function trace_reflection() {
-    // monolithic try-catch removed — safePerform owns the boundary
-    // each class resolved independently via safeUse, one absent class
-    // does not abort the others
     safePerform("runtime:trace_reflection", () => {
         const internalClasses: string[] = ["android.", "com.android", "java.lang", "java.io"];
 
@@ -118,77 +125,89 @@ function trace_reflection() {
                 'java.lang.String', '[Ljava.lang.Class;'
             );
             if (getMethod) {
-                getMethod.implementation = function(methodName: string, paramTypes: any) {
-                    const method = getMethod.call(this, methodName, paramTypes);
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createRuntimeEvent("reflection.get_method", {
-                        library: 'java.lang.Class',
-                        method: 'getMethod',
-                        method_name: methodName,
-                        method_signature: method.toGenericString(),
-                        class_name: this.getName(),
-                        access_type: 'public',
-                        stack_trace: Where(stack)
-                    });
-                    return method;
-                };
+                getMethod.implementation = safeImplementation(
+                    "runtime:Class.getMethod",
+                    getMethod,
+                    function(original, methodName: string, paramTypes: any) {
+                        const method = original.call(this, methodName, paramTypes);
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createRuntimeEvent("reflection.get_method", {
+                            library: 'java.lang.Class',
+                            method: 'getMethod',
+                            method_name: methodName,
+                            method_signature: method.toGenericString(),
+                            class_name: this.getName(),
+                            access_type: 'public',
+                            stack_trace: Where(stack)
+                        });
+                        return method;
+                    }
+                );
             }
 
             // Hook Class.getDeclaredMethod
             const getDeclaredMethod = safeOverload(
-                    classDef.getDeclaredMethod,
-                    "runtime:Class.getDeclaredMethod",
-                    'java.lang.String', '[Ljava.lang.Class;'
-                );
-            if (getDeclaredMethod) {
-                getDeclaredMethod.implementation = function(methodName: string, paramTypes: any) {
-                    const method = getDeclaredMethod.call(this, methodName, paramTypes);
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createRuntimeEvent("reflection.get_declared_method", {
-                        library: 'java.lang.Class',
-                        method: 'getDeclaredMethod',
-                        method_name: methodName,
-                        method_signature: method.toGenericString(),
-                        class_name: this.getName(),
-                        access_type: 'any',
-                        stack_trace: Where(stack)
-                    });
-                    return method;
-                };
-            }
-    
-            // Hook Class.forName
-            const forName = safeOverload(
-            classDef.forName,
-            "runtime:Class.forName",
-            'java.lang.String', 'boolean', 'java.lang.ClassLoader'
+                classDef.getDeclaredMethod,
+                "runtime:Class.getDeclaredMethod",
+                'java.lang.String', '[Ljava.lang.Class;'
             );
-            if (forName) {
-                forName.implementation = function(class_name: string, flag: boolean, class_loader: any) {
-                    let isInternal = false;
-                    for (const internalClass of internalClasses) {
-                        if (class_name.startsWith(internalClass)) {
-                            isInternal = true;
-                            break;
-                        }
-                    }
-                    if (!isInternal) {
+            if (getDeclaredMethod) {
+                getDeclaredMethod.implementation = safeImplementation(
+                    "runtime:Class.getDeclaredMethod",
+                    getDeclaredMethod,
+                    function(original, methodName: string, paramTypes: any) {
+                        const method = original.call(this, methodName, paramTypes);
                         const stack = threadInstance.currentThread().getStackTrace();
-                        createRuntimeEvent("reflection.class_for_name", {
+                        createRuntimeEvent("reflection.get_declared_method", {
                             library: 'java.lang.Class',
-                            method: 'forName',
-                            class_name: class_name,
-                            initialize: flag,
-                            class_loader: class_loader ? class_loader.toString() : null,
-                            is_internal: isInternal,
+                            method: 'getDeclaredMethod',
+                            method_name: methodName,
+                            method_signature: method.toGenericString(),
+                            class_name: this.getName(),
+                            access_type: 'any',
                             stack_trace: Where(stack)
                         });
+                        return method;
                     }
-                    return forName.call(this, class_name, flag, class_loader);
-                };
+                );
+            }
+
+            // Hook Class.forName
+            const forName = safeOverload(
+                classDef.forName,
+                "runtime:Class.forName",
+                'java.lang.String', 'boolean', 'java.lang.ClassLoader'
+            );
+            if (forName) {
+                forName.implementation = safeImplementation(
+                    "runtime:Class.forName",
+                    forName,
+                    function(original, class_name: string, flag: boolean, class_loader: any) {
+                        let isInternal = false;
+                        for (const internalClass of internalClasses) {
+                            if (class_name.startsWith(internalClass)) {
+                                isInternal = true;
+                                break;
+                            }
+                        }
+                        if (!isInternal) {
+                            const stack = threadInstance.currentThread().getStackTrace();
+                            createRuntimeEvent("reflection.class_for_name", {
+                                library: 'java.lang.Class',
+                                method: 'forName',
+                                class_name: class_name,
+                                initialize: flag,
+                                class_loader: class_loader ? class_loader.toString() : null,
+                                is_internal: isInternal,
+                                stack_trace: Where(stack)
+                            });
+                        }
+                        return original.call(this, class_name, flag, class_loader);
+                    }
+                );
             }
         }
-    
+
         // Hook ClassLoader.loadClass
         if (classLoaderDef) {
             const loadClass = safeOverload(
@@ -197,27 +216,31 @@ function trace_reflection() {
                 'java.lang.String', 'boolean'
             );
             if (loadClass) {
-                loadClass.implementation = function(class_name: string, resolve: boolean) {
-                    let isInternal = false;
-                    for (const internalClass of internalClasses) {
-                        if (class_name.startsWith(internalClass)) {
-                            isInternal = true;
-                            break;
+                loadClass.implementation = safeImplementation(
+                    "runtime:ClassLoader.loadClass",
+                    loadClass,
+                    function(original, class_name: string, resolve: boolean) {
+                        let isInternal = false;
+                        for (const internalClass of internalClasses) {
+                            if (class_name.startsWith(internalClass)) {
+                                isInternal = true;
+                                break;
+                            }
                         }
+                        if (!isInternal) {
+                            const stack = threadInstance.currentThread().getStackTrace();
+                            createRuntimeEvent("reflection.load_class", {
+                                library: 'java.lang.ClassLoader',
+                                method: 'loadClass',
+                                class_name: class_name,
+                                resolve: resolve,
+                                is_internal: isInternal,
+                                stack_trace: Where(stack)
+                            });
+                        }
+                        return original.call(this, class_name, resolve);
                     }
-                    if (!isInternal) {
-                        const stack = threadInstance.currentThread().getStackTrace();
-                        createRuntimeEvent("reflection.load_class", {
-                            library: 'java.lang.ClassLoader',
-                            method: 'loadClass',
-                            class_name: class_name,
-                            resolve: resolve,
-                            is_internal: isInternal,
-                            stack_trace: Where(stack)
-                        });
-                    }
-                    return loadClass.call(this, class_name, resolve);
-                };
+                );
             }
         }
 
@@ -229,40 +252,43 @@ function trace_reflection() {
                 'java.lang.Object', '[Ljava.lang.Object;'
             );
             if (invoke) {
-                invoke.implementation = function(instance: any, args: any) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    const result = invoke.call(this, instance, args);
+                invoke.implementation = safeImplementation(
+                    "runtime:Method.invoke",
+                    invoke,
+                    function(original, instance: any, args: any) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        const result = original.call(this, instance, args);
 
-                    let argumentsStr = null;
-                    if (args) {
-                        try {
-                            argumentsStr = args.map((arg: any) => arg ? arg.toString() : 'null').join(', ');
-                        } catch (e) {
-                            argumentsStr = 'arguments_processing_error';
+                        let argumentsStr = null;
+                        if (args) {
+                            try {
+                                argumentsStr = args.map((arg: any) => arg ? arg.toString() : 'null').join(', ');
+                            } catch (e) {
+                                argumentsStr = 'arguments_processing_error';
+                            }
                         }
+
+                        createRuntimeEvent("reflection.method_invoke", {
+                            library: 'java.lang.reflect.Method',
+                            method: 'invoke',
+                            method_name: this.getName(),
+                            method_signature: this.toGenericString(),
+                            target_instance: instance ? instance.toString() : null,
+                            arguments: argumentsStr,
+                            result: result ? result.toString() : null,
+                            stack_trace: Where(stack)
+                        });
+
+                        return result;
                     }
-
-                    createRuntimeEvent("reflection.method_invoke", {
-                        library: 'java.lang.reflect.Method',
-                        method: 'invoke',
-                        method_name: this.getName(),
-                        method_signature: this.toGenericString(),
-                        target_instance: instance ? instance.toString() : null,
-                        arguments: argumentsStr,
-                        result: result ? result.toString() : null,
-                        stack_trace: Where(stack)
-                    });
-
-                    return result;
-                };
+                );
             }
         }
     });
 }
 
-
-export function install_runtime_hooks(){
-    devlog("\n")
+export function install_runtime_hooks() {
+    devlog("\n");
     devlog("install runtime hooks");
 
     try {
@@ -277,4 +303,3 @@ export function install_runtime_hooks(){
         devlog(`[HOOK] Failed to install reflection tracing hooks: ${error}`);
     }
 }
-

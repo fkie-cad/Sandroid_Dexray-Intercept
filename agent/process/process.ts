@@ -2,7 +2,7 @@ import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
 import { Where } from "../utils/misc.js"
-import { safePerform, safeUse } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeImplementation } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "PROCESS_CREATION"
 
@@ -25,61 +25,74 @@ function hook_java_process_creation() {
         const threadInstance = threadDef.$new();
 
         if (Process.start) {
-            Process.start.implementation = function(
-                processClass: any, niceName: string, uid: number,
-                gid: number, gids: any, debugFlags: number, mountExternal: number,
-                targetSdkVersion: number, seInfo: string, abi: string,
-                instructionSet: string, appDataDir: string, zygoteArgs: any
-            ) {
-                const stack = threadInstance.currentThread().getStackTrace();
-                createProcessEvent("process.creation", {
-                    library: 'android.os.Process',
-                    method: 'start',
-                    process_class: processClass ? processClass.toString() : null,
-                    nice_name: niceName,
-                    uid: uid,
-                    gid: gid,
-                    gids: gids ? (Array.isArray(gids) ? gids : gids.toString()) : null,
-                    debug_flags: debugFlags,
-                    mount_external: mountExternal,
-                    target_sdk_version: targetSdkVersion,
-                    selinux_info: seInfo,
-                    abi: abi,
-                    instruction_set: instructionSet,
-                    app_data_dir: appDataDir,
-                    zygote_args: zygoteArgs ? zygoteArgs.toString() : null,
-                    stack_trace: Where(stack)
-                });
-                return this.start.apply(this, arguments);
-            };
+            const startRef = Process.start;
+            startRef.implementation = safeImplementation(
+                "process:Process.start",
+                startRef,
+                function(original, ...args: any[]) {
+                    const [
+                        processClass, niceName, uid, gid, gids,
+                        debugFlags, mountExternal, targetSdkVersion,
+                        seInfo, abi, instructionSet, appDataDir, zygoteArgs
+                    ] = args;
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    createProcessEvent("process.creation", {
+                        library: 'android.os.Process',
+                        method: 'start',
+                        process_class: processClass ? processClass.toString() : null,
+                        nice_name: niceName,
+                        uid: uid,
+                        gid: gid,
+                        gids: gids ? (Array.isArray(gids) ? gids : gids.toString()) : null,
+                        debug_flags: debugFlags,
+                        mount_external: mountExternal,
+                        target_sdk_version: targetSdkVersion,
+                        selinux_info: seInfo,
+                        abi: abi,
+                        instruction_set: instructionSet,
+                        app_data_dir: appDataDir,
+                        zygote_args: zygoteArgs ? zygoteArgs.toString() : null,
+                        stack_trace: Where(stack)
+                    });
+                    return original.apply(this, args);
+                }
+            );
         }
 
         if (Process.killProcess) {
-            Process.killProcess.implementation = function(pid: number) {
-                createProcessEvent("process.kill", {
-                    library: 'android.os.Process',
-                    method: 'killProcess',
-                    target_pid: pid
-                });
-                return this.killProcess(pid);
-            };
+            const killProcessRef = Process.killProcess;
+            killProcessRef.implementation = safeImplementation(
+                "process:Process.killProcess",
+                killProcessRef,
+                function(original, pid: number) {
+                    createProcessEvent("process.kill", {
+                        library: 'android.os.Process',
+                        method: 'killProcess',
+                        target_pid: pid
+                    });
+                    return original.call(this, pid);
+                }
+            );
         }
 
         if (Process.sendSignal) {
-            Process.sendSignal.implementation = function(pid: number, signal: number) {
-                createProcessEvent("process.signal", {
-                    library: 'android.os.Process',
-                    method: 'sendSignal',
-                    target_pid: pid,
-                    signal: signal
-                });
-                return this.sendSignal(pid, signal);
-            };
+            const sendSignalRef = Process.sendSignal;
+            sendSignalRef.implementation = safeImplementation(
+                "process:Process.sendSignal",
+                sendSignalRef,
+                function(original, pid: number, signal: number) {
+                    createProcessEvent("process.signal", {
+                        library: 'android.os.Process',
+                        method: 'sendSignal',
+                        target_pid: pid,
+                        signal: signal
+                    });
+                    return original.call(this, pid, signal);
+                }
+            );
         }
     });
 }
-
-
 
 function hook_native_process_creation(){
     // Hook native process creation functions like fork, execve, system
@@ -154,7 +167,7 @@ function hook_native_process_creation(){
 }
 
 export function install_process_hooks(){
-    devlog("\n")
+    devlog("\n");
     devlog("install process hooks");
 
     try {
@@ -169,4 +182,3 @@ export function install_process_hooks(){
         devlog(`[HOOK] Failed to install native process hooks: ${error}`);
     }
 }
-
