@@ -1,13 +1,12 @@
 import { log, devlog, am_send } from "../utils/logging.js"
-import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
-import { safePerform, safeUse, safeOverload } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+
+const PROFILE_HOOKING_TYPE: string = "CRYPTO_KEYSTORE"
 
 /**
  * https://github.com/m0bilesecurity/RMS-Runtime-Mobile-Security/blob/master/custom_scripts/Android/tracer_keystore.js
  */
-
-const PROFILE_HOOKING_TYPE: string = "CRYPTO_KEYSTORE"
 
 interface KeystoreEntry {
     alias: string;
@@ -17,8 +16,8 @@ interface KeystoreEntry {
 }
 
 const keystoreList: any[] = [];
-// was initialized at module load time via bare Java.perform
-// now initialized inside install_keystore_hooks via safePerform
+
+// was initialized at module load time before, now initialized in install_keystore_hooks
 let StringCls: any = null;
 
 function createKeystoreEvent(eventType: string, data: any): void {
@@ -36,6 +35,8 @@ function charArrayToString(charArray: any): string {
     return StringCls.$new(charArray);
 }
 
+// hook functions
+
 function hookKeystoreConstructor(KeyStore: any): void {
     const ctor = safeOverload(
         KeyStore.$init,
@@ -43,14 +44,19 @@ function hookKeystoreConstructor(KeyStore: any): void {
         "java.security.KeyStoreSpi", "java.security.Provider", "java.lang.String"
     );
     if (!ctor) return;
-    ctor.implementation = function(keyStoreSpi: any, provider: any, type: string) {
-        createKeystoreEvent("crypto.keystore.constructor", {
-            keystore_spi: keyStoreSpi ? keyStoreSpi.toString() : null,
-            provider: provider ? provider.toString() : null,
-            type: type
-        });
-        return this.$init(keyStoreSpi, provider, type);
-    };
+
+    ctor.implementation = safeImplementation(
+        "keystore:KeyStore.$init",
+        ctor,
+        function(original, keyStoreSpi: any, provider: any, type: string) {
+            createKeystoreEvent("crypto.keystore.constructor", {
+                keystore_spi: keyStoreSpi ? keyStoreSpi.toString() : null,
+                provider: provider ? provider.toString() : null,
+                type: type
+            });
+            return original.call(this, keyStoreSpi, provider, type);
+        }
+    );
 }
 
 function hookKeystoreGetInstance(KeyStore: any): void {
@@ -60,15 +66,20 @@ function hookKeystoreGetInstance(KeyStore: any): void {
         "java.lang.String"
     );
     if (!getInstance) return;
-    getInstance.implementation = function(type: string) {
-        createKeystoreEvent("crypto.keystore.get_instance", {
-            method: "getInstance(String)",
-            type: type
-        });
-        const tmp = this.getInstance(type);
-        keystoreList.push(tmp); // Collect keystore objects to allow dump them later using ListAliasesRuntime()
-        return tmp;
-    };
+
+    getInstance.implementation = safeImplementation(
+        "keystore:KeyStore.getInstance[String]",
+        getInstance,
+        function(original, type: string) {
+            createKeystoreEvent("crypto.keystore.get_instance", {
+                method: "getInstance(String)",
+                type: type
+            });
+            const tmp = original.call(this, type);
+            keystoreList.push(tmp);
+            return tmp;
+        }
+    );
 }
 
 function hookKeystoreGetInstance_Provider(KeyStore: any): void {
@@ -78,16 +89,21 @@ function hookKeystoreGetInstance_Provider(KeyStore: any): void {
         "java.lang.String", "java.lang.String"
     );
     if (!getInstance) return;
-    getInstance.implementation = function(type: string, provider: string) {
-        createKeystoreEvent("crypto.keystore.get_instance", {
-            method: "getInstance(String, String)",
-            type: type,
-            provider: provider
-        });
-        const tmp = this.getInstance(type, provider);
-        keystoreList.push(tmp); // Collect keystore objects to allow dump them later using ListAliasesRuntime()
-        return tmp;
-    };
+
+    getInstance.implementation = safeImplementation(
+        "keystore:KeyStore.getInstance[String,String]",
+        getInstance,
+        function(original, type: string, provider: string) {
+            createKeystoreEvent("crypto.keystore.get_instance", {
+                method: "getInstance(String, String)",
+                type: type,
+                provider: provider
+            });
+            const tmp = original.call(this, type, provider);
+            keystoreList.push(tmp);
+            return tmp;
+        }
+    );
 }
 
 function hookKeystoreGetInstance_Provider2(KeyStore: any): void {
@@ -97,21 +113,26 @@ function hookKeystoreGetInstance_Provider2(KeyStore: any): void {
         "java.lang.String", "java.security.Provider"
     );
     if (!getInstance) return;
-    getInstance.implementation = function(type: string, provider: any) {
-        createKeystoreEvent("crypto.keystore.get_instance", {
-            method: "getInstance(String, Provider)",
-            type: type,
-            provider: provider ? provider.toString() : null
-        });
-        const tmp = this.getInstance(type, provider);
-        keystoreList.push(tmp);
-        return tmp;
-    };
+
+    getInstance.implementation = safeImplementation(
+        "keystore:KeyStore.getInstance[String,Provider]",
+        getInstance,
+        function(original, type: string, provider: any) {
+            createKeystoreEvent("crypto.keystore.get_instance", {
+                method: "getInstance(String, Provider)",
+                type: type,
+                provider: provider ? provider.toString() : null
+            });
+            const tmp = original.call(this, type, provider);
+            keystoreList.push(tmp);
+            return tmp;
+        }
+    );
 }
 
 /*
-* Hook Keystore.load( ... ), set dump to true if you want to perform dump of available Aliases automatically.	
-*/
+ * Hook Keystore.load( ... ), set dump to true if you want to perform dump of available Aliases automatically.
+ */
 function hookKeystoreLoad(KeyStore: any, dump: boolean): void {
     const load = safeOverload(
         KeyStore.load,
@@ -119,26 +140,32 @@ function hookKeystoreLoad(KeyStore: any, dump: boolean): void {
         'java.security.KeyStore$LoadStoreParameter'
     );
     if (!load) return;
-	/* following function hooks to a Keystore.load(java.security.KeyStore.LoadStoreParameter) */
-    load.implementation = function(param: any) {
-        createKeystoreEvent("crypto.keystore.load", {
-            method: "load(LoadStoreParameter)",
-            keystore_type: this.getType(),
-            parameter: param ? param.toString() : null
-        });
-        this.load(param);
-        if (dump) {
-            createKeystoreEvent("crypto.keystore.aliases", {
+
+    /* following function hooks to a Keystore.load(java.security.KeyStore.LoadStoreParameter) */
+    load.implementation = safeImplementation(
+        "keystore:KeyStore.load[LoadStoreParameter]",
+        load,
+        function(original, param: any) {
+            createKeystoreEvent("crypto.keystore.load", {
+                method: "load(LoadStoreParameter)",
                 keystore_type: this.getType(),
-                aliases: ListAliasesObj(this)
+                parameter: param ? param.toString() : null
             });
+            const res = original.call(this, param);
+            if (dump) {
+                createKeystoreEvent("crypto.keystore.aliases", {
+                    keystore_type: this.getType(),
+                    aliases: ListAliasesObj(this)
+                });
+            }
+            return res;
         }
-    };
+    );
 }
 
 /*
-* Hook Keystore.load( ... ), set dump to true if you want to perform dump of available Aliases automatically.	
-*/
+ * Hook Keystore.load( ... ), set dump to true if you want to perform dump of available Aliases automatically.
+ */
 function hookKeystoreLoadStream(KeyStore: any, dump: boolean): void {
     const loadStream = safeOverload(
         KeyStore.load,
@@ -146,22 +173,28 @@ function hookKeystoreLoadStream(KeyStore: any, dump: boolean): void {
         'java.io.InputStream', '[C'
     );
     if (!loadStream) return;
-	/* following function hooks to a Keystore.load(InputStream stream, char[] password) */
-    loadStream.implementation = function(stream: any, charArray: any) {
-        createKeystoreEvent("crypto.keystore.load", {
-            method: "load(InputStream, char[])",
-            keystore_type: this.getType(),
-            password: charArrayToString(charArray),
-            input_stream: stream ? stream.toString() : null
-        });
-        this.load(stream, charArray);
-        if (dump) {
-            createKeystoreEvent("crypto.keystore.aliases", {
+
+    /* following function hooks to a Keystore.load(InputStream stream, char[] password) */
+    loadStream.implementation = safeImplementation(
+        "keystore:KeyStore.load[InputStream,char[]]",
+        loadStream,
+        function(original, stream: any, charArray: any) {
+            createKeystoreEvent("crypto.keystore.load", {
+                method: "load(InputStream, char[])",
                 keystore_type: this.getType(),
-                aliases: ListAliasesObj(this)
+                password: charArrayToString(charArray),
+                input_stream: stream ? stream.toString() : null
             });
+            const res = original.call(this, stream, charArray);
+            if (dump) {
+                createKeystoreEvent("crypto.keystore.aliases", {
+                    keystore_type: this.getType(),
+                    aliases: ListAliasesObj(this)
+                });
+            }
+            return res;
         }
-    };
+    );
 }
 
 function hookKeystoreStore(KeyStore: any): void {
@@ -172,15 +205,20 @@ function hookKeystoreStore(KeyStore: any): void {
         'java.security.KeyStore$LoadStoreParameter'
     );
     if (!store) return;
-	/* following function hooks to a Keystore.store(java.security.KeyStore$LoadStoreParameter) */
-    store.implementation = function(param) {
-        createKeystoreEvent("crypto.keystore.store", {
-            method: "store(LoadStoreParameter)",
-            keystore_type: this.getType(),
-            parameter: param ? param.toString() : null
-        });
-        this.store(param);
-    };
+
+    /* following function hooks to a Keystore.store(java.security.KeyStore$LoadStoreParameter) */
+    store.implementation = safeImplementation(
+        "keystore:KeyStore.store[LoadStoreParameter]",
+        store,
+        function(original, param) {
+            createKeystoreEvent("crypto.keystore.store", {
+                method: "store(LoadStoreParameter)",
+                keystore_type: this.getType(),
+                parameter: param ? param.toString() : null
+            });
+            return original.call(this, param);
+        }
+    );
 }
 
 function hookKeystoreStoreStream(KeyStore: any): void {
@@ -191,16 +229,21 @@ function hookKeystoreStoreStream(KeyStore: any): void {
         'java.io.OutputStream', '[C'
     );
     if (!storeStream) return;
-	/* following function hooks to a Keystore.store(OutputStream stream, char[] password) */
-    storeStream.implementation = function(stream, charArray) {
-        createKeystoreEvent("crypto.keystore.store", {
-            method: "store(OutputStream, char[])",
-            keystore_type: this.getType(),
-            password: charArrayToString(charArray),
-            output_stream: stream ? stream.toString() : null
-        });
-        this.store(stream, charArray);
-    };
+
+    /* following function hooks to a Keystore.store(OutputStream stream, char[] password) */
+    storeStream.implementation = safeImplementation(
+        "keystore:KeyStore.store[OutputStream,char[]]",
+        storeStream,
+        function(original, stream, charArray) {
+            createKeystoreEvent("crypto.keystore.store", {
+                method: "store(OutputStream, char[])",
+                keystore_type: this.getType(),
+                password: charArrayToString(charArray),
+                output_stream: stream ? stream.toString() : null
+            });
+            return original.call(this, stream, charArray);
+        }
+    );
 }
 
 function hookKeystoreGetKey(KeyStore: any): void {
@@ -210,13 +253,18 @@ function hookKeystoreGetKey(KeyStore: any): void {
         "java.lang.String", "[C"
     );
     if (!getKey) return;
-    getKey.implementation = function(alias: string, charArray: any) {
-        createKeystoreEvent("crypto.keystore.get_key", {
-            alias: alias,
-            password: charArrayToString(charArray)
-        });
-        return this.getKey(alias, charArray);
-    };
+
+    getKey.implementation = safeImplementation(
+        "keystore:KeyStore.getKey",
+        getKey,
+        function(original, alias: string, charArray: any) {
+            createKeystoreEvent("crypto.keystore.get_key", {
+                alias: alias,
+                password: charArrayToString(charArray)
+            });
+            return original.call(this, alias, charArray);
+        }
+    );
 }
 
 function hookKeystoreSetEntry(KeyStore: any): void {
@@ -229,15 +277,20 @@ function hookKeystoreSetEntry(KeyStore: any): void {
         "java.security.KeyStore$ProtectionParameter"
     );
     if (!setEntry) return;
-    setEntry.implementation = function(alias, entry, protection) {
-        createKeystoreEvent("crypto.keystore.set_entry", {
-            method: "setEntry(String, KeyStore$Entry, KeyStore$ProtectionParameter)",
-            alias: alias,
-            entry: dumpKeyStoreEntry(entry),
-            protection: dumpProtectionParameter(protection)
-        });
-        return this.setEntry(alias, entry, protection);
-    };
+
+    setEntry.implementation = safeImplementation(
+        "keystore:KeyStore.setEntry",
+        setEntry,
+        function(original, alias, entry, protection) {
+            createKeystoreEvent("crypto.keystore.set_entry", {
+                method: "setEntry(String, KeyStore$Entry, KeyStore$ProtectionParameter)",
+                alias: alias,
+                entry: dumpKeyStoreEntry(entry),
+                protection: dumpProtectionParameter(protection)
+            });
+            return original.call(this, alias, entry, protection);
+        }
+    );
 }
 
 // function hookKeystoreSetEntry() {
@@ -275,16 +328,21 @@ function hookKeystoreSetKeyEntry(KeyStore: any): void {
         "java.lang.String", "java.security.Key", "[C", "[Ljava.security.cert.Certificate;"
     );
     if (!setKeyEntry) return;
-    setKeyEntry.implementation = function(alias, key, charArray, certs) {
-        createKeystoreEvent("crypto.keystore.set_key_entry", {
-            method: "setKeyEntry(String, Key, char[], Certificate[])",
-            alias: alias,
-            key: key ? key.toString() : null,
-            password: charArrayToString(charArray),
-            certs: certs ? certs.toString() : null
-        });
-        return this.setKeyEntry(alias, key, charArray, certs);
-    };
+
+    setKeyEntry.implementation = safeImplementation(
+        "keystore:KeyStore.setKeyEntry[String,Key,char[],Certificate[]]",
+        setKeyEntry,
+        function(original, alias, key, charArray, certs) {
+            createKeystoreEvent("crypto.keystore.set_key_entry", {
+                method: "setKeyEntry(String, Key, char[], Certificate[])",
+                alias: alias,
+                key: key ? key.toString() : null,
+                password: charArrayToString(charArray),
+                certs: certs ? certs.toString() : null
+            });
+            return original.call(this, alias, key, charArray, certs);
+        }
+    );
 }
 
 function hookKeystoreSetKeyEntry2(KeyStore: any): void {
@@ -295,38 +353,49 @@ function hookKeystoreSetKeyEntry2(KeyStore: any): void {
         "java.lang.String", "[B", "[Ljava.security.cert.Certificate;"
     );
     if (!setKeyEntry2) return;
-    setKeyEntry2.implementation = function(alias, key, certs) {
-        createKeystoreEvent("crypto.keystore.set_key_entry", {
-            method: "setKeyEntry(String, byte[], Certificate[])",
-            alias: alias,
-            key: key ? key.toString() : null,
-            certs: certs ? certs.toString() : null
-        });
-        return this.setKeyEntry(alias, key, certs);
-    };
+
+    setKeyEntry2.implementation = safeImplementation(
+        "keystore:KeyStore.setKeyEntry[String,byte[],Certificate[]]",
+        setKeyEntry2,
+        function(original, alias, key, certs) {
+            createKeystoreEvent("crypto.keystore.set_key_entry", {
+                method: "setKeyEntry(String, byte[], Certificate[])",
+                alias: alias,
+                key: key ? key.toString() : null,
+                certs: certs ? certs.toString() : null
+            });
+            return original.call(this, alias, key, certs);
+        }
+    );
 }
 
 /*
-* Usually used to load certs for cert pinning.
-*/
+ * Usually used to load certs for cert pinning.
+ */
 function hookKeystoreGetCertificate(KeyStore: any): void {
+    // fix: was raw am_send with string concatenation
     const getCertificate = safeOverload(
         KeyStore.getCertificate,
         "keystore:KeyStore.getCertificate",
         "java.lang.String"
     );
     if (!getCertificate) return;
-    getCertificate.implementation = function(alias: string) {
-        createKeystoreEvent("crypto.keystore.get_certificate", {
-            alias: alias
-        });
-        return this.getCertificate(alias);
-    };
+
+    getCertificate.implementation = safeImplementation(
+        "keystore:KeyStore.getCertificate",
+        getCertificate,
+        function(original, alias: string) {
+            createKeystoreEvent("crypto.keystore.get_certificate", {
+                alias: alias
+            });
+            return original.call(this, alias);
+        }
+    );
 }
 
 /*
-* Usually used to load certs for cert pinning.
-*/
+ * Usually used to load certs for cert pinning.
+ */
 function hookKeystoreGetCertificateChain(KeyStore: any): void {
     // fix: was raw am_send with string concatenation
     const getCertificateChain = safeOverload(
@@ -335,13 +404,18 @@ function hookKeystoreGetCertificateChain(KeyStore: any): void {
         "java.lang.String"
     );
     if (!getCertificateChain) return;
-    getCertificateChain.implementation = function(alias) {
-        createKeystoreEvent("crypto.keystore.get_certificate_chain", {
-            method: "getCertificateChain(String)",
-            alias: alias
-        });
-        return this.getCertificateChain(alias);
-    };
+
+    getCertificateChain.implementation = safeImplementation(
+        "keystore:KeyStore.getCertificateChain",
+        getCertificateChain,
+        function(original, alias) {
+            createKeystoreEvent("crypto.keystore.get_certificate_chain", {
+                method: "getCertificateChain(String)",
+                alias: alias
+            });
+            return original.call(this, alias);
+        }
+    );
 }
 
 function hookKeystoreGetEntry(KeyStore: any): void {
@@ -352,24 +426,29 @@ function hookKeystoreGetEntry(KeyStore: any): void {
         "java.lang.String", "java.security.KeyStore$ProtectionParameter"
     );
     if (!getEntry) return;
-    getEntry.implementation = function(alias, protection) {
-        createKeystoreEvent("crypto.keystore.get_entry", {
-            method: "getEntry(String, KeyStore$ProtectionParameter)",
-            alias: alias,
-            protection: dumpProtectionParameter(protection)
-        });
-        const entry = this.getEntry(alias, protection);
-        createKeystoreEvent("crypto.keystore.get_entry_result", {
-            alias: alias,
-            entry: dumpKeyStoreEntry(entry)
-        });
-        return entry;
-    };
+
+    getEntry.implementation = safeImplementation(
+        "keystore:KeyStore.getEntry",
+        getEntry,
+        function(original, alias, protection) {
+            createKeystoreEvent("crypto.keystore.get_entry", {
+                method: "getEntry(String, KeyStore$ProtectionParameter)",
+                alias: alias,
+                protection: dumpProtectionParameter(protection)
+            });
+            const entry = original.call(this, alias, protection);
+            createKeystoreEvent("crypto.keystore.get_entry_result", {
+                alias: alias,
+                entry: dumpKeyStoreEntry(entry)
+            });
+            return entry;
+        }
+    );
 }
 
 // --- Helper / dump functions --------------------------------------------------
-// These call Java.use directly — valid here because they are only called
-// from within .implementation callbacks (already in Java.perform context).
+
+// helper / dump functions
 
 function dumpProtectionParameter(protection) {
     if (protection != null) {
@@ -398,7 +477,6 @@ function dumpProtectionParameter(protection) {
 }
 
 function dumpKeyStoreEntry(entry) {
-	// java.security.KeyStore$PrivateKeyEntry, java.security.KeyStore$SecretKeyEntry, java.security.KeyStore$TrustedCertificateEntry, android.security.WrappedKeyEntry 
     if (entry != null) {
         var entryCls = entry.$className;
         var castedEntry = Java.cast(entry, Java.use(entryCls));
@@ -429,14 +507,12 @@ function dumpKeyStoreEntry(entry) {
         return "null";
 }
 
-
-// --- List utility functions ---------------------------------------------------
+// --- List of utility functions ---------------------------------------------------
 
 /*
-* Dump all aliases in keystores of all types(predefined in keystoreTypes)	
-*/
+ * Dump all aliases in keystores of all types (predefined in keystoreTypes)
+ */
 function ListAliasesStatic() {
-	// BCPKCS12/PKCS12-DEF - exceptions: /*[]..., "BCPKCS12", "PKCS12-DEF", ...]*/
     const keystoreTypes = ["AndroidKeyStore", "AndroidCAStore", "BKS", "BouncyCastle", "PKCS12"];
     keystoreTypes.forEach(function(entry) {
         createKeystoreEvent("crypto.keystore.aliases_static", {
@@ -448,9 +524,9 @@ function ListAliasesStatic() {
 }
 
 /*
-* Dump all aliases in keystores of all instances obtained during app runtime. 
-* Instances that will be dumped are collected via hijacking Keystre.getInstance() -> hookKeystoreGetInstance()
-*/
+ * Dump all aliases in keystores of all instances obtained during app runtime.
+ * Instances that will be dumped are collected via hijacking Keystore.getInstance()
+ */
 function ListAliasesRuntime() {
     safePerform("keystore:ListAliasesRuntime", () => {
         devlog("[ListAliasesRuntime] Instances: " + keystoreList);
@@ -466,16 +542,16 @@ function ListAliasesRuntime() {
 }
 
 /*
-* Dump all aliases in AndroidKey keystore. 
-*/
+ * Dump all aliases in AndroidKey keystore.
+ */
 function ListAliasesAndroid() {
     return ListAliasesType("AndroidKeyStore");
 }
 
 /*
-* Dump all aliases in keystore of given 'type'. 
-* Example: ListAliasesType('AndroidKeyStore');
-*/
+ * Dump all aliases in keystore of given 'type'.
+ * Example: ListAliasesType('AndroidKeyStore');
+ */
 function ListAliasesType(type) {
     const result: any[] = [];
     safePerform("keystore:ListAliasesType", () => {
@@ -492,13 +568,12 @@ function ListAliasesType(type) {
 }
 
 /*
-* Dump all aliases for a given keystore object. 
-* Example: ListAliasesObj(keystoreObj);
-*/
+ * Dump all aliases for a given keystore object.
+ * Example: ListAliasesObj(keystoreObj);
+ */
 function ListAliasesObj(obj) {
     const result: any[] = [];
     try {
-        // called from within .implementation callbacks => already in Java context
         var aliases = obj.aliases();
         while (aliases.hasMoreElements()) {
             result.push(aliases.nextElement() + "");
@@ -510,9 +585,9 @@ function ListAliasesObj(obj) {
 }
 
 /*
-* Retrieve keystore instance from keystoreList
-* Example: GetKeyStore("KeyStore...@af102a");
-*/
+ * Retrieve keystore instance from keystoreList
+ * Example: GetKeyStore("KeyStore...@af102a");
+ */
 function GetKeyStore(keystoreName) {
     var result = null;
     for (var i = 0; i < keystoreList.length; i++) {
@@ -522,14 +597,13 @@ function GetKeyStore(keystoreName) {
     return result;
 }
 
-/* TAG: tagged for removal or relocation to dedicated general helpers/utils after reevaluation */
+/* TAG: tagged for removal or relocation to dedicated general helpers/utils after re-evaluation */
 /* following function reads an InputStream and returns an ASCII char representation of it */
 function readStreamToHex(stream) {
     var data = [];
     var byteRead = stream.read();
     while (byteRead != -1) {
         data.push(('0' + (byteRead & 0xFF).toString(16)).slice(-2));
-		/* <---------------- binary to hex ---------------> */
         byteRead = stream.read();
     }
     stream.close();
@@ -641,8 +715,6 @@ export function install_keystore_hooks(): void {
     devlog("\n");
     devlog("Installing keystore hooks");
 
-    // fix: StringCls was initialized at module load time via bare Java.perform
-    // now initialized here before any hook callbacks that depend on it
     safePerform("keystore:init", () => {
         StringCls = safeUse('java.lang.String', "keystore:init");
     });
