@@ -96,8 +96,7 @@ export function safeOverload(
 export function safeImplementation(
     context: string,
     original: any,
-    hookLogic: (original: any, ...args: any[]) => any
-): (...args: any[]) => any {
+    hookLogic: (this: any, original: any, ...args: any[]) => any): (...args: any[]) => any {
     return function (this: any, ...args: any[]): any {
         try {
             return hookLogic.apply(this, [original, ...args]);
