@@ -1,8 +1,8 @@
+
 import { log, devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
 import { Where } from "../utils/misc.js"
-import { safePerform, safeUse, safeOverload } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "TELEPHONY"
 
@@ -27,30 +27,31 @@ function hook_sms() {
 
         // Hook SmsManager's sendTextMessage method
         const sendText = safeOverload(
-                    SmsManager.sendTextMessage,
-                    "telephony:SmsManager.sendTextMessage",
-                    'java.lang.String', 'java.lang.String', 'java.lang.String',
-                    'android.app.PendingIntent', 'android.app.PendingIntent'
-                );
+            SmsManager.sendTextMessage,
+            "telephony:SmsManager.sendTextMessage",
+            'java.lang.String', 'java.lang.String', 'java.lang.String',
+            'android.app.PendingIntent', 'android.app.PendingIntent'
+        );
         if (sendText) {
-            sendText.implementation = function(
-                destinationAddress: string, scAddress: string, text: string,
-                sentIntent: any, deliveryIntent: any
-            ) {
-                const stack = threadInstance.currentThread().getStackTrace();
-                createTelephonyEvent("telephony.sms.send_text", {
-                    library: 'android.telephony.SmsManager',
-                    method: 'sendTextMessage',
-                    destination_address: destinationAddress,
-                    service_center_address: scAddress,
-                    message_text: text,
-                    text_length: text ? text.length : 0,
-                    has_sent_intent: sentIntent !== null,
-                    has_delivery_intent: deliveryIntent !== null,
-                    stack_trace: Where(stack)
-                });
-                return this.sendTextMessage(destinationAddress, scAddress, text, sentIntent, deliveryIntent);
-            };
+            sendText.implementation = safeImplementation(
+                "telephony:SmsManager.sendTextMessage",
+                sendText,
+                function(original, destinationAddress: string, scAddress: string, text: string, sentIntent: any, deliveryIntent: any) {
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    createTelephonyEvent("telephony.sms.send_text", {
+                        library: 'android.telephony.SmsManager',
+                        method: 'sendTextMessage',
+                        destination_address: destinationAddress,
+                        service_center_address: scAddress,
+                        message_text: text,
+                        text_length: text ? text.length : 0,
+                        has_sent_intent: sentIntent !== null,
+                        has_delivery_intent: deliveryIntent !== null,
+                        stack_trace: Where(stack)
+                    });
+                    return original.call(this, destinationAddress, scAddress, text, sentIntent, deliveryIntent);
+                }
+            );
         }
 
         // Hook SmsManager's sendMultipartTextMessage method
@@ -61,25 +62,26 @@ function hook_sms() {
             'java.util.ArrayList', 'java.util.ArrayList'
         );
         if (sendMultipart) {
-            sendMultipart.implementation = function(
-                destinationAddress: string, scAddress: string,
-                parts: any, sentIntents: any, deliveryIntents: any
-            ) {
-                const stack = threadInstance.currentThread().getStackTrace();
-                const partsArray = parts ? parts.toArray() : [];
-                createTelephonyEvent("telephony.sms.send_multipart", {
-                    library: 'android.telephony.SmsManager',
-                    method: 'sendMultipartTextMessage',
-                    destination_address: destinationAddress,
-                    service_center_address: scAddress,
-                    message_parts: partsArray,
-                    parts_count: partsArray.length,
-                    has_sent_intents: sentIntents !== null,
-                    has_delivery_intents: deliveryIntents !== null,
-                    stack_trace: Where(stack)
-                });
-                return this.sendMultipartTextMessage(destinationAddress, scAddress, parts, sentIntents, deliveryIntents);
-            };
+            sendMultipart.implementation = safeImplementation(
+                "telephony:SmsManager.sendMultipartTextMessage",
+                sendMultipart,
+                function(original, destinationAddress: string, scAddress: string, parts: any, sentIntents: any, deliveryIntents: any) {
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    const partsArray = parts ? parts.toArray() : [];
+                    createTelephonyEvent("telephony.sms.send_multipart", {
+                        library: 'android.telephony.SmsManager',
+                        method: 'sendMultipartTextMessage',
+                        destination_address: destinationAddress,
+                        service_center_address: scAddress,
+                        message_parts: partsArray,
+                        parts_count: partsArray.length,
+                        has_sent_intents: sentIntents !== null,
+                        has_delivery_intents: deliveryIntents !== null,
+                        stack_trace: Where(stack)
+                    });
+                    return original.call(this, destinationAddress, scAddress, parts, sentIntents, deliveryIntents);
+                }
+            );
         }
     });
 }
@@ -121,23 +123,27 @@ function hook_device_infos() {
                 'java.lang.String'
             );
             if (sysPropsGet) {
-                sysPropsGet.implementation = function(key_value: string) {
-                    const result = this.get(key_value);
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    // deduplication: only log when value changes for a given key
-                    const eventKey = `system_prop:${key_value}`;
-                    if (seenEvents[eventKey] !== result) {
-                        seenEvents[eventKey] = result;
-                        createTelephonyEvent("telephony.system_properties.get", {
-                            library: "android.os.SystemProperties",
-                            method: "get",
-                            property_key: key_value,
-                            property_value: result,
-                            stack_trace: Where(stack)
-                        });
+                sysPropsGet.implementation = safeImplementation(
+                    "telephony:SystemProperties.get",
+                    sysPropsGet,
+                    function(original, key_value: string) {
+                        const result = original.call(this, key_value);
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        // deduplication: only log when value changes for a given key
+                        const eventKey = `system_prop:${key_value}`;
+                        if (seenEvents[eventKey] !== result) {
+                            seenEvents[eventKey] = result;
+                            createTelephonyEvent("telephony.system_properties.get", {
+                                library: "android.os.SystemProperties",
+                                method: "get",
+                                property_key: key_value,
+                                property_value: result,
+                                stack_trace: Where(stack)
+                            });
+                        }
+                        return result;
                     }
-                    return result;
-                };
+                );
             }
         }
 
@@ -148,7 +154,6 @@ function hook_device_infos() {
                 'MANUFACTURER', 'BOOTLOADER', 'BRAND', 'HOST', 'ID', 'DISPLAY',
                 'TAGS', 'SERIAL', 'TYPE', 'USER', 'UNKNOWN'
             ];
-            
             buildProperties.forEach(prop => {
                 Object.defineProperty(build, prop, {
                     get: function() {
@@ -184,17 +189,21 @@ function hook_device_infos() {
                 "telephony:TelephonyManager.getLine1Number"
             );
             if (getLine1Number) {
-                getLine1Number.implementation = function() {
-                    const result = this.getLine1Number();
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createTelephonyEvent("telephony.manager.get_phone_number", {
-                        library: "android.telephony.TelephonyManager",
-                        method: "getLine1Number",
-                        phone_number: result,
-                        stack_trace: Where(stack)
-                    });
-                    return result;
-                };
+                getLine1Number.implementation = safeImplementation(
+                    "telephony:TelephonyManager.getLine1Number",
+                    getLine1Number,
+                    function(original) {
+                        const result = original.call(this);
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createTelephonyEvent("telephony.manager.get_phone_number", {
+                            library: "android.telephony.TelephonyManager",
+                            method: "getLine1Number",
+                            phone_number: result,
+                            stack_trace: Where(stack)
+                        });
+                        return result;
+                    }
+                );
             }
 
             const getSubscriberId = safeOverload(
@@ -202,17 +211,21 @@ function hook_device_infos() {
                 "telephony:TelephonyManager.getSubscriberId"
             );
             if (getSubscriberId) {
-                getSubscriberId.implementation = function() {
-                    const result = this.getSubscriberId();
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createTelephonyEvent("telephony.manager.get_imsi", {
-                        library: "android.telephony.TelephonyManager",
-                        method: "getSubscriberId",
-                        imsi: result,
-                        stack_trace: Where(stack)
-                    });
-                    return result;
-                };
+                getSubscriberId.implementation = safeImplementation(
+                    "telephony:TelephonyManager.getSubscriberId",
+                    getSubscriberId,
+                    function(original) {
+                        const result = original.call(this);
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createTelephonyEvent("telephony.manager.get_imsi", {
+                            library: "android.telephony.TelephonyManager",
+                            method: "getSubscriberId",
+                            imsi: result,
+                            stack_trace: Where(stack)
+                        });
+                        return result;
+                    }
+                );
             }
 
             // previously used .overloads[0] => replaced with safeOverload no-arg for safety
@@ -221,17 +234,21 @@ function hook_device_infos() {
                 "telephony:TelephonyManager.getDeviceId"
             );
             if (getDeviceId) {
-                getDeviceId.implementation = function() {
-                    const result = this.getDeviceId();
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createTelephonyEvent("telephony.manager.get_device_id", {
-                        library: "android.telephony.TelephonyManager",
-                        method: "getDeviceId",
-                        device_id: result,
-                        stack_trace: Where(stack)
-                    });
-                    return result;
-                };
+                getDeviceId.implementation = safeImplementation(
+                    "telephony:TelephonyManager.getDeviceId",
+                    getDeviceId,
+                    function(original) {
+                        const result = original.call(this);
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createTelephonyEvent("telephony.manager.get_device_id", {
+                            library: "android.telephony.TelephonyManager",
+                            method: "getDeviceId",
+                            device_id: result,
+                            stack_trace: Where(stack)
+                        });
+                        return result;
+                    }
+                );
             }
 
             // previously used .overloads[0] => replaced with safeOverload no-arg for safety
@@ -240,17 +257,21 @@ function hook_device_infos() {
                 "telephony:TelephonyManager.getImei"
             );
             if (getImei) {
-                getImei.implementation = function() {
-                    const result = this.getImei();
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createTelephonyEvent("telephony.manager.get_imei", {
-                        library: "android.telephony.TelephonyManager",
-                        method: "getImei",
-                        imei: result,
-                        stack_trace: Where(stack)
-                    });
-                    return result;
-                };
+                getImei.implementation = safeImplementation(
+                    "telephony:TelephonyManager.getImei",
+                    getImei,
+                    function(original) {
+                        const result = original.call(this);
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createTelephonyEvent("telephony.manager.get_imei", {
+                            library: "android.telephony.TelephonyManager",
+                            method: "getImei",
+                            imei: result,
+                            stack_trace: Where(stack)
+                        });
+                        return result;
+                    }
+                );
             }
 
             const getSimOperator = safeOverload(
@@ -258,70 +279,94 @@ function hook_device_infos() {
                 "telephony:TelephonyManager.getSimOperator"
             );
             if (getSimOperator) {
-                getSimOperator.implementation = function() {
-                    const result = this.getSimOperator();
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    createTelephonyEvent("telephony.manager.get_sim_operator", {
-                        library: "android.telephony.TelephonyManager",
-                        method: "getSimOperator",
-                        sim_operator: result,
-                        stack_trace: Where(stack)
-                    });
-                    return result;
-                };
+                getSimOperator.implementation = safeImplementation(
+                    "telephony:TelephonyManager.getSimOperator",
+                    getSimOperator,
+                    function(original) {
+                        const result = original.call(this);
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        createTelephonyEvent("telephony.manager.get_sim_operator", {
+                            library: "android.telephony.TelephonyManager",
+                            method: "getSimOperator",
+                            sim_operator: result,
+                            stack_trace: Where(stack)
+                        });
+                        return result;
+                    }
+                );
             }
         }
 
         if (bluetoothAdapter) {
-            bluetoothAdapter.getAddress.implementation = function() {
-                const result = this.getAddress();
-                const stack = threadInstance.currentThread().getStackTrace();
-                createTelephonyEvent("telephony.bluetooth.get_address", {
-                    library: "android.bluetooth.BluetoothAdapter",
-                    method: "getAddress",
-                    mac_address: result,
-                    stack_trace: Where(stack)
-                });
-                return result;
-            };
+            const getAddressRef = bluetoothAdapter.getAddress;
+            getAddressRef.implementation = safeImplementation(
+                "telephony:BluetoothAdapter.getAddress",
+                getAddressRef,
+                function(original) {
+                    const result = original.call(this);
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    createTelephonyEvent("telephony.bluetooth.get_address", {
+                        library: "android.bluetooth.BluetoothAdapter",
+                        method: "getAddress",
+                        mac_address: result,
+                        stack_trace: Where(stack)
+                    });
+                    return result;
+                }
+            );
         }
 
         if (wifiInfo) {
-            wifiInfo.getMacAddress.implementation = function() {
-                const result = this.getMacAddress();
-                const stack = threadInstance.currentThread().getStackTrace();
-                createTelephonyEvent("telephony.wifi.get_mac_address", {
-                    library: "android.net.wifi.WifiInfo",
-                    method: "getMacAddress",
-                    mac_address: result,
-                    stack_trace: Where(stack)
-                });
-                return result;
-            };
+            const getMacRef = wifiInfo.getMacAddress;
+            getMacRef.implementation = safeImplementation(
+                "telephony:WifiInfo.getMacAddress",
+                getMacRef,
+                function(original) {
+                    const result = original.call(this);
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    createTelephonyEvent("telephony.wifi.get_mac_address", {
+                        library: "android.net.wifi.WifiInfo",
+                        method: "getMacAddress",
+                        mac_address: result,
+                        stack_trace: Where(stack)
+                    });
+                    return result;
+                }
+            );
 
-            wifiInfo.getSSID.implementation = function() {
-                const result = this.getSSID();
-                const stack = threadInstance.currentThread().getStackTrace();
-                createTelephonyEvent("telephony.wifi.get_ssid", {
-                    library: "android.net.wifi.WifiInfo",
-                    method: "getSSID",
-                    ssid: result,
-                    stack_trace: Where(stack)
-                });
-                return result;
-            };
+            const getSSIDRef = wifiInfo.getSSID;
+            getSSIDRef.implementation = safeImplementation(
+                "telephony:WifiInfo.getSSID",
+                getSSIDRef,
+                function(original) {
+                    const result = original.call(this);
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    createTelephonyEvent("telephony.wifi.get_ssid", {
+                        library: "android.net.wifi.WifiInfo",
+                        method: "getSSID",
+                        ssid: result,
+                        stack_trace: Where(stack)
+                    });
+                    return result;
+                }
+            );
 
-            wifiInfo.getBSSID.implementation = function() {
-                const result = this.getBSSID();
-                const stack = threadInstance.currentThread().getStackTrace();
-                createTelephonyEvent("telephony.wifi.get_bssid", {
-                    library: "android.net.wifi.WifiInfo",
-                    method: "getBSSID",
-                    bssid: result,
-                    stack_trace: Where(stack)
-                });
-                return result;
-            };
+            const getBSSIDRef = wifiInfo.getBSSID;
+            getBSSIDRef.implementation = safeImplementation(
+                "telephony:WifiInfo.getBSSID",
+                getBSSIDRef,
+                function(original) {
+                    const result = original.call(this);
+                    const stack = threadInstance.currentThread().getStackTrace();
+                    createTelephonyEvent("telephony.wifi.get_bssid", {
+                        library: "android.net.wifi.WifiInfo",
+                        method: "getBSSID",
+                        bssid: result,
+                        stack_trace: Where(stack)
+                    });
+                    return result;
+                }
+            );
         }
 
         if (contentResolver) {
@@ -332,29 +377,33 @@ function hook_device_infos() {
                 'android.os.Bundle', 'android.os.CancellationSignal'
             );
             if (query1) {
-                query1.implementation = function(uri: string, str: any, bundle: any, sig: any) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    if (uri == 'content://com.google.android.gsf.gservicesa') {
-                        createTelephonyEvent("telephony.content_resolver.query_gsf", {
-                            library: "android.content.ContentResolver",
-                            method: "query",
-                            uri: uri,
-                            action: "cloaking_gsf_query",
-                            stack_trace: Where(stack)
-                        });
-                        return null;
-                    } else {
-                        const result = this.query(uri, str, bundle, sig);
-                        createTelephonyEvent("telephony.content_resolver.query", {
-                            library: "android.content.ContentResolver",
-                            method: "query",
-                            uri: uri,
-                            has_result: result !== null,
-                            stack_trace: Where(stack)
-                        });
-                        return result;
+                query1.implementation = safeImplementation(
+                    "telephony:ContentResolver.query[Uri,String[],Bundle,CancellationSignal]",
+                    query1,
+                    function(original, uri: string, str: any, bundle: any, sig: any) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        if (uri == 'content://com.google.android.gsf.gservicesa') {
+                            createTelephonyEvent("telephony.content_resolver.query_gsf", {
+                                library: "android.content.ContentResolver",
+                                method: "query",
+                                uri: uri,
+                                action: "cloaking_gsf_query",
+                                stack_trace: Where(stack)
+                            });
+                            return null;
+                        } else {
+                            const result = original.call(this, uri, str, bundle, sig);
+                            createTelephonyEvent("telephony.content_resolver.query", {
+                                library: "android.content.ContentResolver",
+                                method: "query",
+                                uri: uri,
+                                has_result: result !== null,
+                                stack_trace: Where(stack)
+                            });
+                            return result;
+                        }
                     }
-                };
+                );
             }
 
             const query2 = safeOverload(
@@ -364,34 +413,38 @@ function hook_device_infos() {
                 'java.lang.String', '[Ljava.lang.String;', 'java.lang.String'
             );
             if (query2) {
-                query2.implementation = function(uri: string, astr: any, bstr: string, cstr: any, dstr: string) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    if (uri == 'content://com.google.android.gsf.gservicesa') {
-                        createTelephonyEvent("telephony.content_resolver.query_gsf", {
-                            library: "android.content.ContentResolver",
-                            method: "query",
-                            uri: uri,
-                            action: "cloaking_gsf_query",
-                            stack_trace: Where(stack)
-                        });
-                        return null;
-                    } else {
-                        // note: Java.use inside .implementation => valid, in Java.perform context
-                        const result = Java.use('android.app.ActivityThread')
-                            .currentApplication()
-                            .getApplicationContext()
-                            .getContentResolver()
-                            .query(uri, astr, bstr, cstr, dstr);
-                        createTelephonyEvent("telephony.content_resolver.query", {
-                            library: "android.content.ContentResolver",
-                            method: "query",
-                            uri: uri,
-                            has_result: result !== null,
-                            stack_trace: Where(stack)
-                        });
-                        return result;
+                query2.implementation = safeImplementation(
+                    "telephony:ContentResolver.query[Uri,String[],String,String[],String]",
+                    query2,
+                    function(original, uri: string, astr: any, bstr: string, cstr: any, dstr: string) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        if (uri == 'content://com.google.android.gsf.gservicesa') {
+                            createTelephonyEvent("telephony.content_resolver.query_gsf", {
+                                library: "android.content.ContentResolver",
+                                method: "query",
+                                uri: uri,
+                                action: "cloaking_gsf_query",
+                                stack_trace: Where(stack)
+                            });
+                            return null;
+                        } else {
+                            // note: Java.use inside .implementation / safeImplementation => valid, in Java.perform context
+                            const result = Java.use('android.app.ActivityThread')
+                                .currentApplication()
+                                .getApplicationContext()
+                                .getContentResolver()
+                                .query(uri, astr, bstr, cstr, dstr);
+                            createTelephonyEvent("telephony.content_resolver.query", {
+                                library: "android.content.ContentResolver",
+                                method: "query",
+                                uri: uri,
+                                has_result: result !== null,
+                                stack_trace: Where(stack)
+                            });
+                            return result;
+                        }
                     }
-                };
+                );
             }
 
             const query3 = safeOverload(
@@ -402,55 +455,67 @@ function hook_device_infos() {
                 'java.lang.String', 'android.os.CancellationSignal'
             );
             if (query3) {
-                query3.implementation = function(uri: string, astr: any, bstr: string, cstr: any, sig: any) {
-                    const stack = threadInstance.currentThread().getStackTrace();
-                    if (uri == 'content://com.google.android.gsf.gservicesa') {
-                        createTelephonyEvent("telephony.content_resolver.query_gsf", {
-                            library: "android.content.ContentResolver",
-                            method: "query",
-                            uri: uri,
-                            action: "cloaking_gsf_query",
-                            stack_trace: Where(stack)
-                        });
-                        return null;
-                    } else {
-                        const result = this.query(uri, astr, bstr, cstr, sig);
-                        createTelephonyEvent("telephony.content_resolver.query", {
-                            library: "android.content.ContentResolver",
-                            method: "query",
-                            uri: uri,
-                            has_result: result !== null,
-                            stack_trace: Where(stack)
-                        });
-                        return result;
+                query3.implementation = safeImplementation(
+                    "telephony:ContentResolver.query[Uri,String[],String,String[],String,CancellationSignal]",
+                    query3,
+                    function(original, uri: string, astr: any, bstr: string, cstr: any, sig: any) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        if (uri == 'content://com.google.android.gsf.gservicesa') {
+                            createTelephonyEvent("telephony.content_resolver.query_gsf", {
+                                library: "android.content.ContentResolver",
+                                method: "query",
+                                uri: uri,
+                                action: "cloaking_gsf_query",
+                                stack_trace: Where(stack)
+                            });
+                            return null;
+                        } else {
+                            const result = original.call(this, uri, astr, bstr, cstr, sig);
+                            createTelephonyEvent("telephony.content_resolver.query", {
+                                library: "android.content.ContentResolver",
+                                method: "query",
+                                uri: uri,
+                                has_result: result !== null,
+                                stack_trace: Where(stack)
+                            });
+                            return result;
+                        }
                     }
-                };
+                );
             }
         }
 
         if (secureSettings) {
-            secureSettings.getString.implementation = function(contentresolver: any, query: string) {
-                const result = this.getString(contentresolver, query);
-                const stack = threadInstance.currentThread().getStackTrace();
-                /*if (query === 'android_id') {
-                    createTelephonyEvent("telephony.secure_settings.get_android_id", {
+            const getStringRef = secureSettings.getString;
+            getStringRef.implementation = safeImplementation(
+                "telephony:SettingsSecure.getString",
+                getStringRef,
+                function (original, contentresolver: any, query: string) {
+                    const result = original.call(this, contentresolver, query);
+                    const stack = threadInstance.currentThread().getStackTrace();
+
+                    /*if (query === 'android_id') {
+                        createTelephonyEvent("telephony.secure_settings.get_android_id", {
+                            library: "android.provider.Settings$Secure",
+                            method: "getString",
+                            query: query,
+                            action: "cloaking_android_id",
+                            stack_trace: Where(stack)
+                        });
+                        return payl0ad;
+                    } else { */
+
+                    createTelephonyEvent("telephony.secure_settings.get_string", {
                         library: "android.provider.Settings$Secure",
                         method: "getString",
                         query: query,
-                        action: "cloaking_android_id",
+                        value: result,
                         stack_trace: Where(stack)
                     });
-                    return payl0ad;
-                } else { */
-                createTelephonyEvent("telephony.secure_settings.get_string", {
-                    library: "android.provider.Settings$Secure",
-                    method: "getString",
-                    query: query,
-                    value: result,
-                    stack_trace: Where(stack)
-                });
-                return result;
-            };
+
+                    return result;
+                }
+            );
         }
     });
 }
@@ -643,7 +708,7 @@ function hook_device_infos_and_cloak(){
 
 
 export function install_telephony_manager_hooks(){
-    devlog("\n")
+    devlog("\n");
     devlog("install telephony manager hooks");
 
     try {
