@@ -91,14 +91,20 @@ class ProfileCollector:
                 return False
             
             profile_type = payload["profileType"]
-            profile_content = payload.get("profileContent", "")
             timestamp = payload.get("timestamp", datetime.now().isoformat())
-            
+
             # Handle special console messages
             if profile_type in ["console", "console_dev"]:
-                self._handle_console_message(profile_content, profile_type)
+                if profile_type == "console_dev":
+                    content = payload.get("console_dev", "")
+                else:
+                    content = payload.get("console", "")
+                self._handle_console_message(content, profile_type)
                 return True
-            
+
+            # For all non-console messages, use profileContent as before
+            profile_content = payload.get("profileContent", "")
+
             # Handle custom script messages
             if profile_type == "CUSTOM_SCRIPT":
                 return self._handle_custom_script_message(profile_content, timestamp)
