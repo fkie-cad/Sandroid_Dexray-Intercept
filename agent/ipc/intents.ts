@@ -20,7 +20,6 @@ function getStackTrace() {
     return Where(threadInstance.currentThread().getStackTrace());
 }
 
-
 function extractIntentData(intent: any): any {
     const intentData: any = {};
     
@@ -102,8 +101,8 @@ function hookGetData(this: any, original: any): any {
     return original.call(this);
 }
 
-function hookGetIntent(this: any): any {
-    const intent = this.getIntent();
+function hookGetIntent(this: any, original: any): any {
+    const intent = original.call(this);
     const intentData = extractIntentData(intent);
     
     createIntentEvent("intent.accessed", {
@@ -115,26 +114,34 @@ function hookGetIntent(this: any): any {
     return intent;
 }
 
-
 function intent_hooks() {
     setTimeout(safeDeferred("intents:intent_hooks", () => {
         safePerform("intents:intent_hooks", () => {
             const Intent = safeUse("android.content.Intent", "intents:intent_hooks");
-            if (!Intent) return;
-
-            const getDataRef = Intent.getData;
-            getDataRef.implementation = safeImplementation(
-                "intents:Intent.getData",
-                getDataRef,
-                hookGetData
-            );
+            if (Intent) {
+                const getDataRef = Intent.getData;
+                getDataRef.implementation = safeImplementation(
+                    "intents:Intent.getData",
+                    getDataRef,
+                    hookGetData
+                );
+            }
 
             // const Activity = Java.use("android.app.Activity");
             // Activity.getIntent.implementation = hookGetIntent;
+
+            const Activity = safeUse("android.app.Activity", "intents:intent_hooks");
+            if (Activity) {
+                const getIntentRef = Activity.getIntent;
+                getIntentRef.implementation = safeImplementation(
+                    "intents:Activity.getIntent",
+                    getIntentRef,
+                    hookGetIntent
+                );
+            }
         });
     }), 0);
 }
-
 
 export function install_intent_hooks(){
     devlog("\n")
