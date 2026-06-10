@@ -3,6 +3,7 @@ import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
 import { Where } from "../utils/misc.js"
 import { safePerform, safeUse, safeImplementation } from "../utils/safe_java.js"
+import { safeAttachExport } from "../utils/safe_native.js"
 
 const PROFILE_HOOKING_TYPE: string = "PROCESS_CREATION"
 
@@ -98,72 +99,63 @@ function hook_native_process_creation(){
     // Hook native process creation functions like fork, execve, system
     
     // Hook fork system call
-    const forkPtr = Process.getModuleByName("libc.so").getExportByName("fork");
-    if (forkPtr) {
-        Interceptor.attach(forkPtr, {
-            onEnter: function(args) {
-                createProcessEvent("process.fork.attempt", {
-                    native_function: "fork",
-                    caller_pid: Process.id
-                });
-            },
-            onLeave: function(retval) {
-                const pid = retval.toInt32();
-                createProcessEvent("process.fork.result", {
-                    native_function: "fork",
-                    caller_pid: Process.id,
-                    child_pid: pid,
-                    success: pid >= 0
-                });
-            }
-        });
-    }
+    safeAttachExport("libc.so", "fork", "process:fork", {
+        onEnter: function(args) {
+            createProcessEvent("process.fork.attempt", {
+                native_function: "fork",
+                caller_pid: Process.id
+            });
+        },
+        onLeave: function(retval) {
+            const pid = retval.toInt32();
+            createProcessEvent("process.fork.result", {
+                native_function: "fork",
+                caller_pid: Process.id,
+                child_pid: pid,
+                success: pid >= 0
+            });
+        }
+    });
 
     // Hook execve system call
-    const execvePtr = Process.getModuleByName("libc.so").getExportByName("execve");
-    if (execvePtr) {
-        Interceptor.attach(execvePtr, {
-            onEnter: function(args) {
-                const pathname = args[0].readCString();
-                createProcessEvent("process.execve.attempt", {
-                    native_function: "execve",
-                    pathname: pathname,
-                    caller_pid: Process.id
-                });
-            },
-            onLeave: function(retval) {
-                const result = retval.toInt32();
-                createProcessEvent("process.execve.result", {
-                    native_function: "execve",
-                    return_value: result,
-                    success: result === 0
-                });
-            }
-        });
-    }
+    safeAttachExport("libc.so", "execve", "process:execve", {
+        onEnter: function(args) {
+            const pathname = args[0].readCString();
+            createProcessEvent("process.execve.attempt", {
+                native_function: "execve",
+                pathname: pathname,
+                caller_pid: Process.id
+            });
+        },
+        onLeave: function(retval) {
+            const result = retval.toInt32();
+            createProcessEvent("process.execve.result", {
+                native_function: "execve",
+                return_value: result,
+                success: result === 0
+            });
+        }
+    });
 
     // Hook system function
-    const systemPtr = Process.getModuleByName("libc.so").getExportByName("system");
-    if (systemPtr) {
-        Interceptor.attach(systemPtr, {
-            onEnter: function(args) {
-                const command = args[0].readCString();
-                createProcessEvent("process.system.call", {
-                    native_function: "system",
-                    command: command,
-                    caller_pid: Process.id
-                });
-            },
-            onLeave: function(retval) {
-                const result = retval.toInt32();
-                createProcessEvent("process.system.result", {
-                    native_function: "system",
-                    return_value: result,
-                    success: result !== -1
-                });
-            }
-        });
-    }
+    safeAttachExport("libc.so", "system", "process:system", {
+        onEnter: function(args) {
+            const command = args[0].readCString();
+            createProcessEvent("process.system.call", {
+                native_function: "system",
+                command: command,
+                caller_pid: Process.id
+            });
+        },
+        onLeave: function(retval) {
+            const result = retval.toInt32();
+            createProcessEvent("process.system.result", {
+                native_function: "system",
+                return_value: result,
+                success: result !== -1
+            });
+        }
+    });
 }
 
 export function install_process_hooks(){

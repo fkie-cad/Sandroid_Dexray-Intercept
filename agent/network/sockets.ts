@@ -3,6 +3,7 @@ import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { safeAttachExport } from "../utils/safe_native.js"
 
 
 /**
@@ -202,22 +203,10 @@ function hook_java_socket_communication() {
 
 
 function hook_bionic_socket_commuication(){
-    //TCP/UDP Funktionen:
-    const libcModule = Process.getModuleByName("libc.so");
-    var socket_ptr = libcModule.findExportByName("socket");
-    var bind_ptr = libcModule.findExportByName("bind");
-    //var listen_ptr = libcModule.findExportByName("listen");
-    //var accept_ptr = libcModule.findExportByName("accept");
-    var connect_ptr = libcModule.findExportByName("connect");
-    var read_ptr = libcModule.findExportByName("read");
-    var write_ptr = libcModule.findExportByName("write"); 
-    var close_ptr = libcModule.findExportByName("close");
-    var sendto_ptr = libcModule.findExportByName("sendto");
-    var recvfrom_ptr = libcModule.findExportByName("recvfrom");
-    var send_ptr = libcModule.findExportByName("send");
-    var recv_ptr = libcModule.findExportByName("recv");
-    var sendmsg_ptr = libcModule.findExportByName("sendmsg");
-    var recvmsg_ptr = libcModule.findExportByName("recvmsg");
+    // TCP/UDP functions in libc.so. Each symbol is now resolved + hooked per-call
+    // via safeAttachExport below, so a missing symbol skips only its own hook
+    // instead of aborting the whole install (the old Process.getModuleByName threw).
+    // Note: "listen" and "accept" were previously resolved here but left unhooked.
 
     // save sockets
     const socket_list = [];
@@ -271,7 +260,7 @@ function addSocketToList(sd, type){
 
 // TCP/UDP functions
 
-Interceptor.attach(socket_ptr, {
+safeAttachExport("libc.so", "socket", "sockets:socket", {
     onEnter(args) {
         
         this.domain = args[0].toInt32(); //2 für AF_INTET & 22 für AF_INET
@@ -300,7 +289,7 @@ Interceptor.attach(socket_ptr, {
     }
 });
 
-Interceptor.attach(bind_ptr, {
+safeAttachExport("libc.so", "bind", "sockets:bind", {
     onEnter: function(args) {
         
         this.sd = args[0].toInt32();
@@ -342,7 +331,7 @@ Interceptor.attach(bind_ptr, {
     }
 });
 
-Interceptor.attach(connect_ptr, {
+safeAttachExport("libc.so", "connect", "sockets:connect", {
     onEnter: function(args) {
         
         this.sd = args[0].toInt32();
@@ -391,7 +380,7 @@ Interceptor.attach(connect_ptr, {
     }
 });
 
-Interceptor.attach(write_ptr, {
+safeAttachExport("libc.so", "write", "sockets:write", {
     onEnter: function(args) {
         this.sd = args[0].toInt32();
         this.addr = args[1];
@@ -448,7 +437,7 @@ Interceptor.attach(write_ptr, {
     }
 });
         
-Interceptor.attach(read_ptr, {
+safeAttachExport("libc.so", "read", "sockets:read", {
     onEnter: function(args) {
         
         this.sd = args[0].toInt32();
@@ -506,7 +495,7 @@ Interceptor.attach(read_ptr, {
     }
 });
 
-Interceptor.attach(sendto_ptr, {
+safeAttachExport("libc.so", "sendto", "sockets:sendto", {
     onEnter: function(args) {
         
         this.sd = args[0].toInt32();
@@ -619,7 +608,7 @@ Interceptor.attach(sendto_ptr, {
     }
 });
 
-Interceptor.attach(recvfrom_ptr, {
+safeAttachExport("libc.so", "recvfrom", "sockets:recvfrom", {
     onEnter: function(args) {
         
         this.sd = args[0].toInt32();
@@ -685,7 +674,7 @@ Interceptor.attach(recvfrom_ptr, {
     }
 });
 
-Interceptor.attach(send_ptr, {
+safeAttachExport("libc.so", "send", "sockets:send", {
     onEnter: function(args) {
         this.sd = args[0].toInt32();
         this.addr = args[1];
@@ -720,7 +709,7 @@ Interceptor.attach(send_ptr, {
     }
 });
 
-Interceptor.attach(recv_ptr, {
+safeAttachExport("libc.so", "recv", "sockets:recv", {
     onEnter: function(args) {
         this.sd = args[0].toInt32();
         this.addr = args[1];
@@ -758,7 +747,7 @@ Interceptor.attach(recv_ptr, {
 });
 
 
-Interceptor.attach(sendmsg_ptr, {
+safeAttachExport("libc.so", "sendmsg", "sockets:sendmsg", {
     onEnter: function(args) {
         
         this.sd = args[0].toInt32();        
@@ -821,7 +810,7 @@ Interceptor.attach(sendmsg_ptr, {
     }
 });
 
-Interceptor.attach(recvmsg_ptr, {
+safeAttachExport("libc.so", "recvmsg", "sockets:recvmsg", {
     onEnter: function(args) {
         
         this.sd = args[0].toInt32();
@@ -877,7 +866,7 @@ Interceptor.attach(recvmsg_ptr, {
 
 
 
-Interceptor.attach(close_ptr, {
+safeAttachExport("libc.so", "close", "sockets:close", {
     onEnter: function(args) {
         this.sd = args[0].toInt32();
     },

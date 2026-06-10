@@ -1,6 +1,7 @@
 import { am_send, log, devlog } from "../utils/logging.js"
 import { getAndroidVersion, arraybuffer2hexstr, copy_file, removeLeadingColon } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
+import { safeResolveExport, safeNativeFunction, safeAttach, safeEnumerateMatches, stripModulePrefix } from "../utils/safe_native.js"
 
 const PROFILE_HOOKING_TYPE: string = "DEX_LOADING"
 
@@ -88,50 +89,41 @@ function createDEXEvent(eventType: string, data: any): void {
 
 //@ts-ignore
 function getFunctionName(g_AndroidOSVersion) : string{
-    var i = 0;
     var functionName = "";
 
-    // Android 4: hook dvmDexFileOpenPartial
+    // ApiResolver is the safe alternative to Process.getModuleByName(...).enumerateExports():
+    // it resolves the module + does the substring match in one call that returns [] (never
+    // throws) when the library or symbol is absent. Match names come back as "module!symbol",
+    // so stripModulePrefix keeps the bare symbol name that dumpDex re-resolves.
+
+    // Android 4: hook dexFileParse
     // Android 5: hook OpenMemory
-    // after Android 5: hook OpenCommon
+    // after Android 5: hook OpenCommon (libdexfile.so on Android 10+, libart.so before)
     if (g_AndroidOSVersion > 4){ // android 5 and later version
         // OpenCommon is in libdexfile.so in android 10 and later
         const soName : string = g_AndroidOSVersion >= 10 ? "libdexfile.so" : "libart.so";
-        const artModule = Process.getModuleByName(soName);
-        var artExports = artModule.enumerateExports();
-        for(i = 0; i< artExports.length; i++){
-            if(artExports[i].name.indexOf("OpenMemory") !== -1){
-                functionName = artExports[i].name;
-                //devlog("Export index: " + i + " -> "+ functionName);
-                break;
-            }else if(artExports[i].name.indexOf("OpenCommon") !== -1){
-                if (g_AndroidOSVersion >= 10 && artExports[i].name.indexOf("ArtDexFileLoader") !== -1)
+
+        const openMemory = safeEnumerateMatches(`exports:${soName}!*OpenMemory*`, "dex:getFunctionName");
+        if (openMemory.length > 0) {
+            functionName = stripModulePrefix(openMemory[0].name);
+        } else {
+            const openCommon = safeEnumerateMatches(`exports:${soName}!*OpenCommon*`, "dex:getFunctionName");
+            for (const match of openCommon) {
+                if (g_AndroidOSVersion >= 10 && match.name.indexOf("ArtDexFileLoader") !== -1)
                     continue;
-                functionName = artExports[i].name;
-                //devlog("Export index: " + i + " -> "+ functionName);
+                functionName = stripModulePrefix(match.name);
                 break;
             }
         }
     }else{ //android 4
-        const dvmModule = Process.getModuleByName("libdvm.so");
-        var dvmExports = dvmModule.enumerateExports();
-        if (dvmExports.length !== 0) {
-            for(i = 0; i< dvmExports.length; i++){
-                if(dvmExports[i].name.indexOf("dexFileParse") !== -1){
-                    functionName = dvmExports[i].name;
-                    //devlog("Export index: " + i + " -> "+ functionName);
-                    break;
-                }
-            }
-        }else {
-            const libartModule = Process.getModuleByName("libart.so");
-            dvmExports = libartModule.enumerateExports();
-            for(i = 0; i< dvmExports.length; i++){
-                if(dvmExports[i].name.indexOf("OpenMemory") !== -1){
-                    functionName = dvmExports[i].name;
-                    //devlog("Export index: " + i + " -> "+ functionName);
-                    break;
-                }
+        const dvm = safeEnumerateMatches("exports:libdvm.so!*dexFileParse*", "dex:getFunctionName");
+        if (dvm.length > 0) {
+            functionName = stripModulePrefix(dvm[0].name);
+        } else {
+            // libdvm not present (or no match) — fall back to libart's OpenMemory
+            const art = safeEnumerateMatches("exports:libart.so!*OpenMemory*", "dex:getFunctionName");
+            if (art.length > 0) {
+                functionName = stripModulePrefix(art[0].name);
             }
         }
     }
@@ -141,14 +133,18 @@ function getFunctionName(g_AndroidOSVersion) : string{
 function getg_processName() : string {
     let g_processName: string = "";
 
-    const libcModule = Process.getModuleByName("libc.so");
-    var fopenPtr = libcModule.findExportByName("fopen");
-    var fgetsPtr = libcModule.findExportByName("fgets");
-    var fclosePtr = libcModule.findExportByName("fclose");
+    const fopenPtr = safeResolveExport("libc.so", "fopen", "dex:getg_processName");
+    const fgetsPtr = safeResolveExport("libc.so", "fgets", "dex:getg_processName");
+    const fclosePtr = safeResolveExport("libc.so", "fclose", "dex:getg_processName");
 
-    var fopenFunc = new NativeFunction(fopenPtr, 'pointer', ['pointer', 'pointer']);
-    var fgetsFunc = new NativeFunction(fgetsPtr, 'int', ['pointer', 'int', 'pointer']);
-    var fcloseFunc = new NativeFunction(fclosePtr, 'int', ['pointer']);
+    var fopenFunc = safeNativeFunction(fopenPtr, 'pointer', ['pointer', 'pointer'], "dex:fopen");
+    var fgetsFunc = safeNativeFunction(fgetsPtr, 'int', ['pointer', 'int', 'pointer'], "dex:fgets");
+    var fcloseFunc = safeNativeFunction(fclosePtr, 'int', ['pointer'], "dex:fclose");
+
+    // If any libc symbol is missing the process name can't be read — bail cleanly.
+    if (!fopenFunc || !fgetsFunc || !fcloseFunc) {
+        return g_processName;
+    }
 
     var pathPtr = Memory.allocUtf8String("/proc/self/cmdline");
     var openFlagsPtr = Memory.allocUtf8String("r");
@@ -264,15 +260,12 @@ function dumpDex(moduleFuncName, g_processName, g_AndroidOSVersion){
     var hookFunction;
     var hooked_fct;
     if (g_AndroidOSVersion > 4) {
-        const libartModule = Process.getModuleByName("libart.so");
-        hookFunction = libartModule.findExportByName(moduleFuncName);
+        hookFunction = safeResolveExport("libart.so", moduleFuncName, "dex:dumpDex");
             hooked_fct = "Libart.so::"+moduleFuncName;
     } else {
-        const libdvmModule = Process.getModuleByName("libdvm.so");
-        hookFunction = libdvmModule.findExportByName(moduleFuncName);
+        hookFunction = safeResolveExport("libdvm.so", moduleFuncName, "dex:dumpDex");
         if(hookFunction == null) {
-            const libartModule = Process.getModuleByName("libart.so");
-            hookFunction = libartModule.findExportByName(moduleFuncName);
+            hookFunction = safeResolveExport("libart.so", moduleFuncName, "dex:dumpDex");
             //dem = demangleAndExtractFunctionName("libart",moduleFuncName)
             hooked_fct = "Libart.so::"+moduleFuncName;
         }else{
@@ -280,7 +273,7 @@ function dumpDex(moduleFuncName, g_processName, g_AndroidOSVersion){
         }
     }
 
-    Interceptor.attach(hookFunction,{
+    safeAttach(hookFunction, "dex:"+moduleFuncName, {
         onEnter: function(args : NativePointer[]){
             let begin, dexInfo, location;
 

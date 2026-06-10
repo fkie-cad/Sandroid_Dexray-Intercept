@@ -4,6 +4,7 @@ import { buffer2ArrayBuffer, b2s, isPatternPresent, byteArray2JString, bytesToHe
 import { show_verbose } from "../hooking_profile_loader.js"
 import { deactivate_unlink } from "../hooking_profile_loader.js"
 import { Java } from "../utils/javalib.js"
+import { safeResolveExport, safeAttach, safeReplace } from "../utils/safe_native.js"
 
 const PROFILE_HOOKING_TYPE: string = "FILE_SYSTEM"
 
@@ -351,18 +352,10 @@ function hook_filesystem_deletes(): void {
         };
     });
 
-    var unlinkPtr: NativePointer | null = null;
-    for (const module of Process.enumerateModules()) {
-        try {
-            unlinkPtr = module.findExportByName('unlink');
-            if (unlinkPtr) break;
-        } catch (e) {
-            continue;
-        }
-    }
+    const unlinkPtr = safeResolveExport(null, 'unlink', 'file_system:unlink');
 
     if (unlinkPtr) {
-        Interceptor.attach(unlinkPtr, {
+        safeAttach(unlinkPtr, 'file_system:unlink', {
             onEnter(args: any) {
                 var ptr_to_file = ptr(args[0]);
                 this.file_path = ptr_to_file.readUtf8String()
@@ -375,17 +368,16 @@ function hook_filesystem_deletes(): void {
                                     });
                     }
                 }
-                
+
             }
         });
     }
 
     if (deactivate_unlink) {
-        var unlink = new NativeFunction(unlinkPtr, 'int', []);
-        Interceptor.replace(unlinkPtr, new NativeCallback(function () {
+        safeReplace(unlinkPtr, 'file_system:unlink.replace', 'int', [], function () {
             am_send(PROFILE_HOOKING_TYPE, "unlink() encountered, skipping it.");
             return 0;
-        }, 'int', []));
+        });
     }
 }
 

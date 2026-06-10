@@ -3,6 +3,7 @@ import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where } from "../utils/misc.js"
 import { Java} from "../utils/javalib.js"
 import { safePerform, safeUse, safeDeferred } from "../utils/safe_java.js"
+import { safeResolveExport, safeAttach } from "../utils/safe_native.js"
 
 /**
  * Some parts are taken from https://codeshare.frida.re/@ninjadiary/sqlite-database/
@@ -1097,27 +1098,23 @@ function hook_native_sqlite() {
     sqlite_modules.forEach(module => {
         devlog(`Hooking SQLite functions in ${module.name}`);
         
-        // Helper function to safely hook a native function
+        // Helper function to safely hook a native function. safeResolveExport
+        // handles the null/throw cases and logs them via hookError; we keep the
+        // module-scoped success/miss devlog for readability.
         function hookFunction(name, successCallback) {
-            try {
-                const address = module.findExportByName(name);
-                if (address) {
-                    successCallback(address);
-                    devlog(`✅ Successfully hooked ${name} in ${module.name}`);
-                } else {
-                    devlog(`⚠️ Could not find export for ${name} in ${module.name}`);
-                }
-            } catch (error) {
-                // Fix: Safely handle the error message property
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                devlog(`⚠️ Error hooking ${name} in ${module.name}: ${errorMessage}`);
+            const address = safeResolveExport(module.name, name, `database:${name}`);
+            if (address) {
+                successCallback(address);
+                devlog(`✅ Successfully hooked ${name} in ${module.name}`);
+            } else {
+                devlog(`⚠️ Could not find export for ${name} in ${module.name}`);
             }
         }
         
         // Hook sqlite3_open and variants
         ["sqlite3_open", "sqlite3_open_v2", "sqlite3_open16"].forEach(funcName => {
             hookFunction(funcName, address => {
-                Interceptor.attach(address, {
+                safeAttach(address, `database:${funcName}`, {
                     onEnter: function(args) {
                         this.dbPath = args[0].readUtf8String();
                         this.dbHandle = args[1]; // Store for later use in onLeave
@@ -1140,7 +1137,7 @@ function hook_native_sqlite() {
         
         // Hook sqlite3_exec (direct SQL execution)
         hookFunction("sqlite3_exec", address => {
-            Interceptor.attach(address, {
+            safeAttach(address, "database:sqlite3_exec", {
                 onEnter: function(args) {
                     const dbHandle = args[0];
                     const sql = args[1].readUtf8String();
@@ -1157,7 +1154,7 @@ function hook_native_sqlite() {
         // Hook sqlite3_prepare and variants (SQL statement preparation)
         ["sqlite3_prepare", "sqlite3_prepare_v2", "sqlite3_prepare_v3", "sqlite3_prepare16", "sqlite3_prepare16_v2", "sqlite3_prepare16_v3"].forEach(funcName => {
             hookFunction(funcName, address => {
-                Interceptor.attach(address, {
+                safeAttach(address, `database:${funcName}`, {
                     onEnter: function(args) {
                         const sql = args[1].readUtf8String();
                         this.sql = sql;
@@ -1176,7 +1173,7 @@ function hook_native_sqlite() {
         
         // Hook sqlite3_step (statement execution)
         hookFunction("sqlite3_step", address => {
-            Interceptor.attach(address, {
+            safeAttach(address, "database:sqlite3_step", {
                 onEnter: function(args) {
                     this.stmtHandle = args[0];
                 },
@@ -1198,7 +1195,7 @@ function hook_native_sqlite() {
         // Hook sqlite3_close and sqlite3_close_v2
         ["sqlite3_close", "sqlite3_close_v2"].forEach(funcName => {
             hookFunction(funcName, address => {
-                Interceptor.attach(address, {
+                safeAttach(address, `database:${funcName}`, {
                     onEnter: function(args) {
                         this.dbHandle = args[0];
                     },
@@ -1216,7 +1213,7 @@ function hook_native_sqlite() {
         // Hook sqlite3_bind_* functions (for parameter binding)
         ["sqlite3_bind_text", "sqlite3_bind_blob", "sqlite3_bind_int", "sqlite3_bind_int64", "sqlite3_bind_double", "sqlite3_bind_null"].forEach(funcName => {
             hookFunction(funcName, address => {
-                Interceptor.attach(address, {
+                safeAttach(address, `database:${funcName}`, {
                     onEnter: function(args) {
                         const stmtHandle = args[0];
                         const paramIndex = args[1].toInt32();

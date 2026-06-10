@@ -1,5 +1,6 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Java } from "../utils/javalib.js"
+import { safeAttachExport } from "../utils/safe_native.js"
 
 const PROFILE_HOOKING_TYPE: string = "IPC_BINDER"
 
@@ -171,9 +172,7 @@ function parse_struct_binder_write_read(binder_write_read) {
 
 function hook_binder(){
     Java.perform(function(){
-        const libBinderModule = Process.getModuleByName("libbinder.so");
-        var ioctl = libBinderModule.findExportByName("ioctl");
-        Interceptor.attach(ioctl, {
+        safeAttachExport("libbinder.so", "ioctl", "binder:ioctl", {
             onEnter: function(args) {
                 var fd = args[0]; // int
                 var cmd = args[1]; // int

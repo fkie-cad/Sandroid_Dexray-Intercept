@@ -3,9 +3,21 @@ import { enable_stacktrace } from "../hooking_profile_loader.js";
 function getStackTrace(context?: CpuContext): string {
     try {
         if (context) {
+            // Resolve each frame defensively and silently: logging sits below the
+            // error-reporting layer (error_utils -> logging), so it must NOT route
+            // through safe_native/hookError — that would be a logging->safe_native->
+            // error_utils->logging cycle, and a failed resolution would recurse back
+            // into getStackTrace. A bad frame degrades to a placeholder instead of
+            // losing the whole trace.
             return Thread.backtrace(context, Backtracer.ACCURATE)
-                .map(DebugSymbol.fromAddress)
-                .map(s => `${s.address} ${s.name || '<unknown>'} (${s.moduleName || '<unknown module>'})`)
+                .map(addr => {
+                    try {
+                        const s = DebugSymbol.fromAddress(addr);
+                        return `${s.address} ${s.name || '<unknown>'} (${s.moduleName || '<unknown module>'})`;
+                    } catch (e) {
+                        return `<unresolved frame ${addr}>`;
+                    }
+                })
                 .join('\n');
         } else {
             // Fallback: show current module information

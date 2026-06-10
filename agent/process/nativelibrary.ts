@@ -2,6 +2,7 @@ import { log, devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
+import { safeResolveExport, safeAttach } from "../utils/safe_native.js"
 const PROFILE_HOOKING_TYPE: string = "PROCESS_NATIVE_LIB"
 
 function createNativeLibEvent(eventType: string, data: any): void {
@@ -15,19 +16,11 @@ function createNativeLibEvent(eventType: string, data: any): void {
 
 function hook_native_lib_loading(){
     // Find dlopen across all modules (older system versions)
-    var dlopen: NativePointer | null = null;
-    for (const module of Process.enumerateModules()) {
-        try {
-            dlopen = module.findExportByName("dlopen");
-            if (dlopen) break;
-        } catch (e) {
-            continue;
-        }
-    }
+    const dlopen = safeResolveExport(null, "dlopen", "nativelibrary:dlopen");
 
     if(dlopen != null){
         devlog(`Found dlopen at: ${dlopen}`);
-        Interceptor.attach(dlopen, {
+        safeAttach(dlopen, "nativelibrary:dlopen", {
             onEnter: function(args){
                 const soName = args[0].readCString();
                 const threadDef = Java.use('java.lang.Thread');
@@ -72,19 +65,11 @@ function hook_native_lib_loading(){
     }
 
     // Find android_dlopen_ext across all modules (newer system versions)
-    var android_dlopen_ext: NativePointer | null = null;
-    for (const module of Process.enumerateModules()) {
-        try {
-            android_dlopen_ext = module.findExportByName("android_dlopen_ext");
-            if (android_dlopen_ext) break;
-        } catch (e) {
-            continue;
-        }
-    }
+    const android_dlopen_ext = safeResolveExport(null, "android_dlopen_ext", "nativelibrary:android_dlopen_ext");
 
     if(android_dlopen_ext != null){
         devlog(`Found android_dlopen_ext at: ${android_dlopen_ext}`);
-        Interceptor.attach(android_dlopen_ext, {
+        safeAttach(android_dlopen_ext, "nativelibrary:android_dlopen_ext", {
             onEnter: function(args){
                 const soName = args[0].readCString();
                 const flags = args[1];
