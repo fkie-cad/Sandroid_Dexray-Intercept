@@ -115,32 +115,30 @@ function hookGetIntent(this: any, original: any): any {
 }
 
 function intent_hooks() {
-    setTimeout(safeDeferred("intents:intent_hooks", () => {
-        safePerform("intents:intent_hooks", () => {
-            const Intent = safeUse("android.content.Intent", "intents:intent_hooks");
-            if (Intent) {
-                const getDataRef = Intent.getData;
-                getDataRef.implementation = safeImplementation(
-                    "intents:Intent.getData",
-                    getDataRef,
-                    hookGetData
-                );
-            }
+    safePerform("intents:intent_hooks", () => {
+        const Intent = safeUse("android.content.Intent", "intents:intent_hooks");
+        if (Intent) {
+            const getDataRef = Intent.getData;
+            getDataRef.implementation = safeImplementation(
+                "intents:Intent.getData",
+                getDataRef,
+                hookGetData
+            );
+        }
 
-            // const Activity = Java.use("android.app.Activity");
-            // Activity.getIntent.implementation = hookGetIntent;
+        // const Activity = Java.use("android.app.Activity");
+        // Activity.getIntent.implementation = hookGetIntent;
 
-            const Activity = safeUse("android.app.Activity", "intents:intent_hooks");
-            if (Activity) {
-                const getIntentRef = Activity.getIntent;
-                getIntentRef.implementation = safeImplementation(
-                    "intents:Activity.getIntent",
-                    getIntentRef,
-                    hookGetIntent
-                );
-            }
-        });
-    }), 0);
+        const Activity = safeUse("android.app.Activity", "intents:intent_hooks");
+        if (Activity) {
+            const getIntentRef = Activity.getIntent;
+            getIntentRef.implementation = safeImplementation(
+                "intents:Activity.getIntent",
+                getIntentRef,
+                hookGetIntent
+            );
+        }
+    });
 }
 
 export function install_intent_hooks(){
