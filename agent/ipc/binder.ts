@@ -191,8 +191,6 @@ function hook_binder(){
             }
         })
     });
-    
-    
 }
 
 
