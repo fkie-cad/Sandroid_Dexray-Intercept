@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import asyncio
-import os
-
 from .appProfiling import AppProfiler, FridaBasedException, setup_frida_handler
 from .services.instrumentation import list_devices
 from .services import cert_pinning

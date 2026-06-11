@@ -1,6 +1,5 @@
 import os.path
 import threading
-import asyncio
 from subprocess import Popen, PIPE
 
 

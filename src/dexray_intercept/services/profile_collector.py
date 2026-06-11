@@ -227,7 +227,7 @@ class ProfileCollector:
                     self._dump_dex_file(file_path, timestamp)
                 elif self.verbose_mode:
                     log_func = logger.info if self.integrated_mode else logger.debug
-                    log_func(f"[DEX] WARNING: No dumped_path in dex.unpacking.detected event")
+                    log_func("[DEX] WARNING: No dumped_path in dex.unpacking.detected event")
 
                 # Parse and display event
                 if self._should_print_to_terminal():
@@ -271,7 +271,7 @@ class ProfileCollector:
             # Legacy string format handling
             if self.verbose_mode:
                 log_func = logger.info if self.integrated_mode else logger.debug
-                log_func(f"[DEX] Processing legacy string format DEX event")
+                log_func("[DEX] Processing legacy string format DEX event")
 
             if "dumped" in content:
                 # Handle file dumping (old format)
@@ -285,7 +285,7 @@ class ProfileCollector:
                 # Regular DEX loading event (old format)
                 if self.verbose_mode:
                     log_func = logger.info if self.integrated_mode else logger.debug
-                    log_func(f"[DEX] Legacy format regular DEX loading event")
+                    log_func("[DEX] Legacy format regular DEX loading event")
                 if self._should_print_to_terminal():
                     # Parse and display
                     parser = parser_factory.get_parser("DEX_LOADING")
@@ -427,7 +427,7 @@ class ProfileCollector:
                     self.event_logger.event(f"{Fore.GREEN}{msg}")
                 if self.verbose_mode:
                     log_func = logger.info if self.integrated_mode else logger.debug
-                    log_func(f"[DEX] Successfully pulled benign file")
+                    log_func("[DEX] Successfully pulled benign file")
             except Exception as e:
                 logger.error(f"[DEX] Failed to pull benign file: {e}")
                 if self.verbose_mode:
@@ -452,7 +452,7 @@ class ProfileCollector:
                     self.event_logger.event(f"{Fore.RED}{msg}")
                 if self.verbose_mode:
                     log_func = logger.info if self.integrated_mode else logger.debug
-                    log_func(f"[DEX] Successfully pulled malicious file")
+                    log_func("[DEX] Successfully pulled malicious file")
             except Exception as e:
                 logger.error(f"[DEX] Failed to pull malicious file: {e}")
                 if self.verbose_mode:
