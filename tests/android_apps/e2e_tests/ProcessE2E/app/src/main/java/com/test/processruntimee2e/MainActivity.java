@@ -1,5 +1,5 @@
-// tests/android_apps/e2e_tests/ProcessRuntimeE2E/app/src/main/java/com/test/processruntimee2e/MainActivity.java
-package com.test.processruntimee2e;
+// tests/android_apps/e2e_tests/ProcessE2E/app/src/main/java/com/test/processe2e/MainActivity.java
+package com.test.processe2e;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -20,7 +20,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        Log.i(TAG, "ProcessRuntimeE2E started");
+        Log.i(TAG, "ProcessE2E started");
 
         try {
             Thread t = new Thread(() -> {
@@ -37,7 +37,7 @@ public class MainActivity extends Activity {
             });
             t.start();
         } catch (Throwable t) {
-            Log.e(TAG, "Error in ProcessRuntimeE2E", t);
+            Log.e(TAG, "Error in ProcessE2E", t);
             finish();
         }
     }
@@ -177,7 +177,7 @@ public class MainActivity extends Activity {
     private void runReflectionTests() {
         Log.i(TAG, "runReflectionTests");
         try {
-            Class<?> targetClass = Class.forName("com.test.processruntimee2e.ReflectionTarget");
+            Class<?> targetClass = Class.forName("com.test.processe2e.ReflectionTarget");
 
             java.lang.reflect.Method staticMethod = targetClass.getMethod(
                     "staticMethod", String.class, int.class);
@@ -192,11 +192,11 @@ public class MainActivity extends Activity {
 
             ClassLoader loader = getClassLoader();
             Class<?> stringClass = loader.loadClass("java.lang.String");
-            Class<?> selfClass = loader.loadClass("com.test.processruntimee2e.MainActivity");
+            Class<?> selfClass = loader.loadClass("com.test.processe2e.MainActivity");
             Log.i(TAG, "Loaded via ClassLoader: " + stringClass.getName() + ", " + selfClass.getName());
 
             Class<?> selfViaForName = Class.forName(
-                    "com.test.processruntimee2e.MainActivity",
+                    "com.test.processe2e.MainActivity",
                     true,
                     getClassLoader()
             );

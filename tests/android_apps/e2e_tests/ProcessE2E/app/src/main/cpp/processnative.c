@@ -1,4 +1,4 @@
-// tests/android_apps/e2e_tests/ProcessRuntimeE2E/app/src/main/cpp/processnative.c
+// tests/android_apps/e2e_tests/ProcessE2E/app/src/main/cpp/processnative.c
 #include <jni.h>
 #include <android/log.h>
 #include <unistd.h>
@@ -40,7 +40,7 @@ static void call_dlopen_child(void) {
 }
 
 JNIEXPORT void JNICALL
-Java_com_test_processruntimee2e_NativeEntry_runNativeProcessTests(JNIEnv *env, jclass clazz) {
+Java_com_test_processe2e_NativeEntry_runNativeProcessTests(JNIEnv *env, jclass clazz) {
     LOGI("runNativeProcessTests: start");
     call_fork_execve();
     call_system();

@@ -1,4 +1,4 @@
-package com.test.processruntimee2e;
+package com.test.processe2e;
 
 public class ReflectionTarget {
 

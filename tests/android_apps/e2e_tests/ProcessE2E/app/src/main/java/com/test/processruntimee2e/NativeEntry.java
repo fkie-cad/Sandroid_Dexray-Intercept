@@ -1,5 +1,5 @@
-// tests/android_apps/e2e_tests/ProcessRuntimeE2E/app/src/main/java/com/test/processruntimee2e/NativeEntry.java
-package com.test.processruntimee2e;
+// tests/android_apps/e2e_tests/ProcessE2E/app/src/main/java/com/test/processe2e/NativeEntry.java
+package com.test.processe2e;
 
 public final class NativeEntry {
 

@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ProcessRuntimeE2E"
+rootProject.name = "ProcessE2E"
 include ':app'

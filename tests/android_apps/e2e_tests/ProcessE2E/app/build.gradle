@@ -3,13 +3,13 @@ plugins {
 }
 
 android {
-    namespace 'com.test.processruntimee2e'
+    namespace 'com.test.processe2e'
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId "com.test.processruntimee2e"
+        applicationId "com.test.processe2e"
         minSdk 24
         targetSdk 36
         versionCode 1

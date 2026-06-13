@@ -1,4 +1,4 @@
-// tests/android_apps/e2e_tests/ProcessRuntimeE2E/app/src/main/cpp/processchild.c
+// tests/android_apps/e2e_tests/ProcessE2E/app/src/main/cpp/processchild.c
 #include <jni.h>
 #include <android/log.h>
 
