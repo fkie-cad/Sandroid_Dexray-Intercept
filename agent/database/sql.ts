@@ -2169,11 +2169,11 @@ export function install_database_hooks(){
         devlog(`[HOOK] Failed to install WCDB hooks: ${error}`);
     }
 
-    //try {
-    //    hook_native_sqlite();
-    //} catch (error) {
-    //    devlog(`[HOOK] Failed to install native SQLite hooks: ${error}`);
-    //}
+    try {
+        hook_native_sqlite();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install native SQLite hooks: ${error}`);
+    }
 
     try {
         hook_room_library(); // e.g on the To Do List App this results into a crash/stopping of the target app
