@@ -15,23 +15,24 @@ public class MainActivity extends Activity {
         Log.i(TAG, "JniE2E started");
 
         try {
-            // 1) Env core tests (GetVersion / FindClass / GetSuperclass /
-            //    IsAssignableFrom / IsInstanceOf / FromReflectedMethod /
-            //    FromReflectedField / ToReflectedMethod / ToReflectedField)
-            //    -> jni_trace.ts: JNIInterceptor.attach("GetVersion", jniEnvCallback)
-            //       JNIInterceptor.attach("FindClass", jniEnvCallback)
-            //       JNIInterceptor.attach("GetSuperclass", jniEnvCallback)
-            //       JNIInterceptor.attach("IsAssignableFrom", jniEnvCallback)
-            //       JNIInterceptor.attach("IsInstanceOf", jniEnvCallback)
-            //       JNIInterceptor.attach("FromReflectedMethod", jniEnvCallback)
-            //       JNIInterceptor.attach("FromReflectedField", jniEnvCallback)
-            //       JNIInterceptor.attach("ToReflectedMethod", jniEnvCallback)
-            //       JNIInterceptor.attach("ToReflectedField", jniEnvCallback)
+            // 1) Env core tests
             try {
+                // -> GetVersion, FindClass, GetSuperclass, IsAssignableFrom, IsInstanceOf,
+                //    FromReflectedMethod/Field, ToReflectedMethod/Field
                 EnvCoreTests.runTests();
                 Log.i(TAG, "EnvCoreTests completed");
             } catch (Throwable t) {
                 Log.e(TAG, "EnvCoreTests failed", t);
+            }
+
+            // 2) Env methods/fields tests
+            try {
+                // -> GetObjectClass, GetFieldID, GetStaticFieldID,
+                //    Get*/Set*Field (instance + static, all primitive types + object)
+                EnvMethodsFieldsTests.runTests();
+                Log.i(TAG, "EnvMethodsFieldsTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "EnvMethodsFieldsTests failed", t);
             }
 
         } catch (Throwable t) {
