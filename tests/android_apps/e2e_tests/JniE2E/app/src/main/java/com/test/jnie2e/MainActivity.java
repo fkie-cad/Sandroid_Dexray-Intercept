@@ -85,6 +85,19 @@ public class MainActivity extends Activity {
                 Log.e(TAG, "EnvExceptionTests failed", t);
             }
 
+            // 8) Env registration / JavaVM tests
+            try {
+                // -> RegisterNatives (in JNI_OnLoad of jni_env_regvm)
+                //    UnregisterNatives / RegisterNatives (again)
+                //    JavaVM::GetEnv
+                //    JavaVM::AttachCurrentThread / DetachCurrentThread
+                //    JavaVM::AttachCurrentThreadAsDaemon / DetachCurrentThread
+                EnvRegistrationVmTests.runTests();
+                Log.i(TAG, "EnvRegistrationVmTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "EnvRegistrationVmTests failed", t);
+            }
+
         } catch (Throwable t) {
             Log.e(TAG, "Error in JniE2E", t);
         } finally {

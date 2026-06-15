@@ -51,6 +51,13 @@ add_library(
         jni_env_exceptions.c
 )
 
+# RegisterNatives / JavaVM tests
+add_library(
+        jni_env_regvm
+        SHARED
+        jni_env_regvm.c
+)
+
 find_library(log-lib log)
 
 target_link_libraries(
@@ -91,6 +98,12 @@ target_link_libraries(
 
 target_link_libraries(
         jni_env_exceptions
+        ${log-lib}
+        android
+)
+
+target_link_libraries(
+        jni_env_regvm
         ${log-lib}
         android
 )
