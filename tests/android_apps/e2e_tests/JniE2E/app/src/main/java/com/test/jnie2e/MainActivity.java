@@ -41,16 +41,23 @@ public class MainActivity extends Activity {
 
             // 4) Env string API tests
             try {
-                // -> NewString / GetStringLength
-                //    GetStringChars / ReleaseStringChars
-                //    NewStringUTF / GetStringUTFLength
-                //    GetStringUTFChars / ReleaseStringUTFChars
-                //    GetStringRegion / GetStringUTFRegion
-                //    GetStringCritical / ReleaseStringCritical
                 EnvStringTests.runTests();
                 Log.i(TAG, "EnvStringTests completed");
             } catch (Throwable t) {
                 Log.e(TAG, "EnvStringTests failed", t);
+            }
+
+            // 5) Env array tests (primitive + object)
+            try {
+                // -> GetArrayLength
+                //    NewObjectArray / GetObjectArrayElement / SetObjectArrayElement
+                //    New*Array / Get*ArrayElements / Release*ArrayElements
+                //    Set*ArrayRegion / Get*ArrayRegion
+                //    GetPrimitiveArrayCritical / ReleasePrimitiveArrayCritical
+                EnvArrayTests.runTests();
+                Log.i(TAG, "EnvArrayTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "EnvArrayTests failed", t);
             }
 
         } catch (Throwable t) {
