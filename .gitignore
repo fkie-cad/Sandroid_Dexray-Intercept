@@ -17,6 +17,8 @@ samples/*
 *.js
 # misc
 *.txt
+# Add .txt files again for path tests/**/CMakeLists.txt for apps with native components
+!tests/android_apps/e2e_tests/**/CMakeLists.txt
 logs_.*
 logs*
 *.md
