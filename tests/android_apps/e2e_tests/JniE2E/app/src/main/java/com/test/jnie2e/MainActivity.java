@@ -60,6 +60,20 @@ public class MainActivity extends Activity {
                 Log.e(TAG, "EnvArrayTests failed", t);
             }
 
+            // 6) Env reference / frame tests
+            try {
+                // -> PushLocalFrame / PopLocalFrame
+                //    EnsureLocalCapacity
+                //    NewLocalRef / DeleteLocalRef
+                //    NewGlobalRef / DeleteGlobalRef
+                //    NewWeakGlobalRef / DeleteWeakGlobalRef
+                //    IsSameObject / GetObjectRefType
+                EnvRefTests.runTests();
+                Log.i(TAG, "EnvRefTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "EnvRefTests failed", t);
+            }
+
         } catch (Throwable t) {
             Log.e(TAG, "Error in JniE2E", t);
         } finally {

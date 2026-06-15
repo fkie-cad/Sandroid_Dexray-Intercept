@@ -30,11 +30,18 @@ add_library(
         jni_env_strings.c
 )
 
-# Array tests (primitive + object arrays)
+# Array tests
 add_library(
         jni_env_arrays
         SHARED
         jni_env_arrays.c
+)
+
+# Reference / frame / weak-ref tests
+add_library(
+        jni_env_refs
+        SHARED
+        jni_env_refs.c
 )
 
 find_library(log-lib log)
@@ -65,6 +72,12 @@ target_link_libraries(
 
 target_link_libraries(
         jni_env_arrays
+        ${log-lib}
+        android
+)
+
+target_link_libraries(
+        jni_env_refs
         ${log-lib}
         android
 )
