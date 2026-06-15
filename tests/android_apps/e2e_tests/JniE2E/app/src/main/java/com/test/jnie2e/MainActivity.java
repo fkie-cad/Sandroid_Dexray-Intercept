@@ -33,13 +33,24 @@ public class MainActivity extends Activity {
 
             // 3) Env instance/static call tests
             try {
-                // -> Call<Type>Method / Call<Type>MethodV / Call<Type>MethodA
-                //    CallStatic<Type>Method / CallStatic<Type>MethodV / CallStatic<Type>MethodA
-                //    NewObject / NewObjectA for MethodTarget(int,String) ctor
                 EnvCallsTests.runTests();
                 Log.i(TAG, "EnvCallsTests completed");
             } catch (Throwable t) {
                 Log.e(TAG, "EnvCallsTests failed", t);
+            }
+
+            // 4) Env string API tests
+            try {
+                // -> NewString / GetStringLength
+                //    GetStringChars / ReleaseStringChars
+                //    NewStringUTF / GetStringUTFLength
+                //    GetStringUTFChars / ReleaseStringUTFChars
+                //    GetStringRegion / GetStringUTFRegion
+                //    GetStringCritical / ReleaseStringCritical
+                EnvStringTests.runTests();
+                Log.i(TAG, "EnvStringTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "EnvStringTests failed", t);
             }
 
         } catch (Throwable t) {

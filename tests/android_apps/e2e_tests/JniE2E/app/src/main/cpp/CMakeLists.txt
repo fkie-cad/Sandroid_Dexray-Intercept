@@ -23,6 +23,13 @@ add_library(
         jni_env_calls.c
 )
 
+# String API tests
+add_library(
+        jni_env_strings
+        SHARED
+        jni_env_strings.c
+)
+
 find_library(log-lib log)
 
 target_link_libraries(
@@ -39,6 +46,12 @@ target_link_libraries(
 
 target_link_libraries(
         jni_env_calls
+        ${log-lib}
+        android
+)
+
+target_link_libraries(
+        jni_env_strings
         ${log-lib}
         android
 )
