@@ -1,0 +1,449 @@
+#include <jni.h>
+#include <android/log.h>
+#include <stdarg.h>
+#include <string.h>
+#include <math.h>
+
+#define LOG_TAG "JNI_ENV_CALLS"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+static int tests_passed = 0;
+static int tests_failed = 0;
+
+#define TEST_ASSERT(cond, name) do { \
+    if (cond) { \
+        LOGI("  PASS: %s", name); \
+        tests_passed++; \
+    } else { \
+        LOGE("  FAIL: %s", name); \
+        tests_failed++; \
+    } \
+} while (0)
+
+/* Helpers for Call*MethodV / CallStatic*MethodV */
+
+static jint call_int_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jint result = (*env)->CallIntMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jlong call_long_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jlong result = (*env)->CallLongMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jobject call_object_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jobject result = (*env)->CallObjectMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jlong call_static_long_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jlong result = (*env)->CallStaticLongMethodV(env, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jboolean call_boolean_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jboolean result = (*env)->CallBooleanMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jobject call_static_object_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jobject result = (*env)->CallStaticObjectMethodV(env, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+/*
+ * EnvCallsTests for jni_trace.ts hooks (selected subset):
+ *
+ *  Instance calls:
+ *    - CallIntMethod / CallIntMethodV / CallIntMethodA
+ *    - CallLongMethod / CallLongMethodV / CallLongMethodA
+ *    - CallObjectMethod / CallObjectMethodV / CallObjectMethodA
+ *    - CallBooleanMethod / CallBooleanMethodV / CallBooleanMethodA
+ *    - CallByteMethod, CallShortMethod
+ *
+ *  Static calls:
+ *    - CallStaticLongMethod / CallStaticLongMethodV / CallStaticLongMethodA
+ *    - CallStaticObjectMethod / CallStaticObjectMethodV / CallStaticObjectMethodA
+ *
+ *  Constructors:
+ *    - NewObject / NewObjectA with MethodTarget(int,String) ctor
+ *
+ *  Methods are defined in com.test.jnie2e.MethodTarget.
+ */
+
+/* Test 1: add(int, int) -> int */
+static void test_add(JNIEnv *env, jobject target, jmethodID mid) {
+    LOGI("");
+    LOGI("=== Call tests: Test 1 add(int,int) ===");
+
+    jint r1 = (*env)->CallIntMethod(env, target, mid, (jint)10, (jint)20);
+    TEST_ASSERT(r1 == 30, "CallIntMethod add(10,20)=30");
+
+    jint r2 = call_int_method_v(env, target, mid, (jint)10, (jint)20);
+    TEST_ASSERT(r2 == 30, "CallIntMethodV add(10,20)=30");
+
+    jvalue args[2];
+    args[0].i = 10;
+    args[1].i = 20;
+    jint r3 = (*env)->CallIntMethodA(env, target, mid, args);
+    TEST_ASSERT(r3 == 30, "CallIntMethodA add(10,20)=30");
+}
+
+/* Test 2: sum3(long, long, long) -> long */
+static void test_sum3(JNIEnv *env, jobject target, jmethodID mid) {
+    LOGI("");
+    LOGI("=== Call tests: Test 2 sum3(long,long,long) ===");
+
+    jlong r1 = (*env)->CallLongMethod(env, target, mid,
+                                      (jlong)100, (jlong)200, (jlong)300);
+    TEST_ASSERT(r1 == 600, "CallLongMethod sum3(100,200,300)=600");
+
+    jlong r2 = call_long_method_v(env, target, mid,
+                                  (jlong)100, (jlong)200, (jlong)300);
+    TEST_ASSERT(r2 == 600, "CallLongMethodV sum3(100,200,300)=600");
+
+    jvalue args[3];
+    args[0].j = 100;
+    args[1].j = 200;
+    args[2].j = 300;
+    jlong r3 = (*env)->CallLongMethodA(env, target, mid, args);
+    TEST_ASSERT(r3 == 600, "CallLongMethodA sum3(100,200,300)=600");
+}
+
+/* Test 3: concat(String, String) -> String */
+static void test_concat(JNIEnv *env, jobject target, jmethodID mid) {
+    LOGI("");
+    LOGI("=== Call tests: Test 3 concat(String,String) ===");
+
+    jstring s1 = (*env)->NewStringUTF(env, "Hello");
+    jstring s2 = (*env)->NewStringUTF(env, "World");
+
+    // CallObjectMethod
+    jstring r1 = (jstring)(*env)->CallObjectMethod(env, target, mid, s1, s2);
+    if (r1 != NULL) {
+        const char *cstr = (*env)->GetStringUTFChars(env, r1, NULL);
+        TEST_ASSERT(strcmp(cstr, "HelloWorld") == 0,
+                    "CallObjectMethod concat='HelloWorld'");
+        (*env)->ReleaseStringUTFChars(env, r1, cstr);
+    } else {
+        TEST_ASSERT(0, "CallObjectMethod concat returned NULL");
+    }
+
+    // CallObjectMethodV
+    jstring r2 = (jstring)call_object_method_v(env, target, mid, s1, s2);
+    if (r2 != NULL) {
+        const char *cstr = (*env)->GetStringUTFChars(env, r2, NULL);
+        TEST_ASSERT(strcmp(cstr, "HelloWorld") == 0,
+                    "CallObjectMethodV concat='HelloWorld'");
+        (*env)->ReleaseStringUTFChars(env, r2, cstr);
+    } else {
+        TEST_ASSERT(0, "CallObjectMethodV concat returned NULL");
+    }
+
+    // CallObjectMethodA
+    jvalue args[2];
+    args[0].l = s1;
+    args[1].l = s2;
+    jstring r3 = (jstring)(*env)->CallObjectMethodA(env, target, mid, args);
+    if (r3 != NULL) {
+        const char *cstr = (*env)->GetStringUTFChars(env, r3, NULL);
+        TEST_ASSERT(strcmp(cstr, "HelloWorld") == 0,
+                    "CallObjectMethodA concat='HelloWorld'");
+        (*env)->ReleaseStringUTFChars(env, r3, cstr);
+    } else {
+        TEST_ASSERT(0, "CallObjectMethodA concat returned NULL");
+    }
+}
+
+/* Test 4: mixed(int, String, double) -> String */
+static void test_mixed(JNIEnv *env, jobject target, jmethodID mid) {
+    LOGI("");
+    LOGI("=== Call tests: Test 4 mixed(int,String,double) ===");
+
+    jstring str = (*env)->NewStringUTF(env, "test");
+
+    // CallObjectMethod (varargs)
+    jstring r1 = (jstring)(*env)->CallObjectMethod(env, target, mid,
+                                                   (jint)42, str, (jdouble)3.14);
+    if (r1 != NULL) {
+        const char *cstr = (*env)->GetStringUTFChars(env, r1, NULL);
+        int match = strstr(cstr, "42") && strstr(cstr, "test") && strstr(cstr, "3.14");
+        TEST_ASSERT(match, "CallObjectMethod mixed pattern");
+        (*env)->ReleaseStringUTFChars(env, r1, cstr);
+    } else {
+        TEST_ASSERT(0, "CallObjectMethod mixed returned NULL");
+    }
+
+    // CallObjectMethodV
+    jstring r2 = (jstring)call_object_method_v(env, target, mid,
+                                               (jint)42, str, (jdouble)3.14);
+    if (r2 != NULL) {
+        const char *cstr = (*env)->GetStringUTFChars(env, r2, NULL);
+        int match = strstr(cstr, "42") && strstr(cstr, "test") && strstr(cstr, "3.14");
+        TEST_ASSERT(match, "CallObjectMethodV mixed pattern");
+        (*env)->ReleaseStringUTFChars(env, r2, cstr);
+    } else {
+        TEST_ASSERT(0, "CallObjectMethodV mixed returned NULL");
+    }
+
+    // CallObjectMethodA
+    jvalue args[3];
+    args[0].i = 42;
+    args[1].l = str;
+    args[2].d = 3.14;
+    jstring r3 = (jstring)(*env)->CallObjectMethodA(env, target, mid, args);
+    if (r3 != NULL) {
+        const char *cstr = (*env)->GetStringUTFChars(env, r3, NULL);
+        int match = strstr(cstr, "42") && strstr(cstr, "test") && strstr(cstr, "3.14");
+        TEST_ASSERT(match, "CallObjectMethodA mixed pattern");
+        (*env)->ReleaseStringUTFChars(env, r3, cstr);
+    } else {
+        TEST_ASSERT(0, "CallObjectMethodA mixed returned NULL");
+    }
+}
+
+/* Test 5: manyArgs(int, long, float, double, boolean) -> long */
+static void test_manyArgs(JNIEnv *env, jobject target, jmethodID mid) {
+    LOGI("");
+    LOGI("=== Call tests: Test 5 manyArgs(int,long,float,double,boolean) ===");
+
+    // CallLongMethod
+    jlong r1 = (*env)->CallLongMethod(env, target, mid,
+                                      (jint)1, (jlong)2, (jfloat)3.0f, (jdouble)4.0, (jboolean)JNI_TRUE);
+    TEST_ASSERT(r1 == 11, "CallLongMethod manyArgs=11");
+
+    // CallLongMethodV
+    jlong r2 = call_long_method_v(env, target, mid,
+                                  (jint)1, (jlong)2, (jfloat)3.0f, (jdouble)4.0, (jboolean)JNI_TRUE);
+    TEST_ASSERT(r2 == 11, "CallLongMethodV manyArgs=11");
+
+    // CallLongMethodA
+    jvalue args[5];
+    args[0].i = 1;
+    args[1].j = 2;
+    args[2].f = 3.0f;
+    args[3].d = 4.0;
+    args[4].z = JNI_TRUE;
+    jlong r3 = (*env)->CallLongMethodA(env, target, mid, args);
+    TEST_ASSERT(r3 == 11, "CallLongMethodA manyArgs=11");
+}
+
+/* Test 6: staticSum(long, long) [STATIC] */
+static void test_staticSum(JNIEnv *env, jclass targetClass, jmethodID mid) {
+    LOGI("");
+    LOGI("=== Call tests: Test 6 staticSum(long,long) [STATIC] ===");
+
+    jlong r1 = (*env)->CallStaticLongMethod(env, targetClass, mid,
+                                            (jlong)1000, (jlong)2000);
+    TEST_ASSERT(r1 == 3000, "CallStaticLongMethod staticSum=3000");
+
+    jlong r2 = call_static_long_method_v(env, targetClass, mid,
+                                         (jlong)1000, (jlong)2000);
+    TEST_ASSERT(r2 == 3000, "CallStaticLongMethodV staticSum=3000");
+
+    jvalue args[2];
+    args[0].j = 1000;
+    args[1].j = 2000;
+    jlong r3 = (*env)->CallStaticLongMethodA(env, targetClass, mid, args);
+    TEST_ASSERT(r3 == 3000, "CallStaticLongMethodA staticSum=3000");
+}
+
+/* Test 7: NewObject with constructor args (int, String) */
+static void test_newObject_with_args(JNIEnv *env, jclass targetClass, jmethodID ctorWithArgs) {
+    LOGI("");
+    LOGI("=== Call tests: Test 7 NewObject/ NewObjectA with args ===");
+
+    jstring initStr = (*env)->NewStringUTF(env, "init");
+
+    jobject r1 = (*env)->NewObject(env, targetClass, ctorWithArgs, (jint)42, initStr);
+    TEST_ASSERT(r1 != NULL, "NewObject(int,String) returned non-NULL");
+
+    jvalue args[2];
+    args[0].i = 42;
+    args[1].l = initStr;
+    jobject r3 = (*env)->NewObjectA(env, targetClass, ctorWithArgs, args);
+    TEST_ASSERT(r3 != NULL, "NewObjectA(int,String) returned non-NULL");
+}
+
+/* Test 8: boolean and small primitive methods */
+static void test_boolean_and_small_primitives(JNIEnv *env, jobject target, jclass targetClass) {
+    LOGI("");
+    LOGI("=== Call tests: Test 8 boolean and small primitives ===");
+
+    jmethodID boolAndMid = (*env)->GetMethodID(env, targetClass,
+                                               "boolAnd", "(IZ)Z");
+    if (boolAndMid != NULL) {
+        jboolean r1 = (*env)->CallBooleanMethod(env, target, boolAndMid, (jint)1, JNI_TRUE);
+        TEST_ASSERT(r1 == JNI_TRUE, "CallBooleanMethod boolAnd(1,true)=true");
+
+        jboolean r2 = call_boolean_method_v(env, target, boolAndMid, (jint)1, JNI_TRUE);
+        TEST_ASSERT(r2 == JNI_TRUE, "CallBooleanMethodV boolAnd(1,true)=true");
+
+        jvalue args[2];
+        args[0].i = 1;
+        args[1].z = JNI_TRUE;
+        jboolean r3 = (*env)->CallBooleanMethodA(env, target, boolAndMid, args);
+        TEST_ASSERT(r3 == JNI_TRUE, "CallBooleanMethodA boolAnd(1,true)=true");
+    } else {
+        LOGE("Skipping boolAnd: method not found");
+        (*env)->ExceptionClear(env);
+    }
+
+    jmethodID addBytesMid = (*env)->GetMethodID(env, targetClass,
+                                                "addBytes", "(BB)B");
+    if (addBytesMid != NULL) {
+        jbyte br = (*env)->CallByteMethod(env, target, addBytesMid, (jbyte)10, (jbyte)20);
+        TEST_ASSERT(br == (jbyte)30, "CallByteMethod addBytes(10,20)=30");
+    } else {
+        LOGE("Skipping addBytes: method not found");
+        (*env)->ExceptionClear(env);
+    }
+
+    jmethodID addShortsMid = (*env)->GetMethodID(env, targetClass,
+                                                 "addShorts", "(SS)S");
+    if (addShortsMid != NULL) {
+        jshort sr = (*env)->CallShortMethod(env, target, addShortsMid, (jshort)1000, (jshort)2000);
+        TEST_ASSERT(sr == (jshort)3000, "CallShortMethod addShorts(1000,2000)=3000");
+    } else {
+        LOGE("Skipping addShorts: method not found");
+        (*env)->ExceptionClear(env);
+    }
+}
+
+/* Test 9: staticConcat3(String,String,String) -> String [STATIC] */
+static void test_static_object_methods(JNIEnv *env, jclass targetClass) {
+    LOGI("");
+    LOGI("=== Call tests: Test 9 staticConcat3(String,String,String) [STATIC] ===");
+
+    jmethodID staticConcat3Mid = (*env)->GetStaticMethodID(env, targetClass,
+                                                           "staticConcat3",
+                                                           "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+    if (staticConcat3Mid == NULL) {
+        LOGE("Skipping staticConcat3 tests: method not found");
+        (*env)->ExceptionClear(env);
+        return;
+    }
+
+    jstring s1 = (*env)->NewStringUTF(env, "one");
+    jstring s2 = (*env)->NewStringUTF(env, "two");
+    jstring s3 = (*env)->NewStringUTF(env, "three");
+
+    jstring r1 = (jstring)(*env)->CallStaticObjectMethod(env, targetClass, staticConcat3Mid, s1, s2, s3);
+    if (r1 != NULL) {
+        const char *c1 = (*env)->GetStringUTFChars(env, r1, NULL);
+        LOGI("  CallStaticObjectMethod: '%s'", c1);
+        (*env)->ReleaseStringUTFChars(env, r1, c1);
+    }
+
+    jstring r2 = (jstring)call_static_object_method_v(env, targetClass, staticConcat3Mid, s1, s2, s3);
+    if (r2 != NULL) {
+        const char *c2 = (*env)->GetStringUTFChars(env, r2, NULL);
+        LOGI("  CallStaticObjectMethodV: '%s'", c2);
+        (*env)->ReleaseStringUTFChars(env, r2, c2);
+    }
+
+    jvalue args[3];
+    args[0].l = s1;
+    args[1].l = s2;
+    args[2].l = s3;
+    jstring r3 = (jstring)(*env)->CallStaticObjectMethodA(env, targetClass, staticConcat3Mid, args);
+    if (r3 != NULL) {
+        const char *c3 = (*env)->GetStringUTFChars(env, r3, NULL);
+        LOGI("  CallStaticObjectMethodA: '%s'", c3);
+        (*env)->ReleaseStringUTFChars(env, r3, c3);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_test_jnie2e_EnvCallsTests_runTests(JNIEnv *env, jclass clazz) {
+    (void) clazz;
+
+    tests_passed = 0;
+    tests_failed = 0;
+
+    LOGI("========================================");
+    LOGI("EnvCallsTests: starting");
+    LOGI("========================================");
+
+    jclass targetClass = (*env)->FindClass(env, "com/test/jnie2e/MethodTarget");
+    if (targetClass == NULL) {
+        LOGE("FindClass(MethodTarget) failed");
+        (*env)->ExceptionClear(env);
+        return;
+    }
+
+    jmethodID ctor = (*env)->GetMethodID(env, targetClass, "<init>", "()V");
+    if (ctor == NULL) {
+        LOGE("GetMethodID(<init>) failed");
+        (*env)->ExceptionClear(env);
+        return;
+    }
+
+    jobject target = (*env)->NewObject(env, targetClass, ctor);
+    if (target == NULL) {
+        LOGE("NewObject(MethodTarget) failed");
+        (*env)->ExceptionClear(env);
+        return;
+    }
+
+    jmethodID addMid       = (*env)->GetMethodID(env, targetClass, "add",       "(II)I");
+    jmethodID sum3Mid      = (*env)->GetMethodID(env, targetClass, "sum3",      "(JJJ)J");
+    jmethodID concatMid    = (*env)->GetMethodID(env, targetClass, "concat",
+                                                 "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+    jmethodID mixedMid     = (*env)->GetMethodID(env, targetClass, "mixed",
+                                                 "(ILjava/lang/String;D)Ljava/lang/String;");
+    jmethodID manyArgsMid  = (*env)->GetMethodID(env, targetClass, "manyArgs",
+                                                 "(IJFDZ)J");
+    jmethodID staticSumMid = (*env)->GetStaticMethodID(env, targetClass,
+                                                       "staticSum", "(JJ)J");
+    jmethodID ctorWithArgs = (*env)->GetMethodID(env, targetClass, "<init>",
+                                                 "(ILjava/lang/String;)V");
+
+    if (addMid != NULL)         test_add(env, target, addMid);
+    else                        LOGE("Skipping test_add: method not found");
+
+    if (sum3Mid != NULL)        test_sum3(env, target, sum3Mid);
+    else                        LOGE("Skipping test_sum3: method not found");
+
+    if (concatMid != NULL)      test_concat(env, target, concatMid);
+    else                        LOGE("Skipping test_concat: method not found");
+
+    if (mixedMid != NULL)       test_mixed(env, target, mixedMid);
+    else                        LOGE("Skipping test_mixed: method not found");
+
+    if (manyArgsMid != NULL)    test_manyArgs(env, target, manyArgsMid);
+    else                        LOGE("Skipping test_manyArgs: method not found");
+
+    if (staticSumMid != NULL)   test_staticSum(env, targetClass, staticSumMid);
+    else                        LOGE("Skipping test_staticSum: method not found");
+
+    if (ctorWithArgs != NULL)   test_newObject_with_args(env, targetClass, ctorWithArgs);
+    else                        LOGE("Skipping test_newObject_with_args: ctor not found");
+
+    test_boolean_and_small_primitives(env, target, targetClass);
+    test_static_object_methods(env, targetClass);
+
+    LOGI("========================================");
+    LOGI("EnvCallsTests summary: %d passed, %d failed", tests_passed, tests_failed);
+    LOGI("========================================");
+}

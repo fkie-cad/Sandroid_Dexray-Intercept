@@ -17,8 +17,6 @@ public class MainActivity extends Activity {
         try {
             // 1) Env core tests
             try {
-                // -> GetVersion, FindClass, GetSuperclass, IsAssignableFrom, IsInstanceOf,
-                //    FromReflectedMethod/Field, ToReflectedMethod/Field
                 EnvCoreTests.runTests();
                 Log.i(TAG, "EnvCoreTests completed");
             } catch (Throwable t) {
@@ -27,12 +25,21 @@ public class MainActivity extends Activity {
 
             // 2) Env methods/fields tests
             try {
-                // -> GetObjectClass, GetFieldID, GetStaticFieldID,
-                //    Get*/Set*Field (instance + static, all primitive types + object)
                 EnvMethodsFieldsTests.runTests();
                 Log.i(TAG, "EnvMethodsFieldsTests completed");
             } catch (Throwable t) {
                 Log.e(TAG, "EnvMethodsFieldsTests failed", t);
+            }
+
+            // 3) Env instance/static call tests
+            try {
+                // -> Call<Type>Method / Call<Type>MethodV / Call<Type>MethodA
+                //    CallStatic<Type>Method / CallStatic<Type>MethodV / CallStatic<Type>MethodA
+                //    NewObject / NewObjectA for MethodTarget(int,String) ctor
+                EnvCallsTests.runTests();
+                Log.i(TAG, "EnvCallsTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "EnvCallsTests failed", t);
             }
 
         } catch (Throwable t) {
