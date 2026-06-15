@@ -74,6 +74,17 @@ public class MainActivity extends Activity {
                 Log.e(TAG, "EnvRefTests failed", t);
             }
 
+            // 7) Env exception / monitor tests
+            try {
+                // -> Throw / ThrowNew
+                //    ExceptionOccurred / ExceptionDescribe / ExceptionClear / ExceptionCheck
+                //    MonitorEnter / MonitorExit
+                EnvExceptionTests.runTests();
+                Log.i(TAG, "EnvExceptionTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "EnvExceptionTests failed", t);
+            }
+
         } catch (Throwable t) {
             Log.e(TAG, "Error in JniE2E", t);
         } finally {

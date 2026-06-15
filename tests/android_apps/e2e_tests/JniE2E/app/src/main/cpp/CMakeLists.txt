@@ -44,6 +44,13 @@ add_library(
         jni_env_refs.c
 )
 
+# Exception / monitor tests
+add_library(
+        jni_env_exceptions
+        SHARED
+        jni_env_exceptions.c
+)
+
 find_library(log-lib log)
 
 target_link_libraries(
@@ -78,6 +85,12 @@ target_link_libraries(
 
 target_link_libraries(
         jni_env_refs
+        ${log-lib}
+        android
+)
+
+target_link_libraries(
+        jni_env_exceptions
         ${log-lib}
         android
 )
