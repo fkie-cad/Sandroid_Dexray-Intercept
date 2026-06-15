@@ -71,6 +71,22 @@ static jobject call_static_object_method_v(JNIEnv *env, jclass cls, jmethodID mi
     return result;
 }
 
+static jfloat call_float_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jfloat result = (*env)->CallFloatMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jdouble call_double_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jdouble result = (*env)->CallDoubleMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
 /*
  * EnvCallsTests for jni_trace.ts hooks (selected subset):
  *
@@ -374,6 +390,299 @@ static void test_static_object_methods(JNIEnv *env, jclass targetClass) {
     }
 }
 
+/* Test 10: float/double instance calls (CallFloatMethod/CallFloatMethodV/CallFloatMethodA,CallDoubleMethod/CallDoubleMethodV/CallDoubleMethodA) */
+ 
+
+static void test_float_double_calls(JNIEnv *env, jobject target, jclass targetClass) {
+    LOGI("");
+    LOGI("=== Call tests: Test 10 float/double instance calls ===");
+
+    jmethodID mulFloatMid = (*env)->GetMethodID(env, targetClass,
+                                                "mulFloat", "(FF)F");
+    jmethodID mulDoubleMid = (*env)->GetMethodID(env, targetClass,
+                                                 "mulDouble", "(DD)D");
+
+    if (mulFloatMid != NULL) {
+        jfloat rf1 = (*env)->CallFloatMethod(env, target, mulFloatMid,
+                                             (jfloat)1.5f, (jfloat)2.0f);
+        TEST_ASSERT(fabsf(rf1 - 3.0f) < 0.0001f, "CallFloatMethod mulFloat(1.5,2)=3");
+
+        jfloat rf2 = call_float_method_v(env, target, mulFloatMid,
+                                         (jfloat)1.5f, (jfloat)2.0f);
+        TEST_ASSERT(fabsf(rf2 - 3.0f) < 0.0001f, "CallFloatMethodV mulFloat(1.5,2)=3");
+
+        jvalue args[2];
+        args[0].f = 1.5f;
+        args[1].f = 2.0f;
+        jfloat rf3 = (*env)->CallFloatMethodA(env, target, mulFloatMid, args);
+        TEST_ASSERT(fabsf(rf3 - 3.0f) < 0.0001f, "CallFloatMethodA mulFloat(1.5,2)=3");
+    } else {
+        LOGE("Skipping mulFloat: method not found");
+        (*env)->ExceptionClear(env);
+    }
+
+    if (mulDoubleMid != NULL) {
+        jdouble rd1 = (*env)->CallDoubleMethod(env, target, mulDoubleMid,
+                                               (jdouble)2.0, (jdouble)4.0);
+        TEST_ASSERT(fabs(rd1 - 8.0) < 1e-6, "CallDoubleMethod mulDouble(2,4)=8");
+
+        jdouble rd2 = call_double_method_v(env, target, mulDoubleMid,
+                                           (jdouble)2.0, (jdouble)4.0);
+        TEST_ASSERT(fabs(rd2 - 8.0) < 1e-6, "CallDoubleMethodV mulDouble(2,4)=8");
+
+        jvalue args[2];
+        args[0].d = 2.0;
+        args[1].d = 4.0;
+        jdouble rd3 = (*env)->CallDoubleMethodA(env, target, mulDoubleMid, args);
+        TEST_ASSERT(fabs(rd3 - 8.0) < 1e-6, "CallDoubleMethodA mulDouble(2,4)=8");
+    } else {
+        LOGE("Skipping mulDouble: method not found");
+        (*env)->ExceptionClear(env);
+    }
+}
+
+/* Test 11: void instance calls */
+static void test_void_calls(JNIEnv *env, jobject target, jclass targetClass) {
+    LOGI("");
+    LOGI("=== Call tests: Test 11 void instance calls ===");
+
+    jmethodID voidMid = (*env)->GetMethodID(env, targetClass,
+                                            "voidMethod", "(ILjava/lang/String;)V");
+    if (voidMid == NULL) {
+        LOGE("Skipping voidMethod: method not found");
+        (*env)->ExceptionClear(env);
+        return;
+    }
+
+    jstring s = (*env)->NewStringUTF(env, "void");
+    if (s == NULL) {
+        LOGE("NewStringUTF(\"void\") failed");
+        (*env)->ExceptionClear(env);
+        return;
+    }
+
+    // CallVoidMethod
+    (*env)->CallVoidMethod(env, target, voidMid, (jint)123, s);
+    TEST_ASSERT(1, "CallVoidMethod voidMethod executed");
+
+    // CallVoidMethodA
+    jvalue args[2];
+    args[0].i = 456;
+    args[1].l = s;
+    (*env)->CallVoidMethodA(env, target, voidMid, args);
+    TEST_ASSERT(1, "CallVoidMethodA voidMethod executed");
+}
+
+/* Test 12: static primitive calls (CallStatic*Method* families) */
+static void test_static_primitive_calls(JNIEnv *env, jclass targetClass) {
+    LOGI("");
+    LOGI("=== Call tests: Test 12 static primitive calls ===");
+
+    // boolean staticAnd(boolean,boolean)
+    jmethodID midAnd = (*env)->GetStaticMethodID(env, targetClass,
+                                                 "staticAnd", "(ZZ)Z");
+    if (midAnd != NULL) {
+        jboolean r1 = (*env)->CallStaticBooleanMethod(env, targetClass, midAnd,
+                                                      (jboolean)JNI_TRUE, (jboolean)JNI_TRUE);
+        TEST_ASSERT(r1 == JNI_TRUE, "CallStaticBooleanMethod staticAnd(true,true)=true");
+
+        jboolean r3;
+        jvalue args[2];
+        args[0].z = JNI_TRUE;
+        args[1].z = JNI_FALSE;
+        r3 = (*env)->CallStaticBooleanMethodA(env, targetClass, midAnd, args);
+        TEST_ASSERT(r3 == JNI_FALSE, "CallStaticBooleanMethodA staticAnd(true,false)=false");
+    } else {
+        LOGE("Skipping staticAnd: method not found");
+        (*env)->ExceptionClear(env);
+    }
+
+    // byte staticAddBytes(byte,byte)
+    jmethodID midAddBytes = (*env)->GetStaticMethodID(env, targetClass,
+                                                      "staticAddBytes", "(BB)B");
+    if (midAddBytes != NULL) {
+        jbyte br = (*env)->CallStaticByteMethod(env, targetClass, midAddBytes,
+                                                (jbyte)10, (jbyte)20);
+        TEST_ASSERT(br == (jbyte)30, "CallStaticByteMethod staticAddBytes(10,20)=30");
+    } else {
+        LOGE("Skipping staticAddBytes: method not found");
+        (*env)->ExceptionClear(env);
+    }
+
+    // char staticShiftChar(char)
+    jmethodID midShiftChar = (*env)->GetStaticMethodID(env, targetClass,
+                                                       "staticShiftChar", "(C)C");
+    if (midShiftChar != NULL) {
+        jchar cr = (*env)->CallStaticCharMethod(env, targetClass, midShiftChar, (jchar)'A');
+        TEST_ASSERT(cr == (jchar)('A' + 1), "CallStaticCharMethod staticShiftChar('A')='B'");
+    } else {
+        LOGE("Skipping staticShiftChar: method not found");
+        (*env)->ExceptionClear(env);
+    }
+
+    // short staticAddShorts(short,short)
+    jmethodID midAddShorts = (*env)->GetStaticMethodID(env, targetClass,
+                                                       "staticAddShorts", "(SS)S");
+    if (midAddShorts != NULL) {
+        jshort sr = (*env)->CallStaticShortMethod(env, targetClass, midAddShorts,
+                                                  (jshort)100, (jshort)200);
+        TEST_ASSERT(sr == (jshort)300, "CallStaticShortMethod staticAddShorts(100,200)=300");
+    } else {
+        LOGE("Skipping staticAddShorts: method not found");
+        (*env)->ExceptionClear(env);
+    }
+
+    // int staticAddInts(int,int)
+    jmethodID midAddInts = (*env)->GetStaticMethodID(env, targetClass,
+                                                     "staticAddInts", "(II)I");
+    if (midAddInts != NULL) {
+        jint ir = (*env)->CallStaticIntMethod(env, targetClass, midAddInts, (jint)2, (jint)3);
+        TEST_ASSERT(ir == 5, "CallStaticIntMethod staticAddInts(2,3)=5");
+    } else {
+        LOGE("Skipping staticAddInts: method not found");
+        (*env)->ExceptionClear(env);
+    }
+
+    // float staticMulFloats(float,float)
+    jmethodID midMulFloats = (*env)->GetStaticMethodID(env, targetClass,
+                                                       "staticMulFloats", "(FF)F");
+    if (midMulFloats != NULL) {
+        jfloat fr = (*env)->CallStaticFloatMethod(env, targetClass, midMulFloats,
+                                                  (jfloat)1.5f, (jfloat)2.0f);
+        TEST_ASSERT(fabsf(fr - 3.0f) < 0.0001f, "CallStaticFloatMethod staticMulFloats(1.5,2)=3");
+    } else {
+        LOGE("Skipping staticMulFloats: method not found");
+        (*env)->ExceptionClear(env);
+    }
+
+    // double staticMulDoubles(double,double)
+    jmethodID midMulDoubles = (*env)->GetStaticMethodID(env, targetClass,
+                                                        "staticMulDoubles", "(DD)D");
+    if (midMulDoubles != NULL) {
+        jdouble dr = (*env)->CallStaticDoubleMethod(env, targetClass, midMulDoubles,
+                                                    (jdouble)2.0, (jdouble)4.0);
+        TEST_ASSERT(fabs(dr - 8.0) < 1e-6, "CallStaticDoubleMethod staticMulDoubles(2,4)=8");
+    } else {
+        LOGE("Skipping staticMulDoubles: method not found");
+        (*env)->ExceptionClear(env);
+    }
+
+    // void staticVoidLog(String)
+    jmethodID midVoid = (*env)->GetStaticMethodID(env, targetClass,
+                                                  "staticVoidLog", "(Ljava/lang/String;)V");
+    if (midVoid != NULL) {
+        jstring s = (*env)->NewStringUTF(env, "static-void");
+        (*env)->CallStaticVoidMethod(env, targetClass, midVoid, s);
+        TEST_ASSERT(1, "CallStaticVoidMethod executed");
+
+        jvalue args[1];
+        args[0].l = s;
+        (*env)->CallStaticVoidMethodA(env, targetClass, midVoid, args);
+        TEST_ASSERT(1, "CallStaticVoidMethodA executed");
+    } else {
+        LOGE("Skipping staticVoidLog: method not found");
+        (*env)->ExceptionClear(env);
+    }
+}
+
+/* Test 13: Nonvirtual calls using NonvirtualBase / NonvirtualDerived */
+static void test_nonvirtual_calls(JNIEnv *env) {
+    LOGI("");
+    LOGI("=== Call tests: Test 13 nonvirtual calls ===");
+
+    jclass baseCls = (*env)->FindClass(env, "com/test/jnie2e/NonvirtualBase");
+    jclass derivedCls = (*env)->FindClass(env, "com/test/jnie2e/NonvirtualDerived");
+    if (baseCls == NULL || derivedCls == NULL) {
+        LOGE("FindClass(NonvirtualBase/NonvirtualDerived) failed");
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+        return;
+    }
+
+    jmethodID ctorDerived = (*env)->GetMethodID(env, derivedCls, "<init>", "()V");
+    if (ctorDerived == NULL) {
+        LOGE("GetMethodID(NonvirtualDerived.<init>) failed");
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+        return;
+    }
+
+    jobject derivedObj = (*env)->NewObject(env, derivedCls, ctorDerived);
+    if (derivedObj == NULL) {
+        LOGE("NewObject(NonvirtualDerived) failed");
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+        return;
+    }
+
+    // Prepare base-class method IDs
+    jmethodID midInt    = (*env)->GetMethodID(env, baseCls, "baseInt",    "(I)I");
+    jmethodID midBool   = (*env)->GetMethodID(env, baseCls, "baseBool",   "(Z)Z");
+    jmethodID midByte   = (*env)->GetMethodID(env, baseCls, "baseByte",   "(B)B");
+    jmethodID midChar   = (*env)->GetMethodID(env, baseCls, "baseChar",   "(C)C");
+    jmethodID midShort  = (*env)->GetMethodID(env, baseCls, "baseShort",  "(S)S");
+    jmethodID midLong   = (*env)->GetMethodID(env, baseCls, "baseLong",   "(J)J");
+    jmethodID midFloat  = (*env)->GetMethodID(env, baseCls, "baseFloat",  "(F)F");
+    jmethodID midDouble = (*env)->GetMethodID(env, baseCls, "baseDouble", "(D)D");
+    jmethodID midVoid   = (*env)->GetMethodID(env, baseCls, "baseVoid",
+                                              "(Ljava/lang/String;)V");
+
+    if (midInt != NULL) {
+        jint v = (*env)->CallNonvirtualIntMethod(env, derivedObj, baseCls, midInt, (jint)2);
+        TEST_ASSERT(v == 20, "CallNonvirtualIntMethod baseInt(2)=20");
+    }
+
+    if (midBool != NULL) {
+        jboolean b = (*env)->CallNonvirtualBooleanMethod(env, derivedObj, baseCls, midBool,
+                                                         (jboolean)JNI_TRUE);
+        TEST_ASSERT(b == JNI_FALSE, "CallNonvirtualBooleanMethod baseBool(true)=false");
+    }
+
+    if (midByte != NULL) {
+        jbyte bb = (*env)->CallNonvirtualByteMethod(env, derivedObj, baseCls, midByte,
+                                                    (jbyte)5);
+        TEST_ASSERT(bb == (jbyte)6, "CallNonvirtualByteMethod baseByte(5)=6");
+    }
+
+    if (midChar != NULL) {
+        jchar c = (*env)->CallNonvirtualCharMethod(env, derivedObj, baseCls, midChar,
+                                                   (jchar)'A');
+        TEST_ASSERT(c == (jchar)('A' + 1), "CallNonvirtualCharMethod baseChar('A')='B'");
+    }
+
+    if (midShort != NULL) {
+        jshort s = (*env)->CallNonvirtualShortMethod(env, derivedObj, baseCls, midShort,
+                                                     (jshort)100);
+        TEST_ASSERT(s == (jshort)110, "CallNonvirtualShortMethod baseShort(100)=110");
+    }
+
+    if (midLong != NULL) {
+        jlong l = (*env)->CallNonvirtualLongMethod(env, derivedObj, baseCls, midLong,
+                                                   (jlong)1000);
+        TEST_ASSERT(l == 1100, "CallNonvirtualLongMethod baseLong(1000)=1100");
+    }
+
+    if (midFloat != NULL) {
+        jfloat f = (*env)->CallNonvirtualFloatMethod(env, derivedObj, baseCls, midFloat,
+                                                     (jfloat)1.5f);
+        TEST_ASSERT(fabsf(f - 2.5f) < 0.0001f, "CallNonvirtualFloatMethod baseFloat(1.5)=2.5");
+    }
+
+    if (midDouble != NULL) {
+        jdouble d = (*env)->CallNonvirtualDoubleMethod(env, derivedObj, baseCls, midDouble,
+                                                       (jdouble)2.5);
+        TEST_ASSERT(fabs(d - 3.5) < 1e-6, "CallNonvirtualDoubleMethod baseDouble(2.5)=3.5");
+    }
+
+    if (midVoid != NULL) {
+        jstring js = (*env)->NewStringUTF(env, "nv");
+        (*env)->CallNonvirtualVoidMethod(env, derivedObj, baseCls, midVoid, js);
+        TEST_ASSERT(1, "CallNonvirtualVoidMethod baseVoid executed");
+    }
+}
+
+/* Entry point */
+
 JNIEXPORT void JNICALL
 Java_com_test_jnie2e_EnvCallsTests_runTests(JNIEnv *env, jclass clazz) {
     (void) clazz;
@@ -388,13 +697,15 @@ Java_com_test_jnie2e_EnvCallsTests_runTests(JNIEnv *env, jclass clazz) {
     jclass targetClass = (*env)->FindClass(env, "com/test/jnie2e/MethodTarget");
     if (targetClass == NULL) {
         LOGE("FindClass(MethodTarget) failed");
+        (*env)->ExceptionDescribe(env);
         (*env)->ExceptionClear(env);
         return;
     }
 
     jmethodID ctor = (*env)->GetMethodID(env, targetClass, "<init>", "()V");
     if (ctor == NULL) {
-        LOGE("GetMethodID(<init>) failed");
+        LOGE("GetMethodID(MethodTarget.<init>) failed");
+        (*env)->ExceptionDescribe(env);
         (*env)->ExceptionClear(env);
         return;
     }
@@ -402,6 +713,7 @@ Java_com_test_jnie2e_EnvCallsTests_runTests(JNIEnv *env, jclass clazz) {
     jobject target = (*env)->NewObject(env, targetClass, ctor);
     if (target == NULL) {
         LOGE("NewObject(MethodTarget) failed");
+        (*env)->ExceptionDescribe(env);
         (*env)->ExceptionClear(env);
         return;
     }
@@ -441,7 +753,12 @@ Java_com_test_jnie2e_EnvCallsTests_runTests(JNIEnv *env, jclass clazz) {
     else                        LOGE("Skipping test_newObject_with_args: ctor not found");
 
     test_boolean_and_small_primitives(env, target, targetClass);
-    test_static_object_methods(env, targetClass);
+
+    // New tests
+    test_float_double_calls(env, target, targetClass);
+    test_void_calls(env, target, targetClass);
+    test_static_primitive_calls(env, targetClass);
+    test_nonvirtual_calls(env);
 
     LOGI("========================================");
     LOGI("EnvCallsTests summary: %d passed, %d failed", tests_passed, tests_failed);

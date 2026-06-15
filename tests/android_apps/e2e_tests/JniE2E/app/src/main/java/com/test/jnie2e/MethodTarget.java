@@ -74,4 +74,55 @@ public class MethodTarget {
         if (c == null) c = "null";
         return a + b + c;
     }
+
+    // 10) float/double instance methods ---
+
+    public float mulFloat(float a, float b) {
+        return a * b;
+    }
+
+    public double mulDouble(double a, double b) {
+        return a * b;
+    }
+
+    // 11) instance void method ---
+
+    public void voidMethod(int v, String s) {
+        this.storedInt = v;
+        this.storedString = s;
+    }
+
+    // 12) static primitive methods for CallStatic*Method* ---
+
+    public static boolean staticAnd(boolean a, boolean b) {
+        return a && b;
+    }
+
+    public static byte staticAddBytes(byte a, byte b) {
+        return (byte) (a + b);
+    }
+
+    public static char staticShiftChar(char c) {
+        return (char) (c + 1);
+    }
+
+    public static short staticAddShorts(short a, short b) {
+        return (short) (a + b);
+    }
+
+    public static int staticAddInts(int a, int b) {
+        return a + b;
+    }
+
+    public static float staticMulFloats(float a, float b) {
+        return a * b;
+    }
+
+    public static double staticMulDoubles(double a, double b) {
+        return a * b;
+    }
+
+    public static void staticVoidLog(String s) {
+        // no-op; used to exercise CallStaticVoidMethod* families
+    }
 }
