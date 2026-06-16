@@ -171,8 +171,14 @@ Java_com_test_jnie2e_EnvExceptionTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("EnvExceptionTests: starting");
     LOGI("========================================");
 
+    LOGI("");
+    LOGI(">> Running test_throw_new...");
     test_throw_new(env);
+    LOGI("");
+    LOGI(">> Running test_throw_existing...");
     test_throw_existing(env);
+    LOGI("");
+    LOGI(">> Running test_monitors...");
     test_monitors(env);
 
     LOGI("========================================");
