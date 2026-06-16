@@ -125,4 +125,9 @@ public class MethodTarget {
     public static void staticVoidLog(String s) {
         // no-op; used to exercise CallStaticVoidMethod* families
     }
+
+    // 13) For CallCharMethod / V / A tests
+    public char shiftChar(char c) {
+        return (char) (c + 1);
+    }
 }
