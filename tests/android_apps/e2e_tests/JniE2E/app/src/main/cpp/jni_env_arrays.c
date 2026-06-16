@@ -2,6 +2,7 @@
 #include <android/log.h>
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
 
 #define LOG_TAG "JNI_ENV_ARRAYS"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
@@ -389,16 +390,23 @@ static void test_object_arrays(JNIEnv *env) {
     LOGI("  object array length = %d", (int)len2);
     TEST_ASSERT(len2 == len, "GetArrayLength for object array");
 
+    const char *expected[] = { "one", "two", "three" };
     for (jsize i = 0; i < len; i++) {
         jobject elem = (*env)->GetObjectArrayElement(env, arr, i);
         if (elem != NULL) {
             const char *cstr = (*env)->GetStringUTFChars(env, (jstring)elem, NULL);
             LOGI("  element[%d] = \"%s\"", (int)i, cstr ? cstr : "<null>");
             if (cstr) {
+                char desc[64];
+                snprintf(desc, sizeof(desc), "object array element[%d] == \"%s\"", (int)i, expected[i]);
+                TEST_ASSERT(strcmp(cstr, expected[i]) == 0, desc);
                 (*env)->ReleaseStringUTFChars(env, (jstring)elem, cstr);
+            } else {
+                TEST_ASSERT(0, "GetStringUTFChars for object array element non-NULL");
             }
         } else {
             LOGE("  element[%d] is NULL", (int)i);
+            TEST_ASSERT(0, "object array element non-NULL");
         }
     }
 }
