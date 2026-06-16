@@ -104,6 +104,59 @@ static void test_global_and_weak_refs(JNIEnv *env) {
     (*env)->DeleteWeakGlobalRef(env, wref);
 }
 
+/* Test 3: GetObjectRefType */
+
+static void test_get_object_ref_type(JNIEnv *env) {
+    LOGI("");
+    LOGI("=== Ref tests: GetObjectRefType ===");
+
+    /*
+     * GetObjectRefType should return:
+     *   JNILocalRefType  = 1  for local references
+     *   JNIGlobalRefType = 2  for global references
+     *   JNIWeakGlobalRefType = 3  for weak global references
+     *
+     * NOTE: Earlier attempts reported a hook crash when calling this.
+     * The app-side code is correct; if the hook crashes, that is a hook bug.
+     * This test validates that the app can call the function without error.
+     */
+
+    jstring s = (*env)->NewStringUTF(env, "reftype-test");
+    if (s == NULL) {
+        LOGE("NewStringUTF failed in test_get_object_ref_type");
+        (*env)->ExceptionClear(env);
+        TEST_ASSERT(0, "NewStringUTF for GetObjectRefType");
+        return;
+    }
+
+    // Test local ref type
+    jobjectRefType localType = (*env)->GetObjectRefType(env, s);
+    LOGI("GetObjectRefType(local jstring) -> %d (expect 1=JNILocalRefType)", (int)localType);
+    TEST_ASSERT(localType == JNILocalRefType, "GetObjectRefType(local) == JNILocalRefType");
+
+    // Test global ref type
+    jobject gref = (*env)->NewGlobalRef(env, s);
+    if (gref != NULL) {
+        jobjectRefType globalType = (*env)->GetObjectRefType(env, gref);
+        LOGI("GetObjectRefType(global ref) -> %d (expect 2=JNIGlobalRefType)", (int)globalType);
+        TEST_ASSERT(globalType == JNIGlobalRefType, "GetObjectRefType(global) == JNIGlobalRefType");
+        (*env)->DeleteGlobalRef(env, gref);
+    } else {
+        TEST_ASSERT(0, "NewGlobalRef for GetObjectRefType non-NULL");
+    }
+
+    // Test weak global ref type
+    jweak wref = (*env)->NewWeakGlobalRef(env, s);
+    if (wref != NULL) {
+        jobjectRefType weakType = (*env)->GetObjectRefType(env, wref);
+        LOGI("GetObjectRefType(weak ref) -> %d (expect 3=JNIWeakGlobalRefType)", (int)weakType);
+        TEST_ASSERT(weakType == JNIWeakGlobalRefType, "GetObjectRefType(weak) == JNIWeakGlobalRefType");
+        (*env)->DeleteWeakGlobalRef(env, wref);
+    } else {
+        TEST_ASSERT(0, "NewWeakGlobalRef for GetObjectRefType non-NULL");
+    }
+}
+
 JNIEXPORT void JNICALL
 Java_com_test_jnie2e_EnvRefTests_runTests(JNIEnv *env, jclass clazz) {
     (void) clazz;
@@ -115,8 +168,17 @@ Java_com_test_jnie2e_EnvRefTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("EnvRefTests: starting");
     LOGI("========================================");
 
+    LOGI("");
+    LOGI(">> Running test_local_frame_and_local_refs...");
     test_local_frame_and_local_refs(env);
+
+    LOGI("");
+    LOGI(">> Running test_global_and_weak_refs...");
     test_global_and_weak_refs(env);
+
+    LOGI("");
+    LOGI(">> Running test_get_object_ref_type...");
+    test_get_object_ref_type(env);
 
     LOGI("========================================");
     LOGI("EnvRefTests summary: %d passed, %d failed", tests_passed, tests_failed);
