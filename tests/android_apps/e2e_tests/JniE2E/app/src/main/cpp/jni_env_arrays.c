@@ -146,6 +146,15 @@ static void test_more_primitive_arrays(JNIEnv *env) {
                             "jbooleanArray contents [T,F,T]");
                 (*env)->ReleaseBooleanArrayElements(env, arr, elems, 0);
             }
+
+            // GetBooleanArrayRegion
+            jboolean out[3] = {0};
+            (*env)->GetBooleanArrayRegion(env, arr, 0, len, out);
+            LOGI("    GetBooleanArrayRegion: %d %d %d", out[0], out[1], out[2]);
+            TEST_ASSERT(out[0] == JNI_TRUE &&
+                        out[1] == JNI_FALSE &&
+                        out[2] == JNI_TRUE,
+                        "GetBooleanArrayRegion contents [T,F,T]");
         }
     }
 
@@ -405,9 +414,17 @@ Java_com_test_jnie2e_EnvArrayTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("EnvArrayTests: starting");
     LOGI("========================================");
 
+    LOGI("");
+    LOGI(">> Running test_int_and_long_arrays...");
     test_int_and_long_arrays(env);
+    LOGI("");
+    LOGI(">> Running test_more_primitive_arrays...");
     test_more_primitive_arrays(env);
+    LOGI("");
+    LOGI(">> Running test_primitive_array_critical...");
     test_primitive_array_critical(env);
+    LOGI("");
+    LOGI(">> Running test_object_arrays...");
     test_object_arrays(env);
 
     LOGI("========================================");
