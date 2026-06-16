@@ -562,6 +562,7 @@ static void test_static_object_methods(JNIEnv *env, jclass targetClass) {
     if (staticConcat3Mid == NULL) {
         LOGE("Skipping staticConcat3 tests: method not found");
         (*env)->ExceptionClear(env);
+        TEST_ASSERT(0, "GetStaticMethodID(staticConcat3) found");
         return;
     }
 
@@ -572,15 +573,21 @@ static void test_static_object_methods(JNIEnv *env, jclass targetClass) {
     jstring r1 = (jstring)(*env)->CallStaticObjectMethod(env, targetClass, staticConcat3Mid, s1, s2, s3);
     if (r1 != NULL) {
         const char *c1 = (*env)->GetStringUTFChars(env, r1, NULL);
-        LOGI("  CallStaticObjectMethod: '%s'", c1);
-        (*env)->ReleaseStringUTFChars(env, r1, c1);
+        TEST_ASSERT(c1 && strcmp(c1, "onetwothree") == 0,
+                    "CallStaticObjectMethod staticConcat3='onetwothree'");
+        if (c1) (*env)->ReleaseStringUTFChars(env, r1, c1);
+    } else {
+        TEST_ASSERT(0, "CallStaticObjectMethod staticConcat3 returned NULL");
     }
 
     jstring r2 = (jstring)call_static_object_method_v(env, targetClass, staticConcat3Mid, s1, s2, s3);
     if (r2 != NULL) {
         const char *c2 = (*env)->GetStringUTFChars(env, r2, NULL);
-        LOGI("  CallStaticObjectMethodV: '%s'", c2);
-        (*env)->ReleaseStringUTFChars(env, r2, c2);
+        TEST_ASSERT(c2 && strcmp(c2, "onetwothree") == 0,
+                    "CallStaticObjectMethodV staticConcat3='onetwothree'");
+        if (c2) (*env)->ReleaseStringUTFChars(env, r2, c2);
+    } else {
+        TEST_ASSERT(0, "CallStaticObjectMethodV staticConcat3 returned NULL");
     }
 
     jvalue args[3];
@@ -590,8 +597,11 @@ static void test_static_object_methods(JNIEnv *env, jclass targetClass) {
     jstring r3 = (jstring)(*env)->CallStaticObjectMethodA(env, targetClass, staticConcat3Mid, args);
     if (r3 != NULL) {
         const char *c3 = (*env)->GetStringUTFChars(env, r3, NULL);
-        LOGI("  CallStaticObjectMethodA: '%s'", c3);
-        (*env)->ReleaseStringUTFChars(env, r3, c3);
+        TEST_ASSERT(c3 && strcmp(c3, "onetwothree") == 0,
+                    "CallStaticObjectMethodA staticConcat3='onetwothree'");
+        if (c3) (*env)->ReleaseStringUTFChars(env, r3, c3);
+    } else {
+        TEST_ASSERT(0, "CallStaticObjectMethodA staticConcat3 returned NULL");
     }
 }
 
