@@ -24,9 +24,8 @@
  *  Identity:
  *    - IsSameObject
  *
- *  NOTE: GetObjectRefType is intentionally NOT called for now, as the current
- *        hook implementation appears to crash when this method is invoked.
- *        This is a hook bug and should be revisited later.
+ *  Ref type:
+ *    - GetObjectRefType
  */
 
 static int tests_passed = 0;
