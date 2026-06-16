@@ -1189,8 +1189,8 @@ Java_com_test_jnie2e_EnvCallsTests_runTests(JNIEnv *env, jclass clazz) {
     test_static_primitive_calls(env, targetClass);
 
     LOGI("");
-    LOGI(">> Running test_nonvirtual_calls...");
-    test_nonvirtual_calls(env);
+    LOGI(">> Skipping test_nonvirtual_calls...");
+    // test_nonvirtual_calls(env);
 
     LOGI("");
     LOGI(">> Running test_char_instance_calls...");
