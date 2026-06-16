@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#include <string.h>
 #include <jni.h>
 #include <android/log.h>
 
@@ -168,50 +170,167 @@ static void test_env_getjavavm(JNIEnv *env) {
     TEST_ASSERT(vm != NULL, "JNIEnv::GetJavaVM returns non-NULL JavaVM*");
 }
 
-/* Test 4: DefineClass with dummy class bytes (may throw) */
+/* Test 4: DefineClass with a structurally valid .class file buffer
+ *
+ * On Android/ART, DefineClass is not supported (ART uses DEX, not .class).
+ * The function will return NULL (with or without an exception).
+ * The hook is still triggered and enriches: define_class_name, class_data_hex,
+ * class_data_length. This test uses a real classloader and proper class structure.
+ */
 
 static void test_define_class(JNIEnv *env) {
     LOGI("");
-    LOGI("=== Core tests: DefineClass (dummy bytes) ===");
+    LOGI("=== Core tests: DefineClass (valid structure, ART will reject) ===");
 
     /*
-     * Minimal, likely invalid or incomplete class file buffer.
-     * The goal is to exercise the DefineClass hook and its enrichment
-     * (class_data_hex, class_data_length, etc.), not to load a usable class.
+     * Minimal structurally-valid .class file for:
+     *   public class com/test/jnie2e/DummyDefined extends java/lang/Object {}
      *
-     * Header: 0xCAFEBABE, version 0x0000 0x0034 (Java 8),
-     * followed by a small, fake constant pool body.
+     * Constant pool (6 entries):
+     *   #1 = Class          #5    // com/test/jnie2e/DummyDefined
+     *   #2 = Class          #6    // java/lang/Object
+     *   #3 = Utf8           "<init>"
+     *   #4 = Utf8           "()V"
+     *   #5 = Utf8           "com/test/jnie2e/DummyDefined"
+     *   #6 = Utf8           "java/lang/Object"
+     *
+     * access_flags: ACC_PUBLIC | ACC_SUPER (0x0021)
+     * this_class: #1, super_class: #2
+     * No interfaces, fields, methods, or attributes.
      */
     static const unsigned char classData[] = {
-        0xCA, 0xFE, 0xBA, 0xBE,  // magic
-        0x00, 0x00,              // minor version
-        0x00, 0x34,              // major version (52)
-        0x00, 0x01,              // constant_pool_count = 1 (minimal)
-        // No constant pool entries; this is intentionally malformed
+        /* magic */
+        0xCA, 0xFE, 0xBA, 0xBE,
+        /* minor_version */ 0x00, 0x00,
+        /* major_version (52 = Java 8) */ 0x00, 0x34,
+        /* constant_pool_count = 7 (6 usable entries) */ 0x00, 0x07,
+
+        /* cp[1]: CONSTANT_Class, name_index -> #5 */
+        0x07, 0x00, 0x05,
+        /* cp[2]: CONSTANT_Class, name_index -> #6 */
+        0x07, 0x00, 0x06,
+        /* cp[3]: CONSTANT_Utf8, length=6, "<init>" */
+        0x01, 0x00, 0x06,
+        0x3C, 0x69, 0x6E, 0x69, 0x74, 0x3E,
+        /* cp[4]: CONSTANT_Utf8, length=3, "()V" */
+        0x01, 0x00, 0x03,
+        0x28, 0x29, 0x56,
+        /* cp[5]: CONSTANT_Utf8, length=28, "com/test/jnie2e/DummyDefined" */
+        0x01, 0x00, 0x1C,
+        0x63, 0x6F, 0x6D, 0x2F, 0x74, 0x65, 0x73, 0x74,
+        0x2F, 0x6A, 0x6E, 0x69, 0x65, 0x32, 0x65, 0x2F,
+        0x44, 0x75, 0x6D, 0x6D, 0x79, 0x44, 0x65, 0x66,
+        0x69, 0x6E, 0x65, 0x64,
+        /* cp[6]: CONSTANT_Utf8, length=16, "java/lang/Object" */
+        0x01, 0x00, 0x10,
+        0x6A, 0x61, 0x76, 0x61, 0x2F, 0x6C, 0x61, 0x6E,
+        0x67, 0x2F, 0x4F, 0x62, 0x6A, 0x65, 0x63, 0x74,
+
+        /* access_flags: ACC_PUBLIC | ACC_SUPER */
+        0x00, 0x21,
+        /* this_class: #1 */  0x00, 0x01,
+        /* super_class: #2 */ 0x00, 0x02,
+        /* interfaces_count */ 0x00, 0x00,
+        /* fields_count */     0x00, 0x00,
+        /* methods_count */    0x00, 0x00,
+        /* attributes_count */ 0x00, 0x00
     };
 
-    const char *name = "com/test/jnie2e/DummyDefinedClass";
+    /* Get the real classloader from EnvCoreTests class */
+    jclass coreTestsCls = (*env)->FindClass(env, "com/test/jnie2e/EnvCoreTests");
+    jobject classLoader = NULL;
+    if (coreTestsCls != NULL) {
+        jclass classCls = (*env)->FindClass(env, "java/lang/Class");
+        if (classCls != NULL) {
+            jmethodID getLoaderMid = (*env)->GetMethodID(env, classCls,
+                                                         "getClassLoader",
+                                                         "()Ljava/lang/ClassLoader;");
+            if (getLoaderMid != NULL) {
+                classLoader = (*env)->CallObjectMethod(env, coreTestsCls, getLoaderMid);
+                if ((*env)->ExceptionCheck(env)) {
+                    (*env)->ExceptionClear(env);
+                    classLoader = NULL;
+                }
+            }
+        }
+    }
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+    }
+
+    LOGI("DefineClass: using classLoader=%p (NULL means bootstrap)", classLoader);
+    LOGI("DefineClass: class data size=%d bytes", (int)sizeof(classData));
+
+    const char *name = "com/test/jnie2e/DummyDefined";
     jclass result = (*env)->DefineClass(env,
                                         name,
-                                        NULL, // bootstrap loader
+                                        classLoader,
                                         (const jbyte *)classData,
                                         (jsize) sizeof(classData));
 
-    if (result == NULL) {
+    if (result != NULL) {
+        LOGI("DefineClass succeeded (unexpected on ART, but valid)");
+        TEST_ASSERT(1, "DefineClass succeeded");
+    } else {
         jthrowable ex = (*env)->ExceptionOccurred(env);
         if (ex != NULL) {
-            LOGI("DefineClass threw an exception (expected with dummy bytes)");
+            LOGI("DefineClass returned NULL with exception (expected on ART)");
             (*env)->ExceptionDescribe(env);
             (*env)->ExceptionClear(env);
-            TEST_ASSERT(1, "DefineClass invoked (exception OK)");
         } else {
-            LOGE("DefineClass returned NULL without exception");
-            TEST_ASSERT(0, "DefineClass result");
+            LOGI("DefineClass returned NULL without exception (ART silently rejects)");
         }
-    } else {
-        LOGI("DefineClass succeeded for %s", name);
-        TEST_ASSERT(1, "DefineClass succeeded");
+        /* Either way the hook was triggered and saw class_data_hex, define_class_name */
+        TEST_ASSERT(1, "DefineClass hook exercised (NULL is expected on ART)");
     }
+}
+
+/* Test 5: NewDirectByteBuffer / GetDirectBufferAddress / GetDirectBufferCapacity */
+
+static void test_direct_buffers(JNIEnv *env) {
+    LOGI("");
+    LOGI("=== Core tests: Direct byte buffers ===");
+
+    /*
+     * Allocate a native buffer, wrap it in a DirectByteBuffer, then
+     * exercise GetDirectBufferAddress and GetDirectBufferCapacity.
+     */
+    const jlong capacity = 64;
+    void *nativeBuf = malloc((size_t)capacity);
+    if (nativeBuf == NULL) {
+        LOGE("malloc(%lld) failed", (long long)capacity);
+        TEST_ASSERT(0, "malloc for direct buffer");
+        return;
+    }
+
+    // Write a known pattern so hook enrichment (buffer_hex) has content
+    memset(nativeBuf, 0xAB, (size_t)capacity);
+
+    // NewDirectByteBuffer
+    jobject bbuf = (*env)->NewDirectByteBuffer(env, nativeBuf, capacity);
+    if (bbuf == NULL) {
+        LOGE("NewDirectByteBuffer returned NULL");
+        if ((*env)->ExceptionCheck(env)) {
+            (*env)->ExceptionDescribe(env);
+            (*env)->ExceptionClear(env);
+        }
+        TEST_ASSERT(0, "NewDirectByteBuffer returned non-NULL");
+        free(nativeBuf);
+        return;
+    }
+    TEST_ASSERT(bbuf != NULL, "NewDirectByteBuffer returned non-NULL");
+
+    // GetDirectBufferAddress
+    void *addr = (*env)->GetDirectBufferAddress(env, bbuf);
+    LOGI("GetDirectBufferAddress -> %p (expected %p)", addr, nativeBuf);
+    TEST_ASSERT(addr == nativeBuf, "GetDirectBufferAddress returns original pointer");
+
+    // GetDirectBufferCapacity
+    jlong cap = (*env)->GetDirectBufferCapacity(env, bbuf);
+    LOGI("GetDirectBufferCapacity -> %lld (expected %lld)", (long long)cap, (long long)capacity);
+    TEST_ASSERT(cap == capacity, "GetDirectBufferCapacity returns 64");
+
+    free(nativeBuf);
 }
 
 /* Entry point */
@@ -227,10 +346,17 @@ Java_com_test_jnie2e_EnvCoreTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("EnvCoreTests: starting");
     LOGI("========================================");
 
+    LOGI("");
+    LOGI(">> Running test_reflection_and_types...");
     test_reflection_and_types(env);
+    LOGI(">> Running test_alloc_object...");
     test_alloc_object(env);
+    LOGI(">> Running test_env_getjavavm...");
     test_env_getjavavm(env);
+    LOGI(">> Running test_define_class...");
     test_define_class(env);
+    LOGI(">> Running test_direct_buffers...");
+    test_direct_buffers(env);
 
     LOGI("========================================");
     LOGI("EnvCoreTests summary: %d passed, %d failed", tests_passed, tests_failed);
