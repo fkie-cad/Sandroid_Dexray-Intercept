@@ -173,8 +173,16 @@ Java_com_test_jnie2e_EnvStringTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("EnvStringTests: starting");
     LOGI("========================================");
 
+    LOGI("");
+    LOGI(">> Running test_utf_string_apis...");
     test_utf_string_apis(env);
+
+    LOGI("");
+    LOGI(">> Running test_jchar_string_apis...");
     test_jchar_string_apis(env);
+
+    LOGI("");
+    LOGI(">> Running test_string_critical...");
     test_string_critical(env);
 
     LOGI("========================================");
