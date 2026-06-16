@@ -23,6 +23,38 @@ static int tests_failed = 0;
 
 /* Helpers for Call*MethodV / CallStatic*MethodV */
 
+static jboolean call_boolean_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jboolean result = (*env)->CallBooleanMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jbyte call_byte_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jbyte result = (*env)->CallByteMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jchar call_char_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jchar result = (*env)->CallCharMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jshort call_short_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jshort result = (*env)->CallShortMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
 static jint call_int_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
@@ -39,38 +71,6 @@ static jlong call_long_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
     return result;
 }
 
-static jobject call_object_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
-    va_list ap;
-    va_start(ap, mid);
-    jobject result = (*env)->CallObjectMethodV(env, obj, mid, ap);
-    va_end(ap);
-    return result;
-}
-
-static jlong call_static_long_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
-    va_list ap;
-    va_start(ap, mid);
-    jlong result = (*env)->CallStaticLongMethodV(env, cls, mid, ap);
-    va_end(ap);
-    return result;
-}
-
-static jboolean call_boolean_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
-    va_list ap;
-    va_start(ap, mid);
-    jboolean result = (*env)->CallBooleanMethodV(env, obj, mid, ap);
-    va_end(ap);
-    return result;
-}
-
-static jobject call_static_object_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
-    va_list ap;
-    va_start(ap, mid);
-    jobject result = (*env)->CallStaticObjectMethodV(env, cls, mid, ap);
-    va_end(ap);
-    return result;
-}
-
 static jfloat call_float_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
@@ -83,6 +83,108 @@ static jdouble call_double_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...
     va_list ap;
     va_start(ap, mid);
     jdouble result = (*env)->CallDoubleMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static void call_void_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    (*env)->CallVoidMethodV(env, obj, mid, ap);
+    va_end(ap);
+}
+
+static jobject call_object_method_v(JNIEnv *env, jobject obj, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jobject result = (*env)->CallObjectMethodV(env, obj, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jboolean call_static_boolean_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jboolean result = (*env)->CallStaticBooleanMethodV(env, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jbyte call_static_byte_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jbyte result = (*env)->CallStaticByteMethodV(env, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jchar call_static_char_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jchar result = (*env)->CallStaticCharMethodV(env, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jshort call_static_short_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jshort result = (*env)->CallStaticShortMethodV(env, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jint call_static_int_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jint result = (*env)->CallStaticIntMethodV(env, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jlong call_static_long_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jlong result = (*env)->CallStaticLongMethodV(env, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jfloat call_static_float_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jfloat result = (*env)->CallStaticFloatMethodV(env, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jdouble call_static_double_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jdouble result = (*env)->CallStaticDoubleMethodV(env, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static void call_static_void_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    (*env)->CallStaticVoidMethodV(env, cls, mid, ap);
+    va_end(ap);
+}
+
+static jobject call_static_object_method_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jobject result = (*env)->CallStaticObjectMethodV(env, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jobject new_object_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jobject result = (*env)->NewObjectV(env, cls, mid, ap);
     va_end(ap);
     return result;
 }
@@ -284,16 +386,22 @@ static void test_staticSum(JNIEnv *env, jclass targetClass, jmethodID mid) {
     TEST_ASSERT(r3 == 3000, "CallStaticLongMethodA staticSum=3000");
 }
 
-/* Test 7: NewObject with constructor args (int, String) */
+/* Test 7: NewObject with constructor args (int, String) - all 3 forms */
 static void test_newObject_with_args(JNIEnv *env, jclass targetClass, jmethodID ctorWithArgs) {
     LOGI("");
-    LOGI("=== Call tests: Test 7 NewObject/ NewObjectA with args ===");
+    LOGI("=== Call tests: Test 7 NewObject / NewObjectV / NewObjectA with args ===");
 
     jstring initStr = (*env)->NewStringUTF(env, "init");
 
+    // NewObject (varargs)
     jobject r1 = (*env)->NewObject(env, targetClass, ctorWithArgs, (jint)42, initStr);
     TEST_ASSERT(r1 != NULL, "NewObject(int,String) returned non-NULL");
 
+    // NewObjectV (via helper)
+    jobject r2 = new_object_v(env, targetClass, ctorWithArgs, (jint)42, initStr);
+    TEST_ASSERT(r2 != NULL, "NewObjectV(int,String) returned non-NULL");
+
+    // NewObjectA (jvalue array)
     jvalue args[2];
     args[0].i = 42;
     args[1].l = initStr;
@@ -330,6 +438,15 @@ static void test_boolean_and_small_primitives(JNIEnv *env, jobject target, jclas
     if (addBytesMid != NULL) {
         jbyte br = (*env)->CallByteMethod(env, target, addBytesMid, (jbyte)10, (jbyte)20);
         TEST_ASSERT(br == (jbyte)30, "CallByteMethod addBytes(10,20)=30");
+
+        jbyte br2 = call_byte_method_v(env, target, addBytesMid, (jbyte)10, (jbyte)20);
+        TEST_ASSERT(br2 == (jbyte)30, "CallByteMethodV addBytes(10,20)=30");
+
+        jvalue bargs[2];
+        bargs[0].b = 10;
+        bargs[1].b = 20;
+        jbyte br3 = (*env)->CallByteMethodA(env, target, addBytesMid, bargs);
+        TEST_ASSERT(br3 == (jbyte)30, "CallByteMethodA addBytes(10,20)=30");
     } else {
         LOGE("Skipping addBytes: method not found");
         (*env)->ExceptionClear(env);
@@ -340,6 +457,15 @@ static void test_boolean_and_small_primitives(JNIEnv *env, jobject target, jclas
     if (addShortsMid != NULL) {
         jshort sr = (*env)->CallShortMethod(env, target, addShortsMid, (jshort)1000, (jshort)2000);
         TEST_ASSERT(sr == (jshort)3000, "CallShortMethod addShorts(1000,2000)=3000");
+
+        jshort sr2 = call_short_method_v(env, target, addShortsMid, (jshort)1000, (jshort)2000);
+        TEST_ASSERT(sr2 == (jshort)3000, "CallShortMethodV addShorts(1000,2000)=3000");
+
+        jvalue sargs[2];
+        sargs[0].s = 1000;
+        sargs[1].s = 2000;
+        jshort sr3 = (*env)->CallShortMethodA(env, target, addShortsMid, sargs);
+        TEST_ASSERT(sr3 == (jshort)3000, "CallShortMethodA addShorts(1000,2000)=3000");
     } else {
         LOGE("Skipping addShorts: method not found");
         (*env)->ExceptionClear(env);
@@ -391,8 +517,6 @@ static void test_static_object_methods(JNIEnv *env, jclass targetClass) {
 }
 
 /* Test 10: float/double instance calls (CallFloatMethod/CallFloatMethodV/CallFloatMethodA,CallDoubleMethod/CallDoubleMethodV/CallDoubleMethodA) */
- 
-
 static void test_float_double_calls(JNIEnv *env, jobject target, jclass targetClass) {
     LOGI("");
     LOGI("=== Call tests: Test 10 float/double instance calls ===");
@@ -465,6 +589,10 @@ static void test_void_calls(JNIEnv *env, jobject target, jclass targetClass) {
     (*env)->CallVoidMethod(env, target, voidMid, (jint)123, s);
     TEST_ASSERT(1, "CallVoidMethod voidMethod executed");
 
+    // CallVoidMethodV
+    call_void_method_v(env, target, voidMid, (jint)789, s);
+    TEST_ASSERT(1, "CallVoidMethodV voidMethod executed");
+
     // CallVoidMethodA
     jvalue args[2];
     args[0].i = 456;
@@ -486,11 +614,14 @@ static void test_static_primitive_calls(JNIEnv *env, jclass targetClass) {
                                                       (jboolean)JNI_TRUE, (jboolean)JNI_TRUE);
         TEST_ASSERT(r1 == JNI_TRUE, "CallStaticBooleanMethod staticAnd(true,true)=true");
 
-        jboolean r3;
+        jboolean r2 = call_static_boolean_method_v(env, targetClass, midAnd,
+                                                    (jboolean)JNI_TRUE, (jboolean)JNI_TRUE);
+        TEST_ASSERT(r2 == JNI_TRUE, "CallStaticBooleanMethodV staticAnd(true,true)=true");
+
         jvalue args[2];
         args[0].z = JNI_TRUE;
         args[1].z = JNI_FALSE;
-        r3 = (*env)->CallStaticBooleanMethodA(env, targetClass, midAnd, args);
+        jboolean r3 = (*env)->CallStaticBooleanMethodA(env, targetClass, midAnd, args);
         TEST_ASSERT(r3 == JNI_FALSE, "CallStaticBooleanMethodA staticAnd(true,false)=false");
     } else {
         LOGE("Skipping staticAnd: method not found");
@@ -501,9 +632,19 @@ static void test_static_primitive_calls(JNIEnv *env, jclass targetClass) {
     jmethodID midAddBytes = (*env)->GetStaticMethodID(env, targetClass,
                                                       "staticAddBytes", "(BB)B");
     if (midAddBytes != NULL) {
-        jbyte br = (*env)->CallStaticByteMethod(env, targetClass, midAddBytes,
+        jbyte br1 = (*env)->CallStaticByteMethod(env, targetClass, midAddBytes,
                                                 (jbyte)10, (jbyte)20);
-        TEST_ASSERT(br == (jbyte)30, "CallStaticByteMethod staticAddBytes(10,20)=30");
+        TEST_ASSERT(br1 == (jbyte)30, "CallStaticByteMethod staticAddBytes(10,20)=30");
+
+        jbyte br2 = call_static_byte_method_v(env, targetClass, midAddBytes,
+                                              (jbyte)10, (jbyte)20);
+        TEST_ASSERT(br2 == (jbyte)30, "CallStaticByteMethodV staticAddBytes(10,20)=30");
+
+        jvalue args[2];
+        args[0].b = 10;
+        args[1].b = 20;
+        jbyte br3 = (*env)->CallStaticByteMethodA(env, targetClass, midAddBytes, args);
+        TEST_ASSERT(br3 == (jbyte)30, "CallStaticByteMethodA staticAddBytes(10,20)=30");
     } else {
         LOGE("Skipping staticAddBytes: method not found");
         (*env)->ExceptionClear(env);
@@ -513,8 +654,16 @@ static void test_static_primitive_calls(JNIEnv *env, jclass targetClass) {
     jmethodID midShiftChar = (*env)->GetStaticMethodID(env, targetClass,
                                                        "staticShiftChar", "(C)C");
     if (midShiftChar != NULL) {
-        jchar cr = (*env)->CallStaticCharMethod(env, targetClass, midShiftChar, (jchar)'A');
-        TEST_ASSERT(cr == (jchar)('A' + 1), "CallStaticCharMethod staticShiftChar('A')='B'");
+        jchar cr1 = (*env)->CallStaticCharMethod(env, targetClass, midShiftChar, (jchar)'A');
+        TEST_ASSERT(cr1 == (jchar)('A' + 1), "CallStaticCharMethod staticShiftChar('A')='B'");
+
+        jchar cr2 = call_static_char_method_v(env, targetClass, midShiftChar, (jchar)'A');
+        TEST_ASSERT(cr2 == (jchar)('A' + 1), "CallStaticCharMethodV staticShiftChar('A')='B'");
+
+        jvalue args[1];
+        args[0].c = 'A';
+        jchar cr3 = (*env)->CallStaticCharMethodA(env, targetClass, midShiftChar, args);
+        TEST_ASSERT(cr3 == (jchar)('A' + 1), "CallStaticCharMethodA staticShiftChar('A')='B'");
     } else {
         LOGE("Skipping staticShiftChar: method not found");
         (*env)->ExceptionClear(env);
@@ -524,9 +673,19 @@ static void test_static_primitive_calls(JNIEnv *env, jclass targetClass) {
     jmethodID midAddShorts = (*env)->GetStaticMethodID(env, targetClass,
                                                        "staticAddShorts", "(SS)S");
     if (midAddShorts != NULL) {
-        jshort sr = (*env)->CallStaticShortMethod(env, targetClass, midAddShorts,
+        jshort sr1 = (*env)->CallStaticShortMethod(env, targetClass, midAddShorts,
                                                   (jshort)100, (jshort)200);
-        TEST_ASSERT(sr == (jshort)300, "CallStaticShortMethod staticAddShorts(100,200)=300");
+        TEST_ASSERT(sr1 == (jshort)300, "CallStaticShortMethod staticAddShorts(100,200)=300");
+
+        jshort sr2 = call_static_short_method_v(env, targetClass, midAddShorts,
+                                                (jshort)100, (jshort)200);
+        TEST_ASSERT(sr2 == (jshort)300, "CallStaticShortMethodV staticAddShorts(100,200)=300");
+
+        jvalue args[2];
+        args[0].s = 100;
+        args[1].s = 200;
+        jshort sr3 = (*env)->CallStaticShortMethodA(env, targetClass, midAddShorts, args);
+        TEST_ASSERT(sr3 == (jshort)300, "CallStaticShortMethodA staticAddShorts(100,200)=300");
     } else {
         LOGE("Skipping staticAddShorts: method not found");
         (*env)->ExceptionClear(env);
@@ -536,8 +695,17 @@ static void test_static_primitive_calls(JNIEnv *env, jclass targetClass) {
     jmethodID midAddInts = (*env)->GetStaticMethodID(env, targetClass,
                                                      "staticAddInts", "(II)I");
     if (midAddInts != NULL) {
-        jint ir = (*env)->CallStaticIntMethod(env, targetClass, midAddInts, (jint)2, (jint)3);
-        TEST_ASSERT(ir == 5, "CallStaticIntMethod staticAddInts(2,3)=5");
+        jint ir1 = (*env)->CallStaticIntMethod(env, targetClass, midAddInts, (jint)2, (jint)3);
+        TEST_ASSERT(ir1 == 5, "CallStaticIntMethod staticAddInts(2,3)=5");
+
+        jint ir2 = call_static_int_method_v(env, targetClass, midAddInts, (jint)2, (jint)3);
+        TEST_ASSERT(ir2 == 5, "CallStaticIntMethodV staticAddInts(2,3)=5");
+
+        jvalue args[2];
+        args[0].i = 2;
+        args[1].i = 3;
+        jint ir3 = (*env)->CallStaticIntMethodA(env, targetClass, midAddInts, args);
+        TEST_ASSERT(ir3 == 5, "CallStaticIntMethodA staticAddInts(2,3)=5");
     } else {
         LOGE("Skipping staticAddInts: method not found");
         (*env)->ExceptionClear(env);
@@ -547,9 +715,19 @@ static void test_static_primitive_calls(JNIEnv *env, jclass targetClass) {
     jmethodID midMulFloats = (*env)->GetStaticMethodID(env, targetClass,
                                                        "staticMulFloats", "(FF)F");
     if (midMulFloats != NULL) {
-        jfloat fr = (*env)->CallStaticFloatMethod(env, targetClass, midMulFloats,
+        jfloat fr1 = (*env)->CallStaticFloatMethod(env, targetClass, midMulFloats,
                                                   (jfloat)1.5f, (jfloat)2.0f);
-        TEST_ASSERT(fabsf(fr - 3.0f) < 0.0001f, "CallStaticFloatMethod staticMulFloats(1.5,2)=3");
+        TEST_ASSERT(fabsf(fr1 - 3.0f) < 0.0001f, "CallStaticFloatMethod staticMulFloats(1.5,2)=3");
+
+        jfloat fr2 = call_static_float_method_v(env, targetClass, midMulFloats,
+                                                (jfloat)1.5f, (jfloat)2.0f);
+        TEST_ASSERT(fabsf(fr2 - 3.0f) < 0.0001f, "CallStaticFloatMethodV staticMulFloats(1.5,2)=3");
+
+        jvalue args[2];
+        args[0].f = 1.5f;
+        args[1].f = 2.0f;
+        jfloat fr3 = (*env)->CallStaticFloatMethodA(env, targetClass, midMulFloats, args);
+        TEST_ASSERT(fabsf(fr3 - 3.0f) < 0.0001f, "CallStaticFloatMethodA staticMulFloats(1.5,2)=3");
     } else {
         LOGE("Skipping staticMulFloats: method not found");
         (*env)->ExceptionClear(env);
@@ -559,9 +737,19 @@ static void test_static_primitive_calls(JNIEnv *env, jclass targetClass) {
     jmethodID midMulDoubles = (*env)->GetStaticMethodID(env, targetClass,
                                                         "staticMulDoubles", "(DD)D");
     if (midMulDoubles != NULL) {
-        jdouble dr = (*env)->CallStaticDoubleMethod(env, targetClass, midMulDoubles,
+        jdouble dr1 = (*env)->CallStaticDoubleMethod(env, targetClass, midMulDoubles,
                                                     (jdouble)2.0, (jdouble)4.0);
-        TEST_ASSERT(fabs(dr - 8.0) < 1e-6, "CallStaticDoubleMethod staticMulDoubles(2,4)=8");
+        TEST_ASSERT(fabs(dr1 - 8.0) < 1e-6, "CallStaticDoubleMethod staticMulDoubles(2,4)=8");
+
+        jdouble dr2 = call_static_double_method_v(env, targetClass, midMulDoubles,
+                                                  (jdouble)2.0, (jdouble)4.0);
+        TEST_ASSERT(fabs(dr2 - 8.0) < 1e-6, "CallStaticDoubleMethodV staticMulDoubles(2,4)=8");
+
+        jvalue args[2];
+        args[0].d = 2.0;
+        args[1].d = 4.0;
+        jdouble dr3 = (*env)->CallStaticDoubleMethodA(env, targetClass, midMulDoubles, args);
+        TEST_ASSERT(fabs(dr3 - 8.0) < 1e-6, "CallStaticDoubleMethodA staticMulDoubles(2,4)=8");
     } else {
         LOGE("Skipping staticMulDoubles: method not found");
         (*env)->ExceptionClear(env);
@@ -572,8 +760,12 @@ static void test_static_primitive_calls(JNIEnv *env, jclass targetClass) {
                                                   "staticVoidLog", "(Ljava/lang/String;)V");
     if (midVoid != NULL) {
         jstring s = (*env)->NewStringUTF(env, "static-void");
+
         (*env)->CallStaticVoidMethod(env, targetClass, midVoid, s);
         TEST_ASSERT(1, "CallStaticVoidMethod executed");
+
+        call_static_void_method_v(env, targetClass, midVoid, s);
+        TEST_ASSERT(1, "CallStaticVoidMethodV executed");
 
         jvalue args[1];
         args[0].l = s;
@@ -681,6 +873,34 @@ static void test_nonvirtual_calls(JNIEnv *env) {
     }
 }
 
+/* Test 14: CallCharMethod / CallCharMethodV / CallCharMethodA (instance) */
+static void test_char_instance_calls(JNIEnv *env, jobject target, jclass targetClass) {
+    LOGI("");
+    LOGI("=== Call tests: Test 14 CallCharMethod/V/A (instance) ===");
+
+    jmethodID shiftCharMid = (*env)->GetMethodID(env, targetClass,
+                                                  "shiftChar", "(C)C");
+    if (shiftCharMid == NULL) {
+        LOGE("Skipping shiftChar: method not found");
+        (*env)->ExceptionClear(env);
+        return;
+    }
+
+    // CallCharMethod
+    jchar r1 = (*env)->CallCharMethod(env, target, shiftCharMid, (jchar)'A');
+    TEST_ASSERT(r1 == (jchar)'B', "CallCharMethod shiftChar('A')='B'");
+
+    // CallCharMethodV
+    jchar r2 = call_char_method_v(env, target, shiftCharMid, (jchar)'X');
+    TEST_ASSERT(r2 == (jchar)'Y', "CallCharMethodV shiftChar('X')='Y'");
+
+    // CallCharMethodA
+    jvalue args[1];
+    args[0].c = 'M';
+    jchar r3 = (*env)->CallCharMethodA(env, target, shiftCharMid, args);
+    TEST_ASSERT(r3 == (jchar)'N', "CallCharMethodA shiftChar('M')='N'");
+}
+
 /* Entry point */
 
 JNIEXPORT void JNICALL
@@ -752,13 +972,33 @@ Java_com_test_jnie2e_EnvCallsTests_runTests(JNIEnv *env, jclass clazz) {
     if (ctorWithArgs != NULL)   test_newObject_with_args(env, targetClass, ctorWithArgs);
     else                        LOGE("Skipping test_newObject_with_args: ctor not found");
 
+    LOGI("");
+    LOGI(">> Running test_boolean_and_small_primitives...");
     test_boolean_and_small_primitives(env, target, targetClass);
 
-    // New tests
+    LOGI("");
+    LOGI(">> Running test_static_object_methods...");
+    test_static_object_methods(env, targetClass);
+
+    LOGI("");
+    LOGI(">> Running test_float_double_calls...");
     test_float_double_calls(env, target, targetClass);
+
+    LOGI("");
+    LOGI(">> Running test_void_calls...");
     test_void_calls(env, target, targetClass);
+
+    LOGI("");
+    LOGI(">> Running test_static_primitive_calls...");
     test_static_primitive_calls(env, targetClass);
+
+    LOGI("");
+    LOGI(">> Running test_nonvirtual_calls...");
     test_nonvirtual_calls(env);
+
+    LOGI("");
+    LOGI(">> Running test_char_instance_calls...");
+    test_char_instance_calls(env, target, targetClass);
 
     LOGI("========================================");
     LOGI("EnvCallsTests summary: %d passed, %d failed", tests_passed, tests_failed);
