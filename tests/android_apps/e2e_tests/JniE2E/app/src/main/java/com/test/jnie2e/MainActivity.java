@@ -101,6 +101,7 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Log.e(TAG, "Error in JniE2E", t);
         } finally {
+            Log.i(TAG, "JniE2E finished, calling finish()");
             finish();
         }
     }
