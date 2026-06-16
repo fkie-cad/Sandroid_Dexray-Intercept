@@ -51,4 +51,9 @@ public class NonvirtualDerived extends NonvirtualBase {
     public void baseVoid(String s) {
         // derived behavior: still no-op for simplicity
     }
+
+    @Override
+    public String baseConcat(String s) {
+        return "derived:" + s;
+    }
 }

@@ -42,4 +42,8 @@ public class NonvirtualBase {
     public void baseVoid(String s) {
         // base behavior: no-op
     }
+
+    public String baseConcat(String s) {
+        return "base:" + s;
+    }
 }

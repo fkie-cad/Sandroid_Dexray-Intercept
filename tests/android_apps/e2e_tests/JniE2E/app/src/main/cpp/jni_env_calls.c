@@ -181,6 +181,85 @@ static jobject call_static_object_method_v(JNIEnv *env, jclass cls, jmethodID mi
     return result;
 }
 
+static jboolean call_nonvirtual_boolean_method_v(JNIEnv *env, jobject obj, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jboolean result = (*env)->CallNonvirtualBooleanMethodV(env, obj, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jbyte call_nonvirtual_byte_method_v(JNIEnv *env, jobject obj, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jbyte result = (*env)->CallNonvirtualByteMethodV(env, obj, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jchar call_nonvirtual_char_method_v(JNIEnv *env, jobject obj, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jchar result = (*env)->CallNonvirtualCharMethodV(env, obj, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jshort call_nonvirtual_short_method_v(JNIEnv *env, jobject obj, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jshort result = (*env)->CallNonvirtualShortMethodV(env, obj, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jint call_nonvirtual_int_method_v(JNIEnv *env, jobject obj, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jint result = (*env)->CallNonvirtualIntMethodV(env, obj, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jlong call_nonvirtual_long_method_v(JNIEnv *env, jobject obj, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jlong result = (*env)->CallNonvirtualLongMethodV(env, obj, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jfloat call_nonvirtual_float_method_v(JNIEnv *env, jobject obj, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jfloat result = (*env)->CallNonvirtualFloatMethodV(env, obj, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static jdouble call_nonvirtual_double_method_v(JNIEnv *env, jobject obj, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jdouble result = (*env)->CallNonvirtualDoubleMethodV(env, obj, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
+static void call_nonvirtual_void_method_v(JNIEnv *env, jobject obj, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    (*env)->CallNonvirtualVoidMethodV(env, obj, cls, mid, ap);
+    va_end(ap);
+}
+
+static jobject call_nonvirtual_object_method_v(JNIEnv *env, jobject obj, jclass cls, jmethodID mid, ...) {
+    va_list ap;
+    va_start(ap, mid);
+    jobject result = (*env)->CallNonvirtualObjectMethodV(env, obj, cls, mid, ap);
+    va_end(ap);
+    return result;
+}
+
 static jobject new_object_v(JNIEnv *env, jclass cls, jmethodID mid, ...) {
     va_list ap;
     va_start(ap, mid);
@@ -777,10 +856,10 @@ static void test_static_primitive_calls(JNIEnv *env, jclass targetClass) {
     }
 }
 
-/* Test 13: Nonvirtual calls using NonvirtualBase / NonvirtualDerived */
+/* Test 13: Nonvirtual calls - all types with plain/V/A variants */
 static void test_nonvirtual_calls(JNIEnv *env) {
     LOGI("");
-    LOGI("=== Call tests: Test 13 nonvirtual calls ===");
+    LOGI("=== Call tests: Test 13 nonvirtual calls (plain/V/A) ===");
 
     jclass baseCls = (*env)->FindClass(env, "com/test/jnie2e/NonvirtualBase");
     jclass derivedCls = (*env)->FindClass(env, "com/test/jnie2e/NonvirtualDerived");
@@ -799,77 +878,184 @@ static void test_nonvirtual_calls(JNIEnv *env) {
         return;
     }
 
-    jobject derivedObj = (*env)->NewObject(env, derivedCls, ctorDerived);
-    if (derivedObj == NULL) {
+    jobject obj = (*env)->NewObject(env, derivedCls, ctorDerived);
+    if (obj == NULL) {
         LOGE("NewObject(NonvirtualDerived) failed");
         (*env)->ExceptionDescribe(env);
         (*env)->ExceptionClear(env);
         return;
     }
 
-    // Prepare base-class method IDs
-    jmethodID midInt    = (*env)->GetMethodID(env, baseCls, "baseInt",    "(I)I");
-    jmethodID midBool   = (*env)->GetMethodID(env, baseCls, "baseBool",   "(Z)Z");
-    jmethodID midByte   = (*env)->GetMethodID(env, baseCls, "baseByte",   "(B)B");
-    jmethodID midChar   = (*env)->GetMethodID(env, baseCls, "baseChar",   "(C)C");
-    jmethodID midShort  = (*env)->GetMethodID(env, baseCls, "baseShort",  "(S)S");
-    jmethodID midLong   = (*env)->GetMethodID(env, baseCls, "baseLong",   "(J)J");
-    jmethodID midFloat  = (*env)->GetMethodID(env, baseCls, "baseFloat",  "(F)F");
-    jmethodID midDouble = (*env)->GetMethodID(env, baseCls, "baseDouble", "(D)D");
-    jmethodID midVoid   = (*env)->GetMethodID(env, baseCls, "baseVoid",
-                                              "(Ljava/lang/String;)V");
-
+    // --- Int: baseInt(int) -> int*10 in base ---
+    jmethodID midInt = (*env)->GetMethodID(env, baseCls, "baseInt", "(I)I");
     if (midInt != NULL) {
-        jint v = (*env)->CallNonvirtualIntMethod(env, derivedObj, baseCls, midInt, (jint)2);
-        TEST_ASSERT(v == 20, "CallNonvirtualIntMethod baseInt(2)=20");
+        jint v1 = (*env)->CallNonvirtualIntMethod(env, obj, baseCls, midInt, (jint)2);
+        TEST_ASSERT(v1 == 20, "CallNonvirtualIntMethod baseInt(2)=20");
+
+        jint v2 = call_nonvirtual_int_method_v(env, obj, baseCls, midInt, (jint)2);
+        TEST_ASSERT(v2 == 20, "CallNonvirtualIntMethodV baseInt(2)=20");
+
+        jvalue args[1]; args[0].i = 2;
+        jint v3 = (*env)->CallNonvirtualIntMethodA(env, obj, baseCls, midInt, args);
+        TEST_ASSERT(v3 == 20, "CallNonvirtualIntMethodA baseInt(2)=20");
     }
 
+    // --- Boolean: baseBool(boolean) -> !b in base ---
+    jmethodID midBool = (*env)->GetMethodID(env, baseCls, "baseBool", "(Z)Z");
     if (midBool != NULL) {
-        jboolean b = (*env)->CallNonvirtualBooleanMethod(env, derivedObj, baseCls, midBool,
-                                                         (jboolean)JNI_TRUE);
-        TEST_ASSERT(b == JNI_FALSE, "CallNonvirtualBooleanMethod baseBool(true)=false");
+        jboolean b1 = (*env)->CallNonvirtualBooleanMethod(env, obj, baseCls, midBool, (jboolean)JNI_TRUE);
+        TEST_ASSERT(b1 == JNI_FALSE, "CallNonvirtualBooleanMethod baseBool(true)=false");
+
+        jboolean b2 = call_nonvirtual_boolean_method_v(env, obj, baseCls, midBool, (jboolean)JNI_TRUE);
+        TEST_ASSERT(b2 == JNI_FALSE, "CallNonvirtualBooleanMethodV baseBool(true)=false");
+
+        jvalue args[1]; args[0].z = JNI_TRUE;
+        jboolean b3 = (*env)->CallNonvirtualBooleanMethodA(env, obj, baseCls, midBool, args);
+        TEST_ASSERT(b3 == JNI_FALSE, "CallNonvirtualBooleanMethodA baseBool(true)=false");
     }
 
+    // --- Byte: baseByte(byte) -> b+1 in base ---
+    jmethodID midByte = (*env)->GetMethodID(env, baseCls, "baseByte", "(B)B");
     if (midByte != NULL) {
-        jbyte bb = (*env)->CallNonvirtualByteMethod(env, derivedObj, baseCls, midByte,
-                                                    (jbyte)5);
-        TEST_ASSERT(bb == (jbyte)6, "CallNonvirtualByteMethod baseByte(5)=6");
+        jbyte bb1 = (*env)->CallNonvirtualByteMethod(env, obj, baseCls, midByte, (jbyte)5);
+        TEST_ASSERT(bb1 == (jbyte)6, "CallNonvirtualByteMethod baseByte(5)=6");
+
+        jbyte bb2 = call_nonvirtual_byte_method_v(env, obj, baseCls, midByte, (jbyte)5);
+        TEST_ASSERT(bb2 == (jbyte)6, "CallNonvirtualByteMethodV baseByte(5)=6");
+
+        jvalue args[1]; args[0].b = 5;
+        jbyte bb3 = (*env)->CallNonvirtualByteMethodA(env, obj, baseCls, midByte, args);
+        TEST_ASSERT(bb3 == (jbyte)6, "CallNonvirtualByteMethodA baseByte(5)=6");
     }
 
+    // --- Char: baseChar(char) -> c+1 in base ---
+    jmethodID midChar = (*env)->GetMethodID(env, baseCls, "baseChar", "(C)C");
     if (midChar != NULL) {
-        jchar c = (*env)->CallNonvirtualCharMethod(env, derivedObj, baseCls, midChar,
-                                                   (jchar)'A');
-        TEST_ASSERT(c == (jchar)('A' + 1), "CallNonvirtualCharMethod baseChar('A')='B'");
+        jchar c1 = (*env)->CallNonvirtualCharMethod(env, obj, baseCls, midChar, (jchar)'A');
+        TEST_ASSERT(c1 == (jchar)'B', "CallNonvirtualCharMethod baseChar('A')='B'");
+
+        jchar c2 = call_nonvirtual_char_method_v(env, obj, baseCls, midChar, (jchar)'A');
+        TEST_ASSERT(c2 == (jchar)'B', "CallNonvirtualCharMethodV baseChar('A')='B'");
+
+        jvalue args[1]; args[0].c = 'A';
+        jchar c3 = (*env)->CallNonvirtualCharMethodA(env, obj, baseCls, midChar, args);
+        TEST_ASSERT(c3 == (jchar)'B', "CallNonvirtualCharMethodA baseChar('A')='B'");
     }
 
+    // --- Short: baseShort(short) -> s+10 in base ---
+    jmethodID midShort = (*env)->GetMethodID(env, baseCls, "baseShort", "(S)S");
     if (midShort != NULL) {
-        jshort s = (*env)->CallNonvirtualShortMethod(env, derivedObj, baseCls, midShort,
-                                                     (jshort)100);
-        TEST_ASSERT(s == (jshort)110, "CallNonvirtualShortMethod baseShort(100)=110");
+        jshort s1 = (*env)->CallNonvirtualShortMethod(env, obj, baseCls, midShort, (jshort)100);
+        TEST_ASSERT(s1 == (jshort)110, "CallNonvirtualShortMethod baseShort(100)=110");
+
+        jshort s2 = call_nonvirtual_short_method_v(env, obj, baseCls, midShort, (jshort)100);
+        TEST_ASSERT(s2 == (jshort)110, "CallNonvirtualShortMethodV baseShort(100)=110");
+
+        jvalue args[1]; args[0].s = 100;
+        jshort s3 = (*env)->CallNonvirtualShortMethodA(env, obj, baseCls, midShort, args);
+        TEST_ASSERT(s3 == (jshort)110, "CallNonvirtualShortMethodA baseShort(100)=110");
     }
 
+    // --- Long: baseLong(long) -> l+100 in base ---
+    jmethodID midLong = (*env)->GetMethodID(env, baseCls, "baseLong", "(J)J");
     if (midLong != NULL) {
-        jlong l = (*env)->CallNonvirtualLongMethod(env, derivedObj, baseCls, midLong,
-                                                   (jlong)1000);
-        TEST_ASSERT(l == 1100, "CallNonvirtualLongMethod baseLong(1000)=1100");
+        jlong l1 = (*env)->CallNonvirtualLongMethod(env, obj, baseCls, midLong, (jlong)1000);
+        TEST_ASSERT(l1 == 1100, "CallNonvirtualLongMethod baseLong(1000)=1100");
+
+        jlong l2 = call_nonvirtual_long_method_v(env, obj, baseCls, midLong, (jlong)1000);
+        TEST_ASSERT(l2 == 1100, "CallNonvirtualLongMethodV baseLong(1000)=1100");
+
+        jvalue args[1]; args[0].j = 1000;
+        jlong l3 = (*env)->CallNonvirtualLongMethodA(env, obj, baseCls, midLong, args);
+        TEST_ASSERT(l3 == 1100, "CallNonvirtualLongMethodA baseLong(1000)=1100");
     }
 
+    // --- Float: baseFloat(float) -> f+1.0 in base ---
+    jmethodID midFloat = (*env)->GetMethodID(env, baseCls, "baseFloat", "(F)F");
     if (midFloat != NULL) {
-        jfloat f = (*env)->CallNonvirtualFloatMethod(env, derivedObj, baseCls, midFloat,
-                                                     (jfloat)1.5f);
-        TEST_ASSERT(fabsf(f - 2.5f) < 0.0001f, "CallNonvirtualFloatMethod baseFloat(1.5)=2.5");
+        jfloat f1 = (*env)->CallNonvirtualFloatMethod(env, obj, baseCls, midFloat, (jfloat)1.5f);
+        TEST_ASSERT(fabsf(f1 - 2.5f) < 0.0001f, "CallNonvirtualFloatMethod baseFloat(1.5)=2.5");
+
+        jfloat f2 = call_nonvirtual_float_method_v(env, obj, baseCls, midFloat, (jfloat)1.5f);
+        TEST_ASSERT(fabsf(f2 - 2.5f) < 0.0001f, "CallNonvirtualFloatMethodV baseFloat(1.5)=2.5");
+
+        jvalue args[1]; args[0].f = 1.5f;
+        jfloat f3 = (*env)->CallNonvirtualFloatMethodA(env, obj, baseCls, midFloat, args);
+        TEST_ASSERT(fabsf(f3 - 2.5f) < 0.0001f, "CallNonvirtualFloatMethodA baseFloat(1.5)=2.5");
     }
 
+    // --- Double: baseDouble(double) -> d+1.0 in base ---
+    jmethodID midDouble = (*env)->GetMethodID(env, baseCls, "baseDouble", "(D)D");
     if (midDouble != NULL) {
-        jdouble d = (*env)->CallNonvirtualDoubleMethod(env, derivedObj, baseCls, midDouble,
-                                                       (jdouble)2.5);
-        TEST_ASSERT(fabs(d - 3.5) < 1e-6, "CallNonvirtualDoubleMethod baseDouble(2.5)=3.5");
+        jdouble d1 = (*env)->CallNonvirtualDoubleMethod(env, obj, baseCls, midDouble, (jdouble)2.5);
+        TEST_ASSERT(fabs(d1 - 3.5) < 1e-6, "CallNonvirtualDoubleMethod baseDouble(2.5)=3.5");
+
+        jdouble d2 = call_nonvirtual_double_method_v(env, obj, baseCls, midDouble, (jdouble)2.5);
+        TEST_ASSERT(fabs(d2 - 3.5) < 1e-6, "CallNonvirtualDoubleMethodV baseDouble(2.5)=3.5");
+
+        jvalue args[1]; args[0].d = 2.5;
+        jdouble d3 = (*env)->CallNonvirtualDoubleMethodA(env, obj, baseCls, midDouble, args);
+        TEST_ASSERT(fabs(d3 - 3.5) < 1e-6, "CallNonvirtualDoubleMethodA baseDouble(2.5)=3.5");
     }
 
+    // --- Void: baseVoid(String) -> no-op in base ---
+    jmethodID midVoid = (*env)->GetMethodID(env, baseCls, "baseVoid", "(Ljava/lang/String;)V");
     if (midVoid != NULL) {
         jstring js = (*env)->NewStringUTF(env, "nv");
-        (*env)->CallNonvirtualVoidMethod(env, derivedObj, baseCls, midVoid, js);
+
+        (*env)->CallNonvirtualVoidMethod(env, obj, baseCls, midVoid, js);
         TEST_ASSERT(1, "CallNonvirtualVoidMethod baseVoid executed");
+
+        call_nonvirtual_void_method_v(env, obj, baseCls, midVoid, js);
+        TEST_ASSERT(1, "CallNonvirtualVoidMethodV baseVoid executed");
+
+        jvalue args[1]; args[0].l = js;
+        (*env)->CallNonvirtualVoidMethodA(env, obj, baseCls, midVoid, args);
+        TEST_ASSERT(1, "CallNonvirtualVoidMethodA baseVoid executed");
+    }
+
+    // --- Object: baseConcat(String) -> "base:"+s in base ---
+    jmethodID midConcat = (*env)->GetMethodID(env, baseCls, "baseConcat",
+                                              "(Ljava/lang/String;)Ljava/lang/String;");
+    if (midConcat != NULL) {
+        jstring input = (*env)->NewStringUTF(env, "test");
+
+        // CallNonvirtualObjectMethod
+        jstring r1 = (jstring)(*env)->CallNonvirtualObjectMethod(env, obj, baseCls, midConcat, input);
+        if (r1 != NULL) {
+            const char *c1 = (*env)->GetStringUTFChars(env, r1, NULL);
+            TEST_ASSERT(c1 && strcmp(c1, "base:test") == 0,
+                        "CallNonvirtualObjectMethod baseConcat='base:test'");
+            if (c1) (*env)->ReleaseStringUTFChars(env, r1, c1);
+        } else {
+            TEST_ASSERT(0, "CallNonvirtualObjectMethod returned NULL");
+        }
+
+        // CallNonvirtualObjectMethodV
+        jstring r2 = (jstring)call_nonvirtual_object_method_v(env, obj, baseCls, midConcat, input);
+        if (r2 != NULL) {
+            const char *c2 = (*env)->GetStringUTFChars(env, r2, NULL);
+            TEST_ASSERT(c2 && strcmp(c2, "base:test") == 0,
+                        "CallNonvirtualObjectMethodV baseConcat='base:test'");
+            if (c2) (*env)->ReleaseStringUTFChars(env, r2, c2);
+        } else {
+            TEST_ASSERT(0, "CallNonvirtualObjectMethodV returned NULL");
+        }
+
+        // CallNonvirtualObjectMethodA
+        jvalue args[1]; args[0].l = input;
+        jstring r3 = (jstring)(*env)->CallNonvirtualObjectMethodA(env, obj, baseCls, midConcat, args);
+        if (r3 != NULL) {
+            const char *c3 = (*env)->GetStringUTFChars(env, r3, NULL);
+            TEST_ASSERT(c3 && strcmp(c3, "base:test") == 0,
+                        "CallNonvirtualObjectMethodA baseConcat='base:test'");
+            if (c3) (*env)->ReleaseStringUTFChars(env, r3, c3);
+        } else {
+            TEST_ASSERT(0, "CallNonvirtualObjectMethodA returned NULL");
+        }
+    } else {
+        LOGE("Skipping baseConcat: method not found");
+        (*env)->ExceptionClear(env);
     }
 }
 
