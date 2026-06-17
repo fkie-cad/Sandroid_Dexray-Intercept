@@ -11,9 +11,6 @@
     "noImplicitAny": false,
     "strictNullChecks": false,
     "skipLibCheck": true,
-  },
-  "exclude": [
-    "node_modules",
-    "agent/jni/jnitrace-engine"
-  ]
+    "resolveJsonModule": true
+  }
 }

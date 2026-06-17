@@ -1,3 +1,5 @@
+import "./compat.js";
+
 import { Config } from "./utils/config";
 import { ConfigBuilder } from "./utils/config_builder";
 
@@ -10,7 +12,7 @@ import JNI_ENV_METHODS from "./data/jni_env.json";
 import JAVA_VM_METHODS from "./data/java_vm.json";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
-import engine = require("./engine");
+import { run } from "./engine.js";
 /* eslint-enable @typescript-eslint/no-require-imports */
 const globalCallbackManager: JNICallbackManager = new JNICallbackManager();
 
@@ -205,7 +207,7 @@ namespace JNILibraryWatcher {
 }
 /* eslint-enable @typescript-eslint/no-namespace */
 
-engine.run(globalCallbackManager);
+run(globalCallbackManager);
 
 export {
     JNIInterceptor,

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { JNIThreadManager } from "./jni_thread_manager";
 import { JNIEnvInterceptor } from "./jni_env_interceptor";
 import { JavaVM } from "./java_vm";

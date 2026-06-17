@@ -7,7 +7,7 @@ import {
     JNIInvocationCallback,
     Config,
     ConfigBuilder
-} from "jnitrace-engine";
+} from "./jnitrace-engine/lib/index.js";
 
 import { am_send, devlog } from "../utils/logging.js";
 import { bytesToHex } from "../utils/misc.js";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import JNI_ENV_METHODS from "../data/jni_env.json";
 
 import { JNIThreadManager } from "./jni_thread_manager";
