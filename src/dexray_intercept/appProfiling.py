@@ -32,7 +32,8 @@ class AppProfiler:
                  path_filters: Optional[List[str]] = None, hook_config: Optional[Dict[str, bool]] = None, 
                  enable_stacktrace: bool = False, enable_fritap: bool = False, 
                  fritap_output_dir: str = "./fritap_output", target_name: Optional[str] = None, 
-                 spawn_mode: bool = False, custom_scripts: Optional[List[str]] = None):
+                 spawn_mode: bool = False, custom_scripts: Optional[List[str]] = None,
+                 jni_config: Optional[Dict[str, Any]] = None):
         """
         Initialize the AppProfiler.
         
@@ -50,6 +51,7 @@ class AppProfiler:
             target_name: Target application name or package identifier
             spawn_mode: Whether the target was spawned (True) or attached to (False)
             custom_scripts: List of paths to custom Frida scripts to load
+            jni_config: JNI tracing configuration dictionary
         """
         self.process = process
         
@@ -97,6 +99,7 @@ class AppProfiler:
             base_path=base_path
         )
         self.hook_manager = HookManager(hook_config)
+        self.jni_config = jni_config or {}
         
         # Set up message handling (only if instrumentation service exists)
         if self.instrumentation:
@@ -454,6 +457,24 @@ class AppProfiler:
                 'payload': filters
             })
             self.path_filters_sent = True
+            return True
+        
+        # Send JNI configuration to agent
+        if payload == 'jni_config':
+            self.instrumentation.send_message({
+                'type': 'jni_config',
+                'payload': self.jni_config or {
+                    "libraries": ["*"],
+                    "backtrace": "none",
+                    "include": [],
+                    "exclude": [],
+                    "include_export": [],
+                    "exclude_export": [],
+                    "hide_data": False,
+                    "env": True,
+                    "vm": True,
+                }
+            })
             return True
         
         return False

@@ -5,7 +5,8 @@ from typing import Optional
 from .base import BaseFormatter
 from ..models.events import (
     Event, FileSystemEvent, CryptoEvent, NetworkEvent, 
-    ProcessEvent, IPCEvent, ServiceEvent, DEXEvent
+    ProcessEvent, IPCEvent, ServiceEvent, DEXEvent,
+    JNIEvent
 )
 from ..utils.hexdump import hexdump
 from ..utils.string_utils import truncate_string
@@ -37,6 +38,8 @@ class ConsoleFormatter(BaseFormatter):
             return self._format_service_event(event)
         elif isinstance(event, DEXEvent):
             return self._format_dex_event(event)
+        elif isinstance(event,JNIEvent):
+            return self._format_jni_event(event)
         else:
             return self._format_generic_event(event)
     
@@ -527,6 +530,215 @@ class ConsoleFormatter(BaseFormatter):
             lines.append(f"[*] DEX: {event.event_type}")
 
         return '\n'.join(lines) if lines else ""
+    
+    def _format_jni_event(self, event: JNIEvent) -> str:
+        """Format JNI events"""
+        lines = []
+        md = event.metadata or {}
+        event_type = event.event_type
+
+        # Prefer parser-generated description when present
+        desc = md.get("description")
+
+        if event_type == "jni.library.tracked":
+            lines.append("\n[*] [JNI] Library Tracked:")
+            lines.append(f"[*] Library Path: {md.get('library_path', 'Unknown')}")
+            if desc:
+                lines.append(f"[*] Description: {desc}")
+
+        elif event_type == "jni.env.call":
+            method = md.get("method", "Unknown")
+            args = md.get("arguments", [])
+            ret = md.get("return_value", "Unknown")
+            sig = md.get("java_method_sig")
+            thread_id = md.get("thread_id")
+
+            lines.append("\n[*] [JNI] JNIEnv Call:")
+            lines.append(f"[*] Method: {method}")
+            if sig:
+                lines.append(f"[*] Java Signature: {sig}")
+            # Arguments
+            if args:
+                arg_str = ", ".join(map(str, args))
+                lines.append(f"[*] Arguments: {arg_str}")
+            else:
+                lines.append("[*] Arguments: (none)")
+            lines.append(f"[*] Return: {ret}")
+            if thread_id is not None:
+                lines.append(f"[*] Thread ID: {thread_id}")
+
+            # Enriched details if available
+            if md.get("class_name"):
+                lines.append(f"[*] Class Name: {md['class_name']}")
+            if md.get("string_argument"):
+                lines.append(f"[*] String Argument: {md['string_argument']}")
+            if md.get("string_return"):
+                lines.append(f"[*] Decoded Return: {md['string_return']}")
+            if method == "GetStringCritical" and md.get("string_return"):
+                lines.append(f"[*] Critical String: {md['string_return']}")
+                
+            # Decoded method/field IDs
+            if method in ("GetMethodID", "GetStaticMethodID"):
+                if md.get("method_name"):
+                    lines.append(f"[*] Target Method Name: {md['method_name']}")
+                if md.get("method_signature"):
+                    lines.append(f"[*] Target Method Signature: {md['method_signature']}")
+                if md.get("method_descriptor"):
+                    lines.append(f"[*] Method Descriptor: {md['method_descriptor']}")
+
+            if method in ("GetFieldID", "GetStaticFieldID"):
+                if md.get("field_name"):
+                    lines.append(f"[*] Target Field Name: {md['field_name']}")
+                if md.get("field_signature"):
+                    lines.append(f"[*] Target Field Signature: {md['field_signature']}")
+                if md.get("field_descriptor"):
+                    lines.append(f"[*] Field Descriptor: {md['field_descriptor']}")
+
+            # Decoded RegisterNatives array
+            if method == "RegisterNatives" and md.get("registered_natives"):
+                lines.append("[*] Registered natives:")
+                for native in md["registered_natives"]:
+                    name = native.get("name") or "<unknown>"
+                    sig = native.get("signature") or ""
+                    addr = native.get("address") or "<addr?>"
+                    lines.append(f"    {addr} - {name}{sig}")
+
+            # ThrowNew / FatalError messages
+            if method == "ThrowNew" and md.get("throw_message"):
+                lines.append(f"[*] Exception Message: {md['throw_message']}")
+            if method == "FatalError" and md.get("fatal_message"):
+                lines.append(f"[*] Fatal Error Message: {md['fatal_message']}")
+
+            # GetJavaVM decoded JavaVM pointer
+            if method == "GetJavaVM" and md.get("java_vm_ptr"):
+                lines.append(f"[*] JavaVM*: {md['java_vm_ptr']}")
+
+            # DefineClass decoded info
+            if method == "DefineClass":
+                if md.get("define_class_name"):
+                    lines.append(f"[*] Class Name: {md['define_class_name']}")
+                if md.get("class_data_length") is not None:
+                    lines.append(f"[*] Class Data Length: {md['class_data_length']} bytes")
+                if md.get("class_data_hex"):
+                    lines.append(f"[*] Class Data (hex, truncated): {md['class_data_hex']}")
+            
+            # Direct buffer details (if present)
+            if method in ("NewDirectByteBuffer", "GetDirectBufferAddress", "GetDirectBufferCapacity"):
+                if md.get("direct_buffer_address"):
+                    lines.append(f"[*] Direct Buffer Address: {md['direct_buffer_address']}")
+                if md.get("direct_buffer_capacity") is not None:
+                    lines.append(f"[*] Direct Buffer Capacity: {md['direct_buffer_capacity']} bytes")
+                if md.get("buffer_hex"):
+                    lines.append("[*] Direct Buffer Data (console view, truncated):")
+                    dump = hexdump(md["buffer_hex"], header=True, ansi=True,
+                                   truncate=True, max_bytes=0x50)
+                    if dump:
+                        for line in dump.split('\n'):
+                            lines.append(f"    {line}")
+                if md.get("buffer_truncated"):
+                    lines.append("[*] Direct buffer data truncated in console view")
+            
+            if md.get("array_length") is not None:
+                lines.append(f"[*] Array Length: {md['array_length']} elements")
+
+            if md.get("array_hex"):
+                # JSON contains the full hex; console shows a truncated hexdump
+                lines.append("[*] Array Data (console view, truncated):")
+                dump = hexdump(md["array_hex"], header=True, ansi=True,
+                            truncate=True, max_bytes=0x50)
+                if dump:
+                    for line in dump.split('\n'):
+                        lines.append(f"    {line}")
+            
+            if md.get("array_values") is not None:
+                lines.append(f"[*] Array Values: {md['array_values']}")
+
+            # Java-level params/args (for Call*/NewObject* when available)
+            if md.get("java_params"):
+                lines.append(f"[*] Java Params: {md['java_params']}")
+            if md.get("java_args"):
+                lines.append(f"[*] Java Args: {md['java_args']}")
+            if md.get("java_ret_type"):
+                lines.append(f"[*] Java Return Type: {md['java_ret_type']}")
+            if md.get("java_ret_value") is not None:
+                lines.append(f"[*] Java Return Value: {md['java_ret_value']}")
+
+            # Backtrace (if available)
+            self._append_jni_backtrace(md, lines)
+            
+            if desc:
+                lines.append(f"[*] Summary: {desc}")
+
+        elif event_type == "jni.vm.call":
+            method = md.get("method", "Unknown")
+            args = md.get("arguments", [])
+            ret = md.get("return_value", "Unknown")
+            thread_id = md.get("thread_id")
+
+            lines.append("\n[*] [JNI] JavaVM Call:")
+            lines.append(f"[*] Method: {method}")
+            if args:
+                arg_str = ", ".join(map(str, args))
+                lines.append(f"[*] Arguments: {arg_str}")
+            else:
+                lines.append("[*] Arguments: (none)")
+            lines.append(f"[*] Return: {ret}")
+            if thread_id is not None:
+                lines.append(f"[*] Thread ID: {thread_id}")
+
+            # Backtrace (if available)
+            self._append_jni_backtrace(md, lines)
+
+            if desc:
+                lines.append(f"[*] Summary: {desc}")
+
+        else:
+            # Fallback for any unexpected JNI event
+            lines.append(f"\n[*] [JNI] {event_type}: {md or 'Unknown'}")
+
+        lines.append("")  # Empty line at end
+        return "\n".join(lines)
+    
+    def _append_jni_backtrace(self, md, lines):
+        bt = md.get("backtrace")
+        if not bt:
+            return
+
+        lines.append("[*] Backtrace:")
+        max_frames = 16
+        count = 0
+        for frame in bt:
+            if count >= max_frames:
+                break
+
+            if isinstance(frame, str):
+                lines.append(f"    {frame}")
+                count += 1
+                continue
+
+            if isinstance(frame, dict):
+                mod = frame.get("module")
+                # Stop when frame without module info is reached
+                if not mod:
+                    break
+
+                addr = frame.get("address") or "0x?"
+                sym = frame.get("symbol") or {}
+
+                mod_name = mod.get("name") or ""
+                sym_name = sym.get("name") or ""
+
+                if sym_name:
+                    if mod_name:
+                        lines.append(f"    {addr}: {mod_name}!{sym_name}")
+                    else:
+                        lines.append(f"    {addr}: {sym_name}")
+                elif mod_name:
+                    lines.append(f"    {addr}: {mod_name}")
+                else:
+                    lines.append(f"    {addr}")
+
+                count += 1
     
     def _format_generic_event(self, event: Event) -> str:
         """Format generic events"""
