@@ -207,7 +207,10 @@ namespace JNILibraryWatcher {
 }
 /* eslint-enable @typescript-eslint/no-namespace */
 
-run(globalCallbackManager);
+//run(globalCallbackManager);
+export function startJniEngine(): void {
+    run(globalCallbackManager);
+}
 
 export {
     JNIInterceptor,

@@ -6,7 +6,8 @@ import {
     JNINativeReturnValue,
     JNIInvocationCallback,
     Config,
-    ConfigBuilder
+    ConfigBuilder,
+    startJniEngine
 } from "./jnitrace-engine/lib/index.js";
 
 import { am_send, devlog } from "../utils/logging.js";
@@ -513,30 +514,6 @@ let jniConfig: JniConfigPayload = {
     vm: true
 };
 
-// Request JNI config from Python
-send("jni_config");
-
-const jniConfigRecvState = recv("jni_config", value => {
-    const p = value.payload;
-    if (typeof p === "object" && p !== null) {
-        jniConfig = {
-            ...jniConfig,
-            libraries: Array.isArray(p.libraries) ? p.libraries : jniConfig.libraries,
-            backtrace: (p.backtrace === "fuzzy" || p.backtrace === "accurate" || p.backtrace === "none")
-                ? p.backtrace
-                : jniConfig.backtrace,
-            include: Array.isArray(p.include) ? p.include : jniConfig.include,
-            exclude: Array.isArray(p.exclude) ? p.exclude : jniConfig.exclude,
-            include_export: Array.isArray(p.include_export) ? p.include_export : jniConfig.include_export,
-            exclude_export: Array.isArray(p.exclude_export) ? p.exclude_export : jniConfig.exclude_export,
-            hide_data: typeof p.hide_data === "boolean" ? p.hide_data : jniConfig.hide_data,
-            env: typeof p.env === "boolean" ? p.env : jniConfig.env,
-            vm: typeof p.vm === "boolean" ? p.vm : jniConfig.vm
-        };
-    }
-});
-jniConfigRecvState.wait();
-
 function createJniEvent(eventType: string, data: any): void {
     const event = {
         event_type: eventType,
@@ -612,24 +589,6 @@ function shouldIgnoreMethod(name: string): boolean {
 
     return false;
 }
-
-JNILibraryWatcher.setCallback({
-    onLoaded (path: string): void {
-        // ensure config is initialized
-        ensureConfig();
-
-        // Only report each path once
-        if (seenLibraries.has(path)) {
-            return;
-        }
-        seenLibraries.add(path);
-
-        // optionally emit a "library tracked" meta-event
-        createJniEvent("jni.library.tracked", {
-            library_path: path
-        });
-    }
-});
 
 const jniEnvCallback: JNIInvocationCallback = {
     onEnter (args): void {
@@ -1308,7 +1267,54 @@ export function install_jni_hooks(): void {
     devlog("\n");
     devlog("[JNI] Installing JNI trace hooks");
 
+    // Configuration is requested at hook installation time rather than at module
+    // load time, ensuring the engine is only initialized when JNI tracing is
+    // explicitly enabled.
+
+    // Request JNI config from Python
+    send("jni_config");
+    const jniConfigRecvState = recv("jni_config", value => {
+        const p = value.payload;
+        if (typeof p === "object" && p !== null) {
+            jniConfig = {
+                ...jniConfig,
+                libraries: Array.isArray(p.libraries) ? p.libraries : jniConfig.libraries,
+                backtrace: (p.backtrace === "fuzzy" || p.backtrace === "accurate" || p.backtrace === "none")
+                    ? p.backtrace
+                    : jniConfig.backtrace,
+                include: Array.isArray(p.include) ? p.include : jniConfig.include,
+                exclude: Array.isArray(p.exclude) ? p.exclude : jniConfig.exclude,
+                include_export: Array.isArray(p.include_export) ? p.include_export : jniConfig.include_export,
+                exclude_export: Array.isArray(p.exclude_export) ? p.exclude_export : jniConfig.exclude_export,
+                hide_data: typeof p.hide_data === "boolean" ? p.hide_data : jniConfig.hide_data,
+                env: typeof p.env === "boolean" ? p.env : jniConfig.env,
+                vm: typeof p.vm === "boolean" ? p.vm : jniConfig.vm
+            };
+        }
+    });
+    jniConfigRecvState.wait();
+
+    // The library watcher callback is registered here for the same reason,
+    // registration at module load time would arm the dynamic linker observer
+    // regardless of the active hook configuration.
+    JNILibraryWatcher.setCallback({
+        onLoaded(path: string): void {
+            ensureConfig();
+            if (seenLibraries.has(path)) {
+                return;
+            }
+            seenLibraries.add(path);
+            createJniEvent("jni.library.tracked", {
+                library_path: path
+            });
+        }
+    });
+
     ensureConfig();
+
+    // Engine is started after config is populated and only when this function
+    // is explicitly called.
+    startJniEngine();
 
     try {
         // JavaVM methods
