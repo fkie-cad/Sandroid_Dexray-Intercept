@@ -460,7 +460,11 @@ class AppProfiler:
             return True
         
         # Send JNI configuration to agent
+        # jni_config is only requested by the agent when JNI hooks are active.
+        # The guard below provides an additional safety net for unexpected requests.
         if payload == 'jni_config':
+            if not self.hook_manager.is_hook_enabled('jni_hooks'):
+                return True
             self.instrumentation.send_message({
                 'type': 'jni_config',
                 'payload': self.jni_config or {
