@@ -53,4 +53,7 @@ dependencies {
 
     // Volley
     implementation "com.android.volley:volley:1.2.1"
+
+    // Local WebSocket
+    implementation 'org.java-websocket:Java-WebSocket:1.5.4'
 }
