@@ -50,7 +50,7 @@ public class MainActivity extends Activity {
 
     private static final String TAG = "NETWORK_E2E";
 
-    private static final String TEST_HTTP_URL = "https://httpbin.org/get";
+    private static final String TEST_HTTP_URL     = "https://httpbin.org/get";
     private static final String TEST_HTTP_POST_URL = "https://httpbin.org/post";
     private static final String TEST_WEBSOCKET_URL = "wss://echo.websocket.events";
 
@@ -60,66 +60,156 @@ public class MainActivity extends Activity {
 
         Log.i(TAG, "NetworkE2E started");
 
+        // WebView construction and all loadUrl/loadData/postUrl calls require
+        // the main thread; executed here before the network thread is started.
         try {
             runWebViewTests();
+            Log.i(TAG, "runWebViewTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runWebViewTests failed", t);
+        }
 
-            Thread t = new Thread(() -> {
+        // All remaining tests perform blocking network I/O and must run off
+        // the main thread to satisfy Android's NetworkOnMainThreadException policy.
+        Thread thread = new Thread(() -> {
+            try {
+
+                // 1) URL / URI construction + HttpURLConnection (POST)
+                //    web.ts: url.creation, uri.creation, url.open_connection,
+                //            okhttp.request_method, okhttp.request_property,
+                //            http.connect, http.output_stream, http.input_stream
                 try {
                     runUrlAndHttpUrlConnectionTests();
-                    runHttpsUrlConnectionTests();
-                    runOkHttp3Tests();
-                    runOkHttpLegacyTests();
-                    runRetrofitTests();
-                    runVolleyTests();
-                    runSocketTests();
-                    runWebSocketTests();
-                } catch (Throwable t1) {
-                    Log.e(TAG, "Error in network tests", t1);
-                } finally {
-                    runOnUiThread(this::finish);
+                    Log.i(TAG, "runUrlAndHttpUrlConnectionTests completed");
+                } catch (Throwable t) {
+                    Log.e(TAG, "runUrlAndHttpUrlConnectionTests failed", t);
                 }
-            });
-            t.start();
-        } catch (Throwable t) {
-            Log.e(TAG, "Error in NetworkE2E", t);
-            finish();
-        }
+
+                // 2) HttpsURLConnection (GET)
+                //    web.ts: https.request_method, https.connect, https.input_stream
+                try {
+                    runHttpsUrlConnectionTests();
+                    Log.i(TAG, "runHttpsUrlConnectionTests completed");
+                } catch (Throwable t) {
+                    Log.e(TAG, "runHttpsUrlConnectionTests failed", t);
+                }
+
+                // 3) OkHttp3
+                //    web.ts: okhttp.request (OkHttpClient.newCall)
+                try {
+                    runOkHttp3Tests();
+                    Log.i(TAG, "runOkHttp3Tests completed");
+                } catch (Throwable t) {
+                    Log.e(TAG, "runOkHttp3Tests failed", t);
+                }
+
+                // 4) Legacy OkHttp (com.squareup.okhttp.*)
+                //    web.ts: okhttp_old.request
+                try {
+                    runOkHttpLegacyTests();
+                    Log.i(TAG, "runOkHttpLegacyTests completed");
+                } catch (Throwable t) {
+                    Log.e(TAG, "runOkHttpLegacyTests failed", t);
+                }
+
+                // 5) Retrofit2 - synchronous and asynchronous
+                //    web.ts: retrofit.request, retrofit.response, retrofit.async_request
+                try {
+                    runRetrofitTests();
+                    Log.i(TAG, "runRetrofitTests completed");
+                } catch (Throwable t) {
+                    Log.e(TAG, "runRetrofitTests failed", t);
+                }
+
+                // 6) Volley StringRequest + RequestQueue
+                //    web.ts: volley.string_request, volley.queue_request
+                try {
+                    runVolleyTests();
+                    Log.i(TAG, "runVolleyTests completed");
+                } catch (Throwable t) {
+                    Log.e(TAG, "runVolleyTests failed", t);
+                }
+
+                // 7) Java-layer and native socket tests (TCP, Unix domain, UDP)
+                //    sockets.ts: socket.java.server_accept, socket.java.init,
+                //                socket.java.connect, socket.java.local_accept,
+                //                socket.java.datagram_connect
+                //                + native: socket, bind, connect, write, read,
+                //                          sendto, recvfrom (via JVM socket internals)
+                try {
+                    runSocketTests();
+                    Log.i(TAG, "runSocketTests completed");
+                } catch (Throwable t) {
+                    Log.e(TAG, "runSocketTests failed", t);
+                }
+
+                // 8) OkHttp3 WebSocket
+                //    web.ts: websocket.send_text, websocket.opened,
+                //            websocket.message_received
+                try {
+                    runWebSocketTests();
+                    Log.i(TAG, "runWebSocketTests completed");
+                } catch (Throwable t) {
+                    Log.e(TAG, "runWebSocketTests failed", t);
+                }
+
+                // 9) Native libc syscalls not reliably reached via Java sockets
+                //    sockets.ts: Libc::send, Libc::recv,
+                //                Libc::sendmsg, Libc::recvmsg, Libc::close
+                try {
+                    NativeSocketTests.runTests();
+                    Log.i(TAG, "NativeSocketTests completed");
+                } catch (Throwable t) {
+                    Log.e(TAG, "NativeSocketTests failed", t);
+                }
+
+            } catch (Throwable t) {
+                Log.e(TAG, "Error in NetworkE2E", t);
+            } finally {
+                Log.i(TAG, "NetworkE2E finished, calling finish()");
+                finish();
+            }
+        }, "networke2e-tests");
+        thread.start();
     }
 
     // ------------------------------------------------------------
     // URL / HttpURLConnection / URI
+    // web.ts: install_url_hooks, install_http_hooks
     // ------------------------------------------------------------
 
     private void runUrlAndHttpUrlConnectionTests() {
         Log.i(TAG, "runUrlAndHttpUrlConnectionTests");
         HttpURLConnection conn = null;
         try {
+            // url.creation, uri.creation
             URL url = new URL(TEST_HTTP_URL);
-
             URI uri = new URI(TEST_HTTP_URL);
             Log.i(TAG, "Created URI: " + uri.toString());
 
+            // url.open_connection
             conn = (HttpURLConnection) url.openConnection();
 
+            // okhttp.request_method, http.request_method
             conn.setRequestMethod("POST");
+            // okhttp.request_property
             conn.setRequestProperty("X-NetworkE2E", "1");
             conn.setDoOutput(true);
 
+            // http.connect (overwrites url.connection hook)
             conn.connect();
 
+            // http.output_stream
             OutputStream os = conn.getOutputStream();
-            byte[] body = "field=value".getBytes("UTF-8");
-            os.write(body);
+            os.write("field=value".getBytes("UTF-8"));
             os.flush();
 
-            InputStream is = conn.getInputStream();
-            readInputStream(is);
+            // http.input_stream
+            readInputStream(conn.getInputStream());
         } catch (Throwable t) {
             Log.e(TAG, "Error in runUrlAndHttpUrlConnectionTests", t);
         } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
+            if (conn != null) conn.disconnect();
         }
     }
 
@@ -127,53 +217,41 @@ public class MainActivity extends Activity {
         Log.i(TAG, "runHttpsUrlConnectionTests");
         HttpsURLConnection conn = null;
         try {
+            // TEST_HTTP_URL already uses https://
             URL url = new URL(TEST_HTTP_URL.replace("http://", "https://"));
 
             conn = (HttpsURLConnection) url.openConnection();
+            // https.request_method
             conn.setRequestMethod("GET");
+            // https.connect
             conn.connect();
-
-            InputStream is = conn.getInputStream();
-            readInputStream(is);
+            // https.input_stream
+            readInputStream(conn.getInputStream());
         } catch (Throwable t) {
             Log.e(TAG, "Error in runHttpsUrlConnectionTests", t);
         } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
+            if (conn != null) conn.disconnect();
         }
     }
 
     private void readInputStream(InputStream is) {
-        if (is == null) {
-            return;
-        }
+        if (is == null) return;
         BufferedReader reader = null;
         try {
             reader = new BufferedReader(new InputStreamReader(is));
-            String line;
             int lines = 0;
-            while ((line = reader.readLine()) != null && lines < 3) {
-                lines++;
-            }
+            while (reader.readLine() != null && lines++ < 3) { /* drain */ }
         } catch (Throwable t) {
             Log.e(TAG, "Error reading InputStream", t);
         } finally {
-            try {
-                is.close();
-            } catch (Throwable ignored) {
-            }
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (Throwable ignored) {
-                }
-            }
+            try { is.close(); } catch (Throwable ignored) {}
+            if (reader != null) try { reader.close(); } catch (Throwable ignored) {}
         }
     }
 
     // ------------------------------------------------------------
     // WebView & WebViewClient
+    // web.ts: install_webview_hooks
     // ------------------------------------------------------------
 
     private void runWebViewTests() {
@@ -181,6 +259,8 @@ public class MainActivity extends Activity {
 
         WebView webView = new WebView(this);
 
+        // Subclass overrides required so onPageStarted / onPageFinished are
+        // invoked; hooks on the base class intercept the call chain.
         WebViewClient client = new WebViewClient() {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
@@ -199,15 +279,22 @@ public class MainActivity extends Activity {
         };
         webView.setWebViewClient(client);
 
+        // webview.load_url
         webView.loadUrl("https://example.com");
 
+        // webview.load_url_with_headers
         Map<String, String> headers = new HashMap<>();
         headers.put("X-WebView-Header", "1");
         webView.loadUrl("https://example.com?with_headers=1", headers);
 
-        String html = "<html><body><h1>NetworkE2E</h1></body></html>";
-        webView.loadData(html, "text/html", "UTF-8");
+        // webview.load_data
+        webView.loadData(
+                "<html><body><h1>NetworkE2E</h1></body></html>",
+                "text/html",
+                "UTF-8"
+        );
 
+        // webview.post_url
         byte[] postData;
         try {
             postData = "p=1".getBytes("UTF-8");
@@ -216,6 +303,8 @@ public class MainActivity extends Activity {
         }
         webView.postUrl(TEST_HTTP_POST_URL, postData);
 
+        // webview.url_override - invoked directly to guarantee the hook fires
+        // regardless of whether the WebView engine processes the navigation.
         try {
             client.shouldOverrideUrlLoading(webView, "https://example.com/override");
         } catch (Throwable t) {
@@ -225,6 +314,7 @@ public class MainActivity extends Activity {
 
     // ------------------------------------------------------------
     // OkHttp3 (okhttp3.*)
+    // web.ts: install_okhttp_hooks -> okhttp.request
     // ------------------------------------------------------------
 
     private void runOkHttp3Tests() {
@@ -235,14 +325,9 @@ public class MainActivity extends Activity {
                     .url(TEST_HTTP_URL + "?okhttp3=1")
                     .header("X-OkHttp3", "1")
                     .build();
-
-            okhttp3.Call call = client.newCall(request);
-
-            Response response = call.execute();
+            Response response = client.newCall(request).execute();
             ResponseBody body = response.body();
-            if (body != null) {
-                body.string();
-            }
+            if (body != null) body.string();
         } catch (Throwable t) {
             Log.e(TAG, "Error in runOkHttp3Tests", t);
         }
@@ -250,6 +335,7 @@ public class MainActivity extends Activity {
 
     // ------------------------------------------------------------
     // Legacy OkHttp (com.squareup.okhttp.*)
+    // web.ts: install_okhttp_hooks -> okhttp_old.request
     // ------------------------------------------------------------
 
     private void runOkHttpLegacyTests() {
@@ -259,19 +345,17 @@ public class MainActivity extends Activity {
             com.squareup.okhttp.Request request = new com.squareup.okhttp.Request.Builder()
                     .url(TEST_HTTP_URL + "?okhttp_legacy=1")
                     .build();
-
-            com.squareup.okhttp.Call call = client.newCall(request);
-            com.squareup.okhttp.Response response = call.execute();
-            if (response.body() != null) {
-                response.body().string();
-            }
+            com.squareup.okhttp.Response response = client.newCall(request).execute();
+            if (response.body() != null) response.body().string();
         } catch (Throwable t) {
             Log.e(TAG, "Error in runOkHttpLegacyTests", t);
         }
     }
 
     // ------------------------------------------------------------
-    // Retrofit (retrofit2.OkHttpCall, retrofit2.Call)
+    // Retrofit2 (retrofit2.OkHttpCall, retrofit2.Call)
+    // web.ts: install_retrofit_hooks
+    //   -> retrofit.request, retrofit.response, retrofit.async_request
     // ------------------------------------------------------------
 
     public interface HttpbinApi {
@@ -282,31 +366,28 @@ public class MainActivity extends Activity {
     private void runRetrofitTests() {
         Log.i(TAG, "runRetrofitTests");
         try {
-            OkHttpClient okHttpClient = new OkHttpClient();
-
             Retrofit retrofit = new Retrofit.Builder()
                     .baseUrl("https://httpbin.org/")
-                    .client(okHttpClient)
+                    .client(new OkHttpClient())
                     .build();
-
             HttpbinApi api = retrofit.create(HttpbinApi.class);
 
-            Call<ResponseBody> syncCall = api.get();
+            // retrofit.request + retrofit.response via OkHttpCall.execute()
             try {
-                retrofit2.Response<ResponseBody> resp = syncCall.execute();
+                retrofit2.Response<ResponseBody> resp = api.get().execute();
                 Log.i(TAG, "Retrofit sync response code: " + resp.code());
             } catch (Throwable e) {
                 Log.e(TAG, "Retrofit sync error", e);
             }
 
-            Call<ResponseBody> asyncCall = api.get();
+            // retrofit.async_request via Call.enqueue()
             CountDownLatch latch = new CountDownLatch(1);
-            asyncCall.enqueue(new Callback<ResponseBody>() {
+            api.get().enqueue(new Callback<ResponseBody>() {
                 @Override
-                public void onResponse(Call<ResponseBody> call, retrofit2.Response<ResponseBody> response) {
+                public void onResponse(Call<ResponseBody> call,
+                                       retrofit2.Response<ResponseBody> response) {
                     latch.countDown();
                 }
-
                 @Override
                 public void onFailure(Call<ResponseBody> call, Throwable t) {
                     latch.countDown();
@@ -320,35 +401,30 @@ public class MainActivity extends Activity {
 
     // ------------------------------------------------------------
     // Volley (StringRequest, RequestQueue.add)
+    // web.ts: install_volley_hooks
+    //   -> volley.string_request, volley.queue_request
     // ------------------------------------------------------------
 
     private void runVolleyTests() {
         Log.i(TAG, "runVolleyTests");
         try {
             RequestQueue queue = Volley.newRequestQueue(getApplicationContext());
-
-            String url = TEST_HTTP_URL + "?volley=1";
             CountDownLatch latch = new CountDownLatch(1);
 
+            // volley.string_request via StringRequest.$init
             StringRequest request = new StringRequest(
                     com.android.volley.Request.Method.GET,
-                    url,
+                    TEST_HTTP_URL + "?volley=1",
                     new com.android.volley.Response.Listener<String>() {
-                        @Override
-                        public void onResponse(String response) {
-                            latch.countDown();
-                        }
+                        @Override public void onResponse(String response) { latch.countDown(); }
                     },
                     new com.android.volley.Response.ErrorListener() {
-                        @Override
-                        public void onErrorResponse(VolleyError error) {
-                            latch.countDown();
-                        }
+                        @Override public void onErrorResponse(VolleyError error) { latch.countDown(); }
                     }
             );
 
+            // volley.queue_request via RequestQueue.add
             queue.add(request);
-
             latch.await(5, TimeUnit.SECONDS);
         } catch (Throwable t) {
             Log.e(TAG, "Error in runVolleyTests", t);
@@ -356,23 +432,37 @@ public class MainActivity extends Activity {
     }
 
     // ------------------------------------------------------------
-    // Java and native sockets (TCP, local, UDP)
+    // Java and native sockets (TCP, Unix domain, UDP)
+    // sockets.ts: hook_java_socket_communication,
+    //             hook_bionic_socket_commuication
     // ------------------------------------------------------------
 
     private void runSocketTests() {
         Log.i(TAG, "runSocketTests");
         try {
             runTcpSocketTests();
-            runLocalSocketTests();
-            runUdpSocketTests();
+            Log.i(TAG, "runTcpSocketTests completed");
         } catch (Throwable t) {
-            Log.e(TAG, "Error in runSocketTests", t);
+            Log.e(TAG, "runTcpSocketTests failed", t);
+        }
+        try {
+            runLocalSocketTests();
+            Log.i(TAG, "runLocalSocketTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runLocalSocketTests failed", t);
+        }
+        try {
+            runUdpSocketTests();
+            Log.i(TAG, "runUdpSocketTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runUdpSocketTests failed", t);
         }
     }
 
     private void runTcpSocketTests() throws Exception {
         Log.i(TAG, "runTcpSocketTests");
 
+        // socket.java.server_accept (3 accepts)
         ServerSocket serverSocket = new ServerSocket(0, 3, InetAddress.getByName("127.0.0.1"));
         final int port = serverSocket.getLocalPort();
         CountDownLatch serverLatch = new CountDownLatch(1);
@@ -381,37 +471,34 @@ public class MainActivity extends Activity {
             try {
                 for (int i = 0; i < 3; i++) {
                     Socket client = serverSocket.accept();
-                    InputStream in = client.getInputStream();
+                    InputStream  in  = client.getInputStream();
                     OutputStream out = client.getOutputStream();
                     byte[] buf = new byte[64];
                     int read = in.read(buf);
-                    if (read > 0) {
-                        out.write("OK".getBytes());
-                        out.flush();
-                    }
+                    if (read > 0) { out.write("OK".getBytes()); out.flush(); }
                     client.close();
                 }
             } catch (Throwable e) {
                 Log.e(TAG, "TCP server error", e);
             } finally {
-                try {
-                    serverSocket.close();
-                } catch (Throwable ignored) {
-                }
+                try { serverSocket.close(); } catch (Throwable ignored) {}
                 serverLatch.countDown();
             }
-        });
+        }, "tcp-server");
         serverThread.start();
 
+        // socket.java.init - Socket.$init(String, int)
         Socket s1 = new Socket("127.0.0.1", port);
         s1.getOutputStream().write("hello1".getBytes());
         s1.close();
 
+        // socket.java.connect - Socket.connect(SocketAddress)
         Socket s2 = new Socket();
         s2.connect(new InetSocketAddress("127.0.0.1", port));
         s2.getOutputStream().write("hello2".getBytes());
         s2.close();
 
+        // socket.java.connect - Socket.connect(SocketAddress, int)
         Socket s3 = new Socket();
         s3.connect(new InetSocketAddress("127.0.0.1", port), 2000);
         s3.getOutputStream().write("hello3".getBytes());
@@ -423,28 +510,24 @@ public class MainActivity extends Activity {
     private void runLocalSocketTests() throws Exception {
         Log.i(TAG, "runLocalSocketTests");
 
+        // socket.java.local_accept - LocalServerSocket.accept
         final String SOCKET_NAME = "networke2e_local";
-
         LocalServerSocket serverSocket = new LocalServerSocket(SOCKET_NAME);
         CountDownLatch serverLatch = new CountDownLatch(1);
 
         Thread serverThread = new Thread(() -> {
             try {
                 LocalSocket incoming = serverSocket.accept();
-                InputStream in = incoming.getInputStream();
                 byte[] buf = new byte[32];
-                in.read(buf);
+                incoming.getInputStream().read(buf);
                 incoming.close();
             } catch (Throwable e) {
-                Log.e(TAG, "LocalServerSocket server error", e);
+                Log.e(TAG, "LocalServerSocket error", e);
             } finally {
-                try {
-                    serverSocket.close();
-                } catch (Throwable ignored) {
-                }
+                try { serverSocket.close(); } catch (Throwable ignored) {}
                 serverLatch.countDown();
             }
-        });
+        }, "local-server");
         serverThread.start();
 
         LocalSocket client = new LocalSocket();
@@ -458,6 +541,7 @@ public class MainActivity extends Activity {
     private void runUdpSocketTests() throws Exception {
         Log.i(TAG, "runUdpSocketTests");
 
+        // socket.java.datagram_connect - DatagramSocket.connect(InetAddress, int)
         DatagramSocket receiver = new DatagramSocket(0, InetAddress.getByName("127.0.0.1"));
         int port = receiver.getLocalPort();
 
@@ -465,12 +549,10 @@ public class MainActivity extends Activity {
         sender.connect(InetAddress.getByName("127.0.0.1"), port);
 
         byte[] outBuf = "udp-test".getBytes("UTF-8");
-        DatagramPacket sendPacket = new DatagramPacket(outBuf, outBuf.length);
-        sender.send(sendPacket);
+        sender.send(new DatagramPacket(outBuf, outBuf.length));
 
         byte[] inBuf = new byte[64];
-        DatagramPacket recvPacket = new DatagramPacket(inBuf, inBuf.length);
-        receiver.receive(recvPacket);
+        receiver.receive(new DatagramPacket(inBuf, inBuf.length));
 
         sender.close();
         receiver.close();
@@ -478,49 +560,44 @@ public class MainActivity extends Activity {
 
     // ------------------------------------------------------------
     // WebSocket (okhttp3.WebSocket / WebSocketListener)
+    // web.ts: install_websocket_hooks
+    //   -> websocket.send_text, websocket.opened, websocket.message_received
     // ------------------------------------------------------------
 
     private void runWebSocketTests() {
         Log.i(TAG, "runWebSocketTests");
-
         OkHttpClient client = new OkHttpClient();
-        Request request = new Request.Builder()
-                .url(TEST_WEBSOCKET_URL)
-                .build();
-
         CountDownLatch latch = new CountDownLatch(1);
 
-        WebSocketListener listener = new WebSocketListener() {
-            @Override
-            public void onOpen(WebSocket webSocket, Response response) {
-                Log.i(TAG, "WebSocket opened");
-                try {
-                    webSocket.send("hello websocket from NetworkE2E");
-                } catch (Throwable t) {
-                    Log.e(TAG, "Error sending WebSocket message", t);
-                }
-            }
-
-            @Override
-            public void onMessage(WebSocket webSocket, String text) {
-                Log.i(TAG, "WebSocket message: " + text);
-                latch.countDown();
-            }
-
-            @Override
-            public void onFailure(WebSocket webSocket, Throwable t, okhttp3.Response response) {
-                Log.e(TAG, "WebSocket failure", t);
-                latch.countDown();
-            }
-
-            @Override
-            public void onClosing(WebSocket webSocket, int code, String reason) {
-                webSocket.close(code, reason);
-            }
-        };
-
         try {
-            client.newWebSocket(request, listener);
+            Request request = new Request.Builder().url(TEST_WEBSOCKET_URL).build();
+
+            client.newWebSocket(request, new WebSocketListener() {
+                @Override
+                public void onOpen(WebSocket webSocket, Response response) {
+                    Log.i(TAG, "WebSocket opened");
+                    // websocket.send_text
+                    webSocket.send("hello websocket from NetworkE2E");
+                }
+
+                @Override
+                public void onMessage(WebSocket webSocket, String text) {
+                    Log.i(TAG, "WebSocket message: " + text);
+                    latch.countDown();
+                }
+
+                @Override
+                public void onFailure(WebSocket webSocket, Throwable t, okhttp3.Response response) {
+                    Log.e(TAG, "WebSocket failure", t);
+                    latch.countDown();
+                }
+
+                @Override
+                public void onClosing(WebSocket webSocket, int code, String reason) {
+                    webSocket.close(code, reason);
+                }
+            });
+
             latch.await(5, TimeUnit.SECONDS);
         } catch (Throwable t) {
             Log.e(TAG, "Error in runWebSocketTests", t);
