@@ -1,10 +1,7 @@
 package com.test.dexe2e;
 
 import android.content.Context;
-import android.content.pm.ApplicationInfo;
 import android.util.Log;
-
-import java.io.File;
 
 /**
  * Covers:
@@ -12,10 +9,14 @@ import java.io.File;
  *     Runtime.load(String)          - full filesystem path to .so
  *     Runtime.loadLibrary(String)   - bare library name
  *
- * Runtime.load and Runtime.loadLibrary are the instance-method equivalents
- * of System.load / System.loadLibrary. Both are public API on Android.
- * System.load/loadLibrary delegate internally to Runtime, but the hooks are
- * on separate method objects so both sets need independent triggering.
+ * Runtime.load / Runtime.loadLibrary are the instance-method equivalents of
+ * System.load / System.loadLibrary. System delegates internally to Runtime,
+ * but the hooks are on separate method objects so both sets need independent
+ * triggering.
+ *
+ * By the time RuntimeLoadLibraryTests runs, libdexe2e_native.so is already
+ * mapped (System.loadLibrary ran first in SystemLoadLibraryTests), so
+ * resolveNativeLibPath will find it in /proc/self/maps immediately.
  *
  * Expected events:
  *   library.runtime.load_library   (method: "Runtime.loadLibrary(String)")
@@ -48,6 +49,8 @@ public class RuntimeLoadLibraryTests {
         Log.i(TAG, "RuntimeLoadLibraryTests: starting");
         Log.i(TAG, "========================================");
 
+        // loadLibrary must run before load so the library is mapped
+        // and resolveNativeLibPath can find it in /proc/self/maps
         test_runtime_load_library();
         test_runtime_load();
 
@@ -72,20 +75,22 @@ public class RuntimeLoadLibraryTests {
         Log.i(TAG, "");
         Log.i(TAG, "=== Runtime.load(String) ===");
 
-        ApplicationInfo ai = context.getApplicationInfo();
-        String libPath = ai.nativeLibraryDir + File.separator + "libdexe2e_native.so";
-        Log.i(TAG, "Full library path: " + libPath);
-
-        if (!new File(libPath).exists()) {
-            fail("Runtime.load - lib file exists", "not found at " + libPath);
+        // Resolve the real filesystem path of the already-loaded library.
+        // Works for both extracted and APK-embedded (non-extracted) cases.
+        String libPath = DexTestUtils.resolveNativeLibPath(context, "dexe2e_native");
+        if (libPath == null) {
+            fail("resolveNativeLibPath(dexe2e_native)", "returned null");
             return;
         }
+        Log.i(TAG, "Resolved library path: " + libPath);
 
         try {
+            // Library is already loaded - linker no-ops, but the Java method
+            // call is made and the hook fires
             Runtime.getRuntime().load(libPath);
             pass("Runtime.getRuntime().load(\"" + libPath + "\")");
         } catch (Throwable t) {
-            fail("Runtime.load(fullPath)", t.toString());
+            fail("Runtime.load(libPath)", t.toString());
         }
     }
 }

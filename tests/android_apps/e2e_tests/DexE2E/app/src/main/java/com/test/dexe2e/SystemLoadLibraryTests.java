@@ -1,10 +1,7 @@
 package com.test.dexe2e;
 
 import android.content.Context;
-import android.content.pm.ApplicationInfo;
 import android.util.Log;
-
-import java.io.File;
 
 /**
  * Covers:
@@ -12,9 +9,19 @@ import java.io.File;
  *     System.load(String)          - full filesystem path to .so
  *     System.loadLibrary(String)   - bare library name (no lib prefix, no .so suffix)
  *
- * libdexe2e_native.so is the bundled native library built via CMake.
- * Loading it multiple times on Android is safe (no-op after first load),
- * so both load variants can target the same library without conflicts.
+ * Test order matters: test_system_load_library() runs first so that
+ * libdexe2e_native.so is already mapped before resolveNativeLibPath()
+ * scans /proc/self/maps to find its path for the System.load call.
+ *
+ * On Android (default extractNativeLibs="false", minSdk >= 23) the .so is
+ * mapped directly from inside the APK - there is no extracted copy on the
+ * filesystem. resolveNativeLibPath handles both cases:
+ *   - extracted: returns nativeLibraryDir path directly
+ *   - APK-embedded: reads /proc/self/maps to find the base.apk!entry path,
+ *     then extracts the zip entry to filesDir to get a real filesystem path
+ *
+ * System.load on an already-loaded library is a linker no-op, but the Java
+ * method call still happens so the hook fires correctly.
  *
  * Expected events:
  *   library.system.load_library   (method: "System.loadLibrary(String)")
@@ -47,6 +54,8 @@ public class SystemLoadLibraryTests {
         Log.i(TAG, "SystemLoadLibraryTests: starting");
         Log.i(TAG, "========================================");
 
+        // loadLibrary must run before load so the library is mapped
+        // and resolveNativeLibPath can find it in /proc/self/maps
         test_system_load_library();
         test_system_load();
 
@@ -71,21 +80,22 @@ public class SystemLoadLibraryTests {
         Log.i(TAG, "");
         Log.i(TAG, "=== System.load(String) ===");
 
-        // Resolve full path from the app's native library directory
-        ApplicationInfo ai = context.getApplicationInfo();
-        String libPath = ai.nativeLibraryDir + File.separator + "libdexe2e_native.so";
-        Log.i(TAG, "Full library path: " + libPath);
-
-        if (!new File(libPath).exists()) {
-            fail("System.load - lib file exists", "not found at " + libPath);
+        // Resolve the real filesystem path of the already-loaded library.
+        // Works for both extracted and APK-embedded (non-extracted) cases.
+        String libPath = DexTestUtils.resolveNativeLibPath(context, "dexe2e_native");
+        if (libPath == null) {
+            fail("resolveNativeLibPath(dexe2e_native)", "returned null");
             return;
         }
+        Log.i(TAG, "Resolved library path: " + libPath);
 
         try {
+            // Library is already loaded - linker no-ops, but the Java method
+            // call is made and the hook fires
             System.load(libPath);
             pass("System.load(\"" + libPath + "\")");
         } catch (Throwable t) {
-            fail("System.load(fullPath)", t.toString());
+            fail("System.load(libPath)", t.toString());
         }
     }
 }
