@@ -1,0 +1,65 @@
+plugins {
+    alias(libs.plugins.android.application)
+}
+
+android {
+    namespace 'com.test.acpe2e'
+    compileSdk {
+        version = release(36)
+    }
+
+    defaultConfig {
+        applicationId "com.test.acpe2e"
+        minSdk 24
+        targetSdk 36
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    packaging {
+        resources {
+            // Netty and other libs may include this; exclude duplicates
+            excludes += "META-INF/INDEX.LIST"
+            excludes += "META-INF/io.netty.versions.properties"
+            // Optional: if you hit similar issues, you can add:
+            // excludes += "META-INF/DEPENDENCIES"
+        }
+    }
+}
+
+dependencies {
+    // OkHttp 3 (modern)
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
+
+    // OkHttp 2 (legacy)
+    implementation "com.squareup.okhttp:okhttp:2.7.5"
+
+    // Netty (for io.netty.handler.ssl.util.FingerprintTrustManagerFactory)
+    implementation "io.netty:netty-handler:4.1.108.Final"
+
+    // Cronet via Google Play Services
+    implementation "com.google.android.gms:play-services-cronet:18.0.1"
+
+    // Cordova framework (for sslCertificateChecker & CordovaServerTrust)
+    implementation "org.apache.cordova:framework:10.1.1"
+
+    // Appmattus Certificate Transparency (Android) - from Maven Central
+    implementation "com.appmattus.certificatetransparency:certificatetransparency-android:2.4.8"
+
+    // TrustKit Android - via JitPack
+    implementation "com.github.datatheorem:TrustKit-Android:1.1.3"
+
+    // CWAC-Netsecurity - via CommonsWare repo
+    implementation "com.commonsware.cwac:netsecurity:0.5.0"
+}

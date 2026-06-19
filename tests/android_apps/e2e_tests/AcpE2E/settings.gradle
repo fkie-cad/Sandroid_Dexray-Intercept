@@ -1,0 +1,29 @@
+pluginManagement {
+    repositories {
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+            }
+        }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+
+        // For TrustKit (GitHub / JitPack)
+        maven { url "https://jitpack.io" }
+
+        // For CWAC-Netsecurity (CommonsWare repo)
+        maven { url "https://s3.amazonaws.com/repo.commonsware.com" }
+    }
+}
+
+rootProject.name = "AcpE2E"
+include ':app'
