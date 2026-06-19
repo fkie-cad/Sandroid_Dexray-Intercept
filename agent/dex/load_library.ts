@@ -1,5 +1,4 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { Java } from "../utils/javalib.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "DYNAMIC_LIB_LOADING"
@@ -18,23 +17,27 @@ function install_system_library_hooks(): void {
 
     safePerform("load_library:install_system_library_hooks", () => {
         const SystemDef = safeUse(
-            'java.lang.System',
+            "java.lang.System",
             "load_library:install_system_library_hooks"
         );
         if (!SystemDef) return;
 
         const SystemLoad_1 = safeOverload(
-            SystemDef.load, "load_library:System.load", 'java.lang.String'
+            SystemDef.load,
+            "load_library:System.load",
+            "java.lang.String"
         );
         const SystemLoad_2 = safeOverload(
-            SystemDef.loadLibrary, "load_library:System.loadLibrary", 'java.lang.String'
+            SystemDef.loadLibrary,
+            "load_library:System.loadLibrary",
+            "java.lang.String"
         );
 
         if (SystemLoad_1) {
             SystemLoad_1.implementation = safeImplementation(
                 "load_library:System.load",
                 SystemLoad_1,
-                function(original, library: string) {
+                function (original, library: string) {
                     createLibraryEvent("library.system.load", {
                         method: "System.load(String)",
                         library_path: library,
@@ -49,7 +52,7 @@ function install_system_library_hooks(): void {
             SystemLoad_2.implementation = safeImplementation(
                 "load_library:System.loadLibrary",
                 SystemLoad_2,
-                function(original, library: string) {
+                function (original, library: string) {
                     createLibraryEvent("library.system.load_library", {
                         method: "System.loadLibrary(String)",
                         library_name: library,
@@ -67,23 +70,27 @@ function install_runtime_library_hooks(): void {
 
     safePerform("load_library:install_runtime_library_hooks", () => {
         const RuntimeDef = safeUse(
-            'java.lang.Runtime',
+            "java.lang.Runtime",
             "load_library:install_runtime_library_hooks"
         );
         if (!RuntimeDef) return;
 
         const RuntimeLoad_1 = safeOverload(
-            RuntimeDef.load, "load_library:Runtime.load", 'java.lang.String'
+            RuntimeDef.load,
+            "load_library:Runtime.load",
+            "java.lang.String"
         );
         const RuntimeLoad_2 = safeOverload(
-            RuntimeDef.loadLibrary, "load_library:Runtime.loadLibrary", 'java.lang.String'
+            RuntimeDef.loadLibrary,
+            "load_library:Runtime.loadLibrary",
+            "java.lang.String"
         );
 
         if (RuntimeLoad_1) {
             RuntimeLoad_1.implementation = safeImplementation(
                 "load_library:Runtime.load",
                 RuntimeLoad_1,
-                function(original, library: string) {
+                function (original, library: string) {
                     createLibraryEvent("library.runtime.load", {
                         method: "Runtime.load(String)",
                         library_path: library,
@@ -98,7 +105,7 @@ function install_runtime_library_hooks(): void {
             RuntimeLoad_2.implementation = safeImplementation(
                 "load_library:Runtime.loadLibrary",
                 RuntimeLoad_2,
-                function(original, library: string) {
+                function (original, library: string) {
                     createLibraryEvent("library.runtime.load_library", {
                         method: "Runtime.loadLibrary(String)",
                         library_name: library,
