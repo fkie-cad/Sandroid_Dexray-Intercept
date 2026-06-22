@@ -21,6 +21,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Looper;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.provider.Settings;
 import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
@@ -223,6 +225,14 @@ public class MainActivity extends Activity {
             if (manager != null) {
                 try {
                     String[] ids = manager.getCameraIdList();
+                    Log.i(TAG, "CameraManager.getCameraIdList: " + ids.length + " camera(s)");
+
+                    // callbacks dispatched on a background thread - main thread
+                    // must not be blocked while waiting for its own looper
+                    HandlerThread cameraThread = new HandlerThread("camera-e2e");
+                    cameraThread.start();
+                    Handler cameraHandler = new Handler(cameraThread.getLooper());
+
                     for (String id : ids) {
                         try {
                             CountDownLatch latch = new CountDownLatch(1);
@@ -233,7 +243,6 @@ public class MainActivity extends Activity {
                                     latch.countDown();
                                     cameraDevice.close();
                                 }
-
                                 @Override
                                 public void onDisconnected(CameraDevice cameraDevice) {
                                     Log.w(TAG, "CameraManager.openCamera id=" + id + " disconnected");
@@ -246,12 +255,14 @@ public class MainActivity extends Activity {
                                     latch.countDown();
                                     cameraDevice.close();
                                 }
-                            }, null);
-                            latch.await(1, TimeUnit.SECONDS);
+                            }, cameraHandler);
+                            latch.await(2, TimeUnit.SECONDS);
                         } catch (Throwable t) {
                             Log.e(TAG, "openCamera id=" + id + " failed", t);
                         }
                     }
+
+                    cameraThread.quitSafely();
                 } catch (Throwable t) {
                     Log.e(TAG, "Error in CameraManager tests", t);
                 }
