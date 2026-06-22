@@ -4,6 +4,8 @@ package com.test.servicese2e;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -152,6 +154,38 @@ public class MainActivity extends Activity {
                 characteristic.setValue(new byte[]{0x01, 0x02, 0x03});
             } catch (Throwable t) {
                 Log.e(TAG, "BluetoothGattCharacteristic.setValue failed", t);
+            }
+
+            // BluetoothGatt.readCharacteristic hook trigger
+            // connectGatt returns synchronously before connection - method entry fires hook
+            // readCharacteristic returns false (not connected), which is expected
+            if (adapter != null) {
+                BluetoothGatt gatt = null;
+                try {
+                    BluetoothDevice gattTarget = adapter.getRemoteDevice("00:11:22:33:44:55");
+                    UUID gattUuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+                    BluetoothGattCharacteristic gattChar = new BluetoothGattCharacteristic(
+                            gattUuid,
+                            BluetoothGattCharacteristic.PROPERTY_READ,
+                            BluetoothGattCharacteristic.PERMISSION_READ
+                    );
+                    gatt = gattTarget.connectGatt(this, false, new BluetoothGattCallback() {});
+                    Log.i(TAG, "connectGatt result: " + (gatt != null ? "non-null" : "null"));
+
+                    if (gatt != null) {
+                        boolean readResult = gatt.readCharacteristic(gattChar);
+                        Log.i(TAG, "BluetoothGatt.readCharacteristic returned: " + readResult);
+                    } else {
+                        Log.w(TAG, "BluetoothGatt.readCharacteristic skipped - connectGatt returned null");
+                    }
+                } catch (Throwable t) {
+                    Log.e(TAG, "BluetoothGatt.readCharacteristic test failed: "
+                            + t.getClass().getSimpleName() + " - " + t.getMessage());
+                } finally {
+                    if (gatt != null) {
+                        gatt.close();
+                    }
+                }
             }
         } catch (Throwable t) {
             Log.e(TAG, "Error in runBluetoothTests", t);
