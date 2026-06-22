@@ -1,4 +1,3 @@
-// tests/android_apps/e2e_tests/ServicesE2E/app/src/main/java/com/test/servicese2e/MainActivity.java
 package com.test.servicese2e;
 
 import android.app.Activity;
@@ -11,6 +10,9 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.hardware.Camera;
+import android.hardware.camera2.CameraDevice;
+import android.hardware.camera2.CameraManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -27,10 +29,6 @@ import android.provider.Settings;
 import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
 import android.util.Log;
-
-import android.hardware.Camera;
-import android.hardware.camera2.CameraDevice;
-import android.hardware.camera2.CameraManager;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
@@ -100,97 +98,91 @@ public class MainActivity extends Activity {
         }
     }
 
-
     // ------------------------------------------------------------
     // Bluetooth (adapter, device, GATT characteristic)
     // ------------------------------------------------------------
 
     private void runBluetoothTests() {
         Log.i(TAG, "runBluetoothTests started");
-        try {
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-            if (adapter != null) {
-                try {
-                    adapter.enable();
-                } catch (Throwable t) {
-                    Log.w(TAG, "adapter.enable failed: " + t.getMessage());
-                }
 
-                try {
-                    adapter.disable();
-                } catch (Throwable t) {
-                    Log.w(TAG, "adapter.disable failed: " + t.getMessage());
-                }
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
 
-                try {
-                    adapter.startDiscovery();
-                } catch (Throwable t) {
-                    Log.w(TAG, "adapter.startDiscovery failed: " + t.getMessage());
-                }
-
-                try {
-                    BluetoothDevice device = adapter.getRemoteDevice("00:11:22:33:44:55");
-                    device.createBond();
-                } catch (Throwable t) {
-                    Log.w(TAG, "device.createBond failed: " + t.getMessage());
-                }
-
-                try {
-                    String address = adapter.getAddress();
-                    Log.i(TAG, "BluetoothAdapter.getAddress(): " + address);
-                } catch (Throwable t) {
-                    Log.w(TAG, "adapter.getAddress failed: " + t.getMessage());
-                }
-            } else {
-                Log.w(TAG, "BluetoothAdapter not available");
-            }
-            
+        if (adapter != null) {
             try {
-                UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-                BluetoothGattCharacteristic characteristic =
-                        new BluetoothGattCharacteristic(
-                                uuid,
-                                BluetoothGattCharacteristic.PROPERTY_WRITE,
-                                BluetoothGattCharacteristic.PERMISSION_WRITE
-                        );
-                characteristic.setValue(new byte[]{0x01, 0x02, 0x03});
+                adapter.enable();
             } catch (Throwable t) {
-                Log.e(TAG, "BluetoothGattCharacteristic.setValue failed", t);
+                Log.w(TAG, "adapter.enable failed: " + t.getMessage());
             }
+            try {
+                adapter.disable();
+            } catch (Throwable t) {
+                Log.w(TAG, "adapter.disable failed: " + t.getMessage());
+            }
+            try {
+                adapter.startDiscovery();
+            } catch (Throwable t) {
+                Log.w(TAG, "adapter.startDiscovery failed: " + t.getMessage());
+            }
+            try {
+                BluetoothDevice device = adapter.getRemoteDevice("00:11:22:33:44:55");
+                device.createBond();
+            } catch (Throwable t) {
+                Log.w(TAG, "device.createBond failed: " + t.getMessage());
+            }
+            try {
+                String address = adapter.getAddress();
+                Log.i(TAG, "BluetoothAdapter.getAddress: " + address);
+            } catch (Throwable t) {
+                Log.w(TAG, "adapter.getAddress failed: " + t.getMessage());
+            }
+        } else {
+            Log.w(TAG, "BluetoothAdapter not available");
+        }
 
-            // BluetoothGatt.readCharacteristic hook trigger
-            // connectGatt returns synchronously before connection - method entry fires hook
-            // readCharacteristic returns false (not connected), which is expected
-            if (adapter != null) {
-                BluetoothGatt gatt = null;
-                try {
-                    BluetoothDevice gattTarget = adapter.getRemoteDevice("00:11:22:33:44:55");
-                    UUID gattUuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-                    BluetoothGattCharacteristic gattChar = new BluetoothGattCharacteristic(
-                            gattUuid,
-                            BluetoothGattCharacteristic.PROPERTY_READ,
-                            BluetoothGattCharacteristic.PERMISSION_READ
-                    );
-                    gatt = gattTarget.connectGatt(this, false, new BluetoothGattCallback() {});
-                    Log.i(TAG, "connectGatt result: " + (gatt != null ? "non-null" : "null"));
+        // BluetoothGattCharacteristic.setValue hook trigger - no peer needed
+        try {
+            UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+            BluetoothGattCharacteristic characteristic = new BluetoothGattCharacteristic(
+                    uuid,
+                    BluetoothGattCharacteristic.PROPERTY_WRITE,
+                    BluetoothGattCharacteristic.PERMISSION_WRITE
+            );
+            characteristic.setValue(new byte[]{0x01, 0x02, 0x03});
+            Log.i(TAG, "BluetoothGattCharacteristic.setValue completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "BluetoothGattCharacteristic.setValue failed", t);
+        }
 
-                    if (gatt != null) {
-                        boolean readResult = gatt.readCharacteristic(gattChar);
-                        Log.i(TAG, "BluetoothGatt.readCharacteristic returned: " + readResult);
-                    } else {
-                        Log.w(TAG, "BluetoothGatt.readCharacteristic skipped - connectGatt returned null");
-                    }
-                } catch (Throwable t) {
-                    Log.e(TAG, "BluetoothGatt.readCharacteristic test failed: "
-                            + t.getClass().getSimpleName() + " - " + t.getMessage());
-                } finally {
-                    if (gatt != null) {
-                        gatt.close();
-                    }
+        // BluetoothGatt.readCharacteristic hook trigger
+        // connectGatt returns synchronously before connection - method entry fires hook
+        // readCharacteristic returns false (not connected), which is expected
+        if (adapter != null) {
+            BluetoothGatt gatt = null;
+            try {
+                BluetoothDevice gattTarget = adapter.getRemoteDevice("00:11:22:33:44:55");
+                UUID gattUuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+                BluetoothGattCharacteristic gattChar = new BluetoothGattCharacteristic(
+                        gattUuid,
+                        BluetoothGattCharacteristic.PROPERTY_READ,
+                        BluetoothGattCharacteristic.PERMISSION_READ
+                );
+                gatt = gattTarget.connectGatt(this, false, new BluetoothGattCallback() {});
+                Log.i(TAG, "connectGatt result: " + (gatt != null ? "non-null" : "null"));
+
+                if (gatt != null) {
+                    boolean readResult = gatt.readCharacteristic(gattChar);
+                    Log.i(TAG, "BluetoothGatt.readCharacteristic returned: " + readResult);
+                } else {
+                    Log.w(TAG, "BluetoothGatt.readCharacteristic skipped - connectGatt returned null");
+                }
+            } catch (Throwable t) {
+                Log.e(TAG, "BluetoothGatt.readCharacteristic test failed: "
+                        + t.getClass().getSimpleName() + " - " + t.getMessage());
+            } finally {
+                if (gatt != null) {
+                    gatt.close();
                 }
             }
-        } catch (Throwable t) {
-            Log.e(TAG, "Error in runBluetoothTests", t);
         }
     }
 
@@ -200,7 +192,12 @@ public class MainActivity extends Activity {
 
     private void runCameraTests() {
         Log.i(TAG, "runCameraTests started");
-        try {
+
+        // legacy Camera API crashes in native HAL on emulator - skip on emulator
+        // CAM-1 and CAM-2 hooks are only testable on real hardware
+        if (isEmulator()) {
+            Log.i(TAG, "runCameraTests: emulator detected - skipping legacy Camera.open()");
+        } else {
             Camera camera = null;
             try {
                 camera = Camera.open();
@@ -220,55 +217,59 @@ public class MainActivity extends Activity {
             } finally {
                 if (camera != null) camera.release();
             }
+        }
 
-            CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-            if (manager != null) {
-                try {
-                    String[] ids = manager.getCameraIdList();
-                    Log.i(TAG, "CameraManager.getCameraIdList: " + ids.length + " camera(s)");
-
-                    // callbacks dispatched on a background thread - main thread
-                    // must not be blocked while waiting for its own looper
-                    HandlerThread cameraThread = new HandlerThread("camera-e2e");
-                    cameraThread.start();
-                    Handler cameraHandler = new Handler(cameraThread.getLooper());
-
-                    for (String id : ids) {
-                        try {
-                            CountDownLatch latch = new CountDownLatch(1);
-                            manager.openCamera(id, new CameraDevice.StateCallback() {
-                                @Override
-                                public void onOpened(CameraDevice cameraDevice) {
-                                    Log.i(TAG, "CameraManager.openCamera id=" + id + " opened");
-                                    latch.countDown();
-                                    cameraDevice.close();
-                                }
-                                @Override
-                                public void onDisconnected(CameraDevice cameraDevice) {
-                                    Log.w(TAG, "CameraManager.openCamera id=" + id + " disconnected");
-                                    latch.countDown();
-                                    cameraDevice.close();
-                                }
-                                @Override
-                                public void onError(CameraDevice cameraDevice, int error) {
-                                    Log.w(TAG, "CameraManager.openCamera id=" + id + " error=" + error);
-                                    latch.countDown();
-                                    cameraDevice.close();
-                                }
-                            }, cameraHandler);
-                            latch.await(2, TimeUnit.SECONDS);
-                        } catch (Throwable t) {
-                            Log.e(TAG, "openCamera id=" + id + " failed", t);
-                        }
-                    }
-
-                    cameraThread.quitSafely();
-                } catch (Throwable t) {
-                    Log.e(TAG, "Error in CameraManager tests", t);
-                }
+        // Camera2 - works on emulator and real hardware
+        CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+        if (manager != null) {
+            String[] ids = null;
+            try {
+                ids = manager.getCameraIdList();
+                Log.i(TAG, "CameraManager.getCameraIdList: " + ids.length + " camera(s)");
+            } catch (Throwable t) {
+                Log.e(TAG, "getCameraIdList failed", t);
             }
-        } catch (Throwable t) {
-            Log.e(TAG, "Error in runCameraTests", t);
+
+            if (ids != null) {
+                // callbacks dispatched on a background thread - main thread
+                // must not be blocked while waiting for its own looper
+                HandlerThread cameraThread = new HandlerThread("camera-e2e");
+                cameraThread.start();
+                Handler cameraHandler = new Handler(cameraThread.getLooper());
+
+                for (String id : ids) {
+                    try {
+                        CountDownLatch latch = new CountDownLatch(1);
+                        manager.openCamera(id, new CameraDevice.StateCallback() {
+                            @Override
+                            public void onOpened(CameraDevice cameraDevice) {
+                                Log.i(TAG, "CameraManager.openCamera id=" + id + " opened");
+                                latch.countDown();
+                                cameraDevice.close();
+                            }
+                            @Override
+                            public void onDisconnected(CameraDevice cameraDevice) {
+                                Log.w(TAG, "CameraManager.openCamera id=" + id + " disconnected");
+                                latch.countDown();
+                                cameraDevice.close();
+                            }
+                            @Override
+                            public void onError(CameraDevice cameraDevice, int error) {
+                                Log.w(TAG, "CameraManager.openCamera id=" + id + " error=" + error);
+                                latch.countDown();
+                                cameraDevice.close();
+                            }
+                        }, cameraHandler);
+                        latch.await(2, TimeUnit.SECONDS);
+                    } catch (Throwable t) {
+                        Log.e(TAG, "openCamera id=" + id + " failed", t);
+                    }
+                }
+
+                cameraThread.quitSafely();
+            }
+        } else {
+            Log.w(TAG, "CameraManager not available");
         }
     }
 
@@ -579,5 +580,23 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Log.e(TAG, "Settings.Secure.getString failed", t);
         }
+    }
+
+    // ------------------------------------------------------------
+    // Utilities
+    // ------------------------------------------------------------
+
+    // returns true when running on a standard Android emulator
+    // covers AOSP emulator, Google APIs emulator and Genymotion
+    private static boolean isEmulator() {
+        return Build.FINGERPRINT.startsWith("generic")
+                || Build.FINGERPRINT.startsWith("unknown")
+                || Build.MODEL.contains("google_sdk")
+                || Build.MODEL.contains("sdk_gphone")
+                || Build.MODEL.contains("Emulator")
+                || Build.MODEL.contains("Android SDK built for x86")
+                || Build.MANUFACTURER.contains("Genymotion")
+                || Build.DEVICE.startsWith("generic")
+                || Build.PRODUCT.equals("google_sdk");
     }
 }
