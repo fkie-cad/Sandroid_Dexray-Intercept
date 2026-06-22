@@ -10,6 +10,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.Intent;
 import android.hardware.Camera;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
@@ -47,9 +48,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // All test sections run synchronously on the main thread before onCreate()
-        // returns. Theme.NoDisplay requires finish() before onResume() completes -
-        // a background thread would violate this contract on Android 11+.
+        // All non-clipboard test sections run synchronously on the main thread.
+        // Clipboard tests require window focus (API 29+) and run in ClipboardTestActivity.
         Log.i(TAG, "ServicesE2E started");
 
         try {
@@ -59,13 +59,6 @@ public class MainActivity extends Activity {
                 Log.i(TAG, "runBluetoothTests completed");
             } catch (Throwable t) {
                 Log.e(TAG, "runBluetoothTests failed", t);
-            }
-
-            try {
-                runClipboardTests();
-                Log.i(TAG, "runClipboardTests completed");
-            } catch (Throwable t) {
-                Log.e(TAG, "runClipboardTests failed", t);
             }
 
             try {
@@ -93,6 +86,12 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Log.e(TAG, "unexpected error in ServicesE2E", t);
         } finally {
+            // clipboard tests need window focus - delegated to ClipboardTestActivity
+            try {
+                startActivity(new Intent(this, ClipboardTestActivity.class));
+            } catch (Throwable t) {
+                Log.e(TAG, "failed to start ClipboardTestActivity", t);
+            }
             Log.i(TAG, "ServicesE2E finished");
             finish();
         }
@@ -273,35 +272,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ------------------------------------------------------------
-    // Clipboard
-    // ------------------------------------------------------------
-
-    private void runClipboardTests() {
-        Log.i(TAG, "runClipboardTests started");
-
-        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        if (cm == null) {
-            Log.w(TAG, "ClipboardManager not available");
-            return;
-        }
-
-        try {
-            ClipData clip = ClipData.newPlainText("label", "services-e2e-clipboard");
-            cm.setPrimaryClip(clip);
-            Log.i(TAG, "ClipboardManager.setPrimaryClip completed");
-        } catch (Throwable t) {
-            Log.e(TAG, "setPrimaryClip failed", t);
-        }
-
-        try {
-            ClipData result = cm.getPrimaryClip();
-            Log.i(TAG, "ClipboardManager.getPrimaryClip item count: "
-                    + (result != null ? result.getItemCount() : "null"));
-        } catch (Throwable t) {
-            Log.e(TAG, "getPrimaryClip failed", t);
-        }
-    }
 
     // ------------------------------------------------------------
     // Location (LocationManager, Location, FusedLocationProviderClient)

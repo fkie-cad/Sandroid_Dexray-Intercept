@@ -42,5 +42,12 @@
             </intent-filter>
         </activity>
 
+        <!-- transparent window required for clipboard read focus on API 29+ -->
+        <activity
+            android:name=".ClipboardTestActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:hardwareAccelerated="false" />
+
     </application>
 </manifest>
