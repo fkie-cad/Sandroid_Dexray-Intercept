@@ -2,7 +2,6 @@
 package com.test.servicese2e;
 
 import android.app.Activity;
-import android.app.PendingIntent;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGattCharacteristic;
@@ -46,64 +45,102 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // All test sections run synchronously on the main thread before onCreate()
+        // returns. Theme.NoDisplay requires finish() before onResume() completes -
+        // a background thread would violate this contract on Android 11+.
         Log.i(TAG, "ServicesE2E started");
 
         try {
-            Thread t = new Thread(() -> {
-                try {
-                    runBluetoothTests();
-                    runCameraTests();
-                    runClipboardTests();
-                    runLocationTests();
-                    runTelephonyTests();
-                } catch (Throwable t1) {
-                    Log.e(TAG, "Error in service tests", t1);
-                } finally {
-                    runOnUiThread(this::finish);
-                }
-            });
-            t.start();
+
+            try {
+                runBluetoothTests();
+                Log.i(TAG, "runBluetoothTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "runBluetoothTests failed", t);
+            }
+
+            try {
+                runClipboardTests();
+                Log.i(TAG, "runClipboardTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "runClipboardTests failed", t);
+            }
+
+            try {
+                runLocationTests();
+                Log.i(TAG, "runLocationTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "runLocationTests failed", t);
+            }
+
+            try {
+                runTelephonyTests();
+                Log.i(TAG, "runTelephonyTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "runTelephonyTests failed", t);
+            }
+
+            // last - legacy Camera.open() causes a native HAL crash on emulator
+            try {
+                runCameraTests();
+                Log.i(TAG, "runCameraTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "runCameraTests failed", t);
+            }
+
         } catch (Throwable t) {
-            Log.e(TAG, "Error in ServicesE2E", t);
+            Log.e(TAG, "unexpected error in ServicesE2E", t);
+        } finally {
+            Log.i(TAG, "ServicesE2E finished");
             finish();
         }
     }
+
 
     // ------------------------------------------------------------
     // Bluetooth (adapter, device, GATT characteristic)
     // ------------------------------------------------------------
 
     private void runBluetoothTests() {
-        Log.i(TAG, "runBluetoothTests");
+        Log.i(TAG, "runBluetoothTests started");
         try {
             BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
             if (adapter != null) {
                 try {
                     adapter.enable();
-                } catch (Throwable ignored) {
+                } catch (Throwable t) {
+                    Log.w(TAG, "adapter.enable failed: " + t.getMessage());
                 }
+
                 try {
                     adapter.disable();
-                } catch (Throwable ignored) {
+                } catch (Throwable t) {
+                    Log.w(TAG, "adapter.disable failed: " + t.getMessage());
                 }
+
                 try {
                     adapter.startDiscovery();
-                } catch (Throwable ignored) {
+                } catch (Throwable t) {
+                    Log.w(TAG, "adapter.startDiscovery failed: " + t.getMessage());
                 }
 
                 try {
                     BluetoothDevice device = adapter.getRemoteDevice("00:11:22:33:44:55");
                     device.createBond();
-                } catch (Throwable ignored) {
+                } catch (Throwable t) {
+                    Log.w(TAG, "device.createBond failed: " + t.getMessage());
                 }
 
                 try {
                     String address = adapter.getAddress();
                     Log.i(TAG, "BluetoothAdapter.getAddress(): " + address);
-                } catch (Throwable ignored) {
+                } catch (Throwable t) {
+                    Log.w(TAG, "adapter.getAddress failed: " + t.getMessage());
                 }
+            } else {
+                Log.w(TAG, "BluetoothAdapter not available");
             }
-
+            
             try {
                 UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
                 BluetoothGattCharacteristic characteristic =
@@ -114,7 +151,7 @@ public class MainActivity extends Activity {
                         );
                 characteristic.setValue(new byte[]{0x01, 0x02, 0x03});
             } catch (Throwable t) {
-                Log.e(TAG, "Error in BluetoothGattCharacteristic test", t);
+                Log.e(TAG, "BluetoothGattCharacteristic.setValue failed", t);
             }
         } catch (Throwable t) {
             Log.e(TAG, "Error in runBluetoothTests", t);
@@ -126,28 +163,29 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runCameraTests() {
-        Log.i(TAG, "runCameraTests");
+        Log.i(TAG, "runCameraTests started");
         try {
             Camera camera = null;
             try {
                 camera = Camera.open();
-            } catch (Throwable ignored) {
-            }
-            if (camera != null) {
-                camera.release();
+                Log.i(TAG, "Camera.open() succeeded");
+            } catch (Throwable t) {
+                Log.w(TAG, "Camera.open() failed: " + t.getMessage());
+            } finally {
+                if (camera != null) camera.release();
             }
 
             camera = null;
             try {
                 camera = Camera.open(0);
-            } catch (Throwable ignored) {
-            }
-            if (camera != null) {
-                camera.release();
+                Log.i(TAG, "Camera.open(0) succeeded");
+            } catch (Throwable t) {
+                Log.w(TAG, "Camera.open(0) failed: " + t.getMessage());
+            } finally {
+                if (camera != null) camera.release();
             }
 
-            CameraManager manager =
-                    (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+            CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
             if (manager != null) {
                 try {
                     String[] ids = manager.getCameraIdList();
@@ -157,24 +195,27 @@ public class MainActivity extends Activity {
                             manager.openCamera(id, new CameraDevice.StateCallback() {
                                 @Override
                                 public void onOpened(CameraDevice cameraDevice) {
+                                    Log.i(TAG, "CameraManager.openCamera id=" + id + " opened");
                                     latch.countDown();
                                     cameraDevice.close();
                                 }
 
                                 @Override
                                 public void onDisconnected(CameraDevice cameraDevice) {
+                                    Log.w(TAG, "CameraManager.openCamera id=" + id + " disconnected");
                                     latch.countDown();
                                     cameraDevice.close();
                                 }
-
                                 @Override
                                 public void onError(CameraDevice cameraDevice, int error) {
+                                    Log.w(TAG, "CameraManager.openCamera id=" + id + " error=" + error);
                                     latch.countDown();
                                     cameraDevice.close();
                                 }
                             }, null);
                             latch.await(1, TimeUnit.SECONDS);
-                        } catch (Throwable ignored) {
+                        } catch (Throwable t) {
+                            Log.e(TAG, "openCamera id=" + id + " failed", t);
                         }
                     }
                 } catch (Throwable t) {
@@ -191,22 +232,28 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runClipboardTests() {
-        Log.i(TAG, "runClipboardTests");
-        try {
-            ClipboardManager cm =
-                    (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            if (cm != null) {
-                ClipData clip =
-                        ClipData.newPlainText("label", "services-e2e-clipboard");
-                cm.setPrimaryClip(clip);
+        Log.i(TAG, "runClipboardTests started");
 
-                ClipData result = cm.getPrimaryClip();
-                if (result != null) {
-                    Log.i(TAG, "Clipboard item count: " + result.getItemCount());
-                }
-            }
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm == null) {
+            Log.w(TAG, "ClipboardManager not available");
+            return;
+        }
+
+        try {
+            ClipData clip = ClipData.newPlainText("label", "services-e2e-clipboard");
+            cm.setPrimaryClip(clip);
+            Log.i(TAG, "ClipboardManager.setPrimaryClip completed");
         } catch (Throwable t) {
-            Log.e(TAG, "Error in runClipboardTests", t);
+            Log.e(TAG, "setPrimaryClip failed", t);
+        }
+
+        try {
+            ClipData result = cm.getPrimaryClip();
+            Log.i(TAG, "ClipboardManager.getPrimaryClip item count: "
+                    + (result != null ? result.getItemCount() : "null"));
+        } catch (Throwable t) {
+            Log.e(TAG, "getPrimaryClip failed", t);
         }
     }
 
@@ -215,80 +262,67 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runLocationTests() {
-        Log.i(TAG, "runLocationTests");
+        Log.i(TAG, "runLocationTests started");
+
+        LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        if (lm != null) {
+            try {
+                lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                Log.i(TAG, "getLastKnownLocation(GPS) completed");
+            } catch (Throwable t) {
+                Log.w(TAG, "getLastKnownLocation(GPS) failed: " + t.getMessage());
+            }
+            try {
+                lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                Log.i(TAG, "getLastKnownLocation(NETWORK) completed");
+            } catch (Throwable t) {
+                Log.w(TAG, "getLastKnownLocation(NETWORK) failed: " + t.getMessage());
+            }
+
+            LocationListener listener = new LocationListener() {
+                @Override public void onLocationChanged(Location location) {}
+                @Override public void onStatusChanged(String p, int s, Bundle e) {}
+                @Override public void onProviderEnabled(String p) {}
+                @Override public void onProviderDisabled(String p) {}
+            };
+
+            try {
+                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 1.0f, listener);
+                Log.i(TAG, "requestLocationUpdates(GPS, basic) completed");
+            } catch (Throwable t) {
+                Log.w(TAG, "requestLocationUpdates(GPS, basic) failed: " + t.getMessage());
+            }
+            try {
+                lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,
+                        1000L, 1.0f, listener, Looper.getMainLooper());
+                Log.i(TAG, "requestLocationUpdates(NETWORK, looper) completed");
+            } catch (Throwable t) {
+                Log.w(TAG, "requestLocationUpdates(NETWORK, looper) failed: " + t.getMessage());
+            }
+        } else {
+            Log.w(TAG, "LocationManager not available");
+        }
+
+        // Location.getLatitude / getLongitude hook triggers - no provider needed
         try {
-            LocationManager lm =
-                    (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-            if (lm != null) {
-                try {
-                    lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-                } catch (Throwable ignored) {
-                }
-                try {
-                    lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                } catch (Throwable ignored) {
-                }
-
-                LocationListener listener = new LocationListener() {
-                    @Override
-                    public void onLocationChanged(Location location) {
-                    }
-
-                    @Override
-                    public void onStatusChanged(String provider, int status, Bundle extras) {
-                    }
-
-                    @Override
-                    public void onProviderEnabled(String provider) {
-                    }
-
-                    @Override
-                    public void onProviderDisabled(String provider) {
-                    }
-                };
-
-                try {
-                    lm.requestLocationUpdates(
-                            LocationManager.GPS_PROVIDER,
-                            1000L,
-                            1.0f,
-                            listener
-                    );
-                } catch (Throwable ignored) {
-                }
-
-                try {
-                    lm.requestLocationUpdates(
-                            LocationManager.NETWORK_PROVIDER,
-                            1000L,
-                            1.0f,
-                            listener,
-                            Looper.getMainLooper()
-                    );
-                } catch (Throwable ignored) {
-                }
-            }
-
-            try {
-                Location loc = new Location("services-e2e");
-                loc.setLatitude(1.23);
-                loc.setLongitude(4.56);
-                double lat = loc.getLatitude();
-                double lon = loc.getLongitude();
-                Log.i(TAG, "Location lat=" + lat + " lon=" + lon);
-            } catch (Throwable t) {
-                Log.e(TAG, "Error in Location object test", t);
-            }
-
-            try {
-                FusedLocationProviderClient fused =
-                        LocationServices.getFusedLocationProviderClient(this);
-                fused.getLastLocation();
-            } catch (Throwable t) {
-                Log.e(TAG, "Error in FusedLocationProviderClient test", t);
-            }
+            Location loc = new Location("services-e2e");
+            loc.setLatitude(1.23);
+            loc.setLongitude(4.56);
+            double lat = loc.getLatitude();
+            double lon = loc.getLongitude();
+            Log.i(TAG, "Location lat=" + lat + " lon=" + lon);
         } catch (Throwable t) {
-            Log.e(TAG, "Error in runLocationTests", t);
+            Log.e(TAG, "Location object test failed", t);
+        }
+
+        // FusedLocationProviderClient hook trigger
+        try {
+            FusedLocationProviderClient fused =
+                    LocationServices.getFusedLocationProviderClient(this);
+            fused.getLastLocation();
+            Log.i(TAG, "FusedLocationProviderClient.getLastLocation completed");
+        } catch (Throwable t) {
+            Log.w(TAG, "FusedLocationProviderClient.getLastLocation failed: " + t.getMessage());
         }
     }
 
@@ -297,221 +331,205 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runTelephonyTests() {
-        Log.i(TAG, "runTelephonyTests");
+        Log.i(TAG, "runTelephonyTests started");
+
         try {
             runSmsTests();
-            runDeviceInfoTests();
-            runWifiAndBluetoothInfoTests();
-            runSystemPropertiesTests();
-            runContentResolverTests();
-            runSettingsSecureTests();
+            Log.i(TAG, "runSmsTests completed");
         } catch (Throwable t) {
-            Log.e(TAG, "Error in runTelephonyTests", t);
+            Log.e(TAG, "runSmsTests failed", t);
+        }
+
+        try {
+            runDeviceInfoTests();
+            Log.i(TAG, "runDeviceInfoTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runDeviceInfoTests failed", t);
+        }
+
+        try {
+            runWifiAndBluetoothInfoTests();
+            Log.i(TAG, "runWifiAndBluetoothInfoTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runWifiAndBluetoothInfoTests failed", t);
+        }
+
+        try {
+            runSystemPropertiesTests();
+            Log.i(TAG, "runSystemPropertiesTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runSystemPropertiesTests failed", t);
+        }
+
+        try {
+            runContentResolverTests();
+            Log.i(TAG, "runContentResolverTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runContentResolverTests failed", t);
+        }
+
+        try {
+            runSettingsSecureTests();
+            Log.i(TAG, "runSettingsSecureTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runSettingsSecureTests failed", t);
         }
     }
 
     private void runSmsTests() {
-        Log.i(TAG, "runSmsTests");
+        Log.i(TAG, "runSmsTests started");
+        SmsManager sms = SmsManager.getDefault();
+        if (sms == null) {
+            Log.w(TAG, "SmsManager not available");
+            return;
+        }
         try {
-            SmsManager sms = SmsManager.getDefault();
-            if (sms != null) {
-                try {
-                    sms.sendTextMessage("12345", null,
-                            "services-e2e-text", null, null);
-                } catch (Throwable t) {
-                    Log.e(TAG, "sendTextMessage failed", t);
-                }
-
-                try {
-                    ArrayList<String> parts = new ArrayList<>();
-                    parts.add("part-one");
-                    parts.add("part-two");
-                    sms.sendMultipartTextMessage(
-                            "12345",
-                            null,
-                            parts,
-                            null,
-                            null
-                    );
-                } catch (Throwable t) {
-                    Log.e(TAG, "sendMultipartTextMessage failed", t);
-                }
-            }
+            sms.sendTextMessage("12345", null, "services-e2e-text", null, null);
+            Log.i(TAG, "SmsManager.sendTextMessage completed");
         } catch (Throwable t) {
-            Log.e(TAG, "Error in runSmsTests", t);
+            Log.w(TAG, "sendTextMessage failed: " + t.getMessage());
+        }
+        try {
+            ArrayList<String> parts = new ArrayList<>();
+            parts.add("part-one");
+            parts.add("part-two");
+            sms.sendMultipartTextMessage("12345", null, parts, null, null);
+            Log.i(TAG, "SmsManager.sendMultipartTextMessage completed");
+        } catch (Throwable t) {
+            Log.w(TAG, "sendMultipartTextMessage failed: " + t.getMessage());
         }
     }
 
     private void runDeviceInfoTests() {
-        Log.i(TAG, "runDeviceInfoTests");
-        try {
-            TelephonyManager tm =
-                    (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
-            if (tm != null) {
-                try {
-                    String line1 = tm.getLine1Number();
-                    Log.i(TAG, "TelephonyManager.getLine1Number(): " + line1);
-                } catch (Throwable t) {
-                    Log.e(TAG, "getLine1Number failed", t);
-                }
-
-                try {
-                    String subId = tm.getSubscriberId();
-                    Log.i(TAG, "TelephonyManager.getSubscriberId(): " + subId);
-                } catch (Throwable t) {
-                    Log.e(TAG, "getSubscriberId failed", t);
-                }
-
-                try {
-                    String devId = tm.getDeviceId();
-                    Log.i(TAG, "TelephonyManager.getDeviceId(): " + devId);
-                } catch (Throwable t) {
-                    Log.e(TAG, "getDeviceId failed", t);
-                }
-
-                try {
-                    String imei = tm.getImei();
-                    Log.i(TAG, "TelephonyManager.getImei(): " + imei);
-                } catch (Throwable t) {
-                    Log.e(TAG, "getImei failed", t);
-                }
-
-                try {
-                    String op = tm.getSimOperator();
-                    Log.i(TAG, "TelephonyManager.getSimOperator(): " + op);
-                } catch (Throwable t) {
-                    Log.e(TAG, "getSimOperator failed", t);
-                }
-            }
-
+        Log.i(TAG, "runDeviceInfoTests started");
+        TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+        if (tm != null) {
             try {
-                String model = Build.MODEL;
-                String device = Build.DEVICE;
-                String product = Build.PRODUCT;
-                Log.i(TAG, "Build properties: MODEL=" + model +
-                        " DEVICE=" + device +
-                        " PRODUCT=" + product);
+                Log.i(TAG, "TelephonyManager.getLine1Number: " + tm.getLine1Number());
             } catch (Throwable t) {
-                Log.e(TAG, "Build property read failed", t);
+                Log.w(TAG, "getLine1Number failed: " + t.getMessage());
             }
+            try {
+                Log.i(TAG, "TelephonyManager.getSubscriberId: " + tm.getSubscriberId());
+            } catch (Throwable t) {
+                Log.w(TAG, "getSubscriberId failed: " + t.getMessage());
+            }
+            try {
+                Log.i(TAG, "TelephonyManager.getDeviceId: " + tm.getDeviceId());
+            } catch (Throwable t) {
+                Log.w(TAG, "getDeviceId failed: " + t.getMessage());
+            }
+            try {
+                Log.i(TAG, "TelephonyManager.getImei: " + tm.getImei());
+            } catch (Throwable t) {
+                Log.w(TAG, "getImei failed: " + t.getMessage());
+            }
+            try {
+                Log.i(TAG, "TelephonyManager.getSimOperator: " + tm.getSimOperator());
+            } catch (Throwable t) {
+                Log.w(TAG, "getSimOperator failed: " + t.getMessage());
+            }
+        } else {
+            Log.w(TAG, "TelephonyManager not available");
+        }
+        try {
+            Log.i(TAG, "Build MODEL=" + Build.MODEL
+                    + " DEVICE=" + Build.DEVICE
+                    + " PRODUCT=" + Build.PRODUCT);
         } catch (Throwable t) {
-            Log.e(TAG, "Error in runDeviceInfoTests", t);
+            Log.w(TAG, "Build property read failed: " + t.getMessage());
         }
     }
 
     private void runWifiAndBluetoothInfoTests() {
-        Log.i(TAG, "runWifiAndBluetoothInfoTests");
-        try {
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-            if (adapter != null) {
-                try {
-                    String addr = adapter.getAddress();
-                    Log.i(TAG, "Bluetooth address: " + addr);
-                } catch (Throwable t) {
-                    Log.e(TAG, "BluetoothAdapter.getAddress failed", t);
-                }
-            }
-
+        Log.i(TAG, "runWifiAndBluetoothInfoTests started");
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (adapter != null) {
             try {
-                WifiManager wm = (WifiManager) getApplicationContext()
-                        .getSystemService(Context.WIFI_SERVICE);
-                if (wm != null) {
-                    WifiInfo info = wm.getConnectionInfo();
-                    if (info != null) {
-                        try {
-                            String mac = info.getMacAddress();
-                            Log.i(TAG, "WifiInfo.getMacAddress(): " + mac);
-                        } catch (Throwable t) {
-                            Log.e(TAG, "getMacAddress failed", t);
-                        }
-                        try {
-                            String ssid = info.getSSID();
-                            Log.i(TAG, "WifiInfo.getSSID(): " + ssid);
-                        } catch (Throwable t) {
-                            Log.e(TAG, "getSSID failed", t);
-                        }
-                        try {
-                            String bssid = info.getBSSID();
-                            Log.i(TAG, "WifiInfo.getBSSID(): " + bssid);
-                        } catch (Throwable t) {
-                            Log.e(TAG, "getBSSID failed", t);
-                        }
-                    }
-                }
+                Log.i(TAG, "BluetoothAdapter.getAddress: " + adapter.getAddress());
             } catch (Throwable t) {
-                Log.e(TAG, "Wifi info tests failed", t);
+                Log.w(TAG, "BluetoothAdapter.getAddress failed: " + t.getMessage());
+            }
+        }
+        try {
+            WifiManager wm = (WifiManager) getApplicationContext()
+                    .getSystemService(Context.WIFI_SERVICE);
+            if (wm != null) {
+                WifiInfo info = wm.getConnectionInfo();
+                if (info != null) {
+                    try {
+                        Log.i(TAG, "WifiInfo.getMacAddress: " + info.getMacAddress());
+                    } catch (Throwable t) {
+                        Log.w(TAG, "getMacAddress failed: " + t.getMessage());
+                    }
+                    try {
+                        Log.i(TAG, "WifiInfo.getSSID: " + info.getSSID());
+                    } catch (Throwable t) {
+                        Log.w(TAG, "getSSID failed: " + t.getMessage());
+                    }
+                    try {
+                        Log.i(TAG, "WifiInfo.getBSSID: " + info.getBSSID());
+                    } catch (Throwable t) {
+                        Log.w(TAG, "getBSSID failed: " + t.getMessage());
+                    }
+                } else {
+                    Log.w(TAG, "WifiInfo not available - no active connection");
+                }
             }
         } catch (Throwable t) {
-            Log.e(TAG, "Error in runWifiAndBluetoothInfoTests", t);
+            Log.e(TAG, "Wifi info tests failed", t);
         }
     }
 
     private void runSystemPropertiesTests() {
-        Log.i(TAG, "runSystemPropertiesTests");
+        Log.i(TAG, "runSystemPropertiesTests started");
         try {
             Class<?> spClass = Class.forName("android.os.SystemProperties");
             Method get = spClass.getMethod("get", String.class);
             Object value = get.invoke(null, "ro.build.version.release");
-            Log.i(TAG, "SystemProperties.get(ro.build.version.release) = " + value);
+            Log.i(TAG, "SystemProperties.get(ro.build.version.release)=" + value);
         } catch (Throwable t) {
             Log.e(TAG, "SystemProperties.get failed", t);
         }
     }
 
     private void runContentResolverTests() {
-        Log.i(TAG, "runContentResolverTests");
+        Log.i(TAG, "runContentResolverTests started");
+        ContentResolver cr = getContentResolver();
+        Uri gsfUri = Uri.parse("content://com.google.android.gsf.gservicesa");
+        Uri otherUri = Settings.Secure.CONTENT_URI;
+
         try {
-            ContentResolver cr = getContentResolver();
-            Uri gsfUri = Uri.parse("content://com.google.android.gsf.gservicesa");
-            Uri otherUri = Settings.Secure.CONTENT_URI;
-
-            try {
-                Bundle args = new Bundle();
-                args.putString("e2e_key", "e2e_value");
-                CancellationSignal cs = new CancellationSignal();
-                cr.query(gsfUri, null, args, cs);
-            } catch (Throwable t) {
-                Log.e(TAG, "ContentResolver.query(URI,BUNDLE) failed", t);
-            }
-
-            try {
-                cr.query(
-                        otherUri,
-                        null,
-                        "name=?",
-                        new String[]{"android_id"},
-                        "name ASC"
-                );
-            } catch (Throwable t) {
-                Log.e(TAG, "ContentResolver.query(URI,String,String,String[],String) failed", t);
-            }
-
-            try {
-                CancellationSignal cs2 = new CancellationSignal();
-                cr.query(
-                        otherUri,
-                        null,
-                        "name=?",
-                        new String[]{"android_id"},
-                        null,
-                        cs2
-                );
-            } catch (Throwable t) {
-                Log.e(TAG, "ContentResolver.query(URI,String,String,String[],String,CancellationSignal) failed", t);
-            }
+            Bundle args = new Bundle();
+            args.putString("e2e_key", "e2e_value");
+            CancellationSignal cs = new CancellationSignal();
+            cr.query(gsfUri, null, args, cs);
+            Log.i(TAG, "ContentResolver.query(Uri, Bundle, CancellationSignal) completed");
         } catch (Throwable t) {
-            Log.e(TAG, "Error in runContentResolverTests", t);
+            Log.w(TAG, "ContentResolver.query(Uri,Bundle) failed: " + t.getMessage());
+        }
+
+        try {
+            cr.query(otherUri, null, "name=?", new String[]{"android_id"}, "name ASC");
+            Log.i(TAG, "ContentResolver.query(Uri, String, String[], String) completed");
+        } catch (Throwable t) {
+            Log.w(TAG, "ContentResolver.query(5-arg) failed: " + t.getMessage());
+        }
+
+        try {
+            CancellationSignal cs2 = new CancellationSignal();
+            cr.query(otherUri, null, "name=?", new String[]{"android_id"}, null, cs2);
+            Log.i(TAG, "ContentResolver.query(Uri, String, String[], String, CancellationSignal) completed");
+        } catch (Throwable t) {
+            Log.w(TAG, "ContentResolver.query(6-arg) failed: " + t.getMessage());
         }
     }
 
     private void runSettingsSecureTests() {
-        Log.i(TAG, "runSettingsSecureTests");
+        Log.i(TAG, "runSettingsSecureTests started");
         try {
-            ContentResolver cr = getContentResolver();
             String androidId = Settings.Secure.getString(
-                    cr,
-                    Settings.Secure.ANDROID_ID
-            );
+                    getContentResolver(), Settings.Secure.ANDROID_ID);
             Log.i(TAG, "Settings.Secure.ANDROID_ID: " + androidId);
         } catch (Throwable t) {
             Log.e(TAG, "Settings.Secure.getString failed", t);
