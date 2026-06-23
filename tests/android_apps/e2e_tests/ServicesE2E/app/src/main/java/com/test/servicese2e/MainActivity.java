@@ -153,24 +153,84 @@ public class MainActivity extends Activity {
         }
 
         // BluetoothGatt.readCharacteristic hook trigger
-        // connectGatt returns synchronously before connection - method entry fires hook
-        // readCharacteristic returns false (not connected), which is expected
+        // waits for STATE_CONNECTED, then service discovery, then reads characteristic
+        // requires bumble GATT server running via netsim with address F0:F1:F2:F3:F4:F5
         if (adapter != null) {
-            BluetoothGatt gatt = null;
-            try {
-                BluetoothDevice gattTarget = adapter.getRemoteDevice("00:11:22:33:44:55");
-                UUID gattUuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-                BluetoothGattCharacteristic gattChar = new BluetoothGattCharacteristic(
-                        gattUuid,
-                        BluetoothGattCharacteristic.PROPERTY_READ,
-                        BluetoothGattCharacteristic.PERMISSION_READ
-                );
-                gatt = gattTarget.connectGatt(this, false, new BluetoothGattCallback() {});
-                Log.i(TAG, "connectGatt result: " + (gatt != null ? "non-null" : "null"));
+            BluetoothGatt[] gattHolder     = new BluetoothGatt[1];
+            CountDownLatch connectedLatch  = new CountDownLatch(1);
+            CountDownLatch discoveredLatch = new CountDownLatch(1);
+            CountDownLatch readLatch       = new CountDownLatch(1);
 
-                if (gatt != null) {
-                    boolean readResult = gatt.readCharacteristic(gattChar);
-                    Log.i(TAG, "BluetoothGatt.readCharacteristic returned: " + readResult);
+            BluetoothGattCallback callback = new BluetoothGattCallback() {
+                @Override
+                public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+                    if (newState == android.bluetooth.BluetoothProfile.STATE_CONNECTED) {
+                        Log.i(TAG, "BluetoothGatt connected, status=" + status);
+                        connectedLatch.countDown();
+                        // service discovery required before any characteristic operations
+                        gatt.discoverServices();
+                    } else if (newState == android.bluetooth.BluetoothProfile.STATE_DISCONNECTED) {
+                        Log.w(TAG, "BluetoothGatt disconnected, status=" + status);
+                        connectedLatch.countDown();
+                        discoveredLatch.countDown();
+                        readLatch.countDown();
+                    }
+                }
+
+                @Override
+                public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+                    Log.i(TAG, "onServicesDiscovered status=" + status
+                            + " services=" + gatt.getServices().size());
+                    discoveredLatch.countDown();
+                }
+
+                @Override
+                public void onCharacteristicRead(BluetoothGatt gatt,
+                        BluetoothGattCharacteristic characteristic, int status) {
+                    Log.i(TAG, "onCharacteristicRead status=" + status
+                            + " uuid=" + characteristic.getUuid());
+                    readLatch.countDown();
+                }
+            };
+
+            try {
+                BluetoothDevice gattTarget = adapter.getRemoteDevice("F0:F1:F2:F3:F4:F5");
+
+                gattHolder[0] = gattTarget.connectGatt(this, false, callback);
+                Log.i(TAG, "connectGatt result: " + (gattHolder[0] != null ? "non-null" : "null"));
+
+                if (gattHolder[0] != null) {
+                    boolean connected = connectedLatch.await(5, TimeUnit.SECONDS);
+                    if (!connected) {
+                        Log.w(TAG, "BluetoothGatt connection timed out - bumble server may not be running");
+                    } else {
+                        boolean discovered = discoveredLatch.await(5, TimeUnit.SECONDS);
+                        if (!discovered) {
+                            Log.w(TAG, "service discovery timed out after 5s");
+                        } else {
+                            UUID serviceUuid = UUID.fromString("12345678-1234-5678-1234-56789abcdef0");
+                            UUID charUuid    = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+                            android.bluetooth.BluetoothGattService svc =
+                                    gattHolder[0].getService(serviceUuid);
+                            if (svc != null) {
+                                BluetoothGattCharacteristic remoteChar =
+                                        svc.getCharacteristic(charUuid);
+                                if (remoteChar != null) {
+                                    boolean readResult =
+                                            gattHolder[0].readCharacteristic(remoteChar);
+                                    Log.i(TAG, "BluetoothGatt.readCharacteristic returned: "
+                                            + readResult);
+                                    if (readResult) {
+                                        readLatch.await(3, TimeUnit.SECONDS);
+                                    }
+                                } else {
+                                    Log.w(TAG, "characteristic not found in discovered services");
+                                }
+                            } else {
+                                Log.w(TAG, "service not found - check bumble_gatt_server.py service UUID");
+                            }
+                        }
+                    }
                 } else {
                     Log.w(TAG, "BluetoothGatt.readCharacteristic skipped - connectGatt returned null");
                 }
@@ -178,8 +238,8 @@ public class MainActivity extends Activity {
                 Log.e(TAG, "BluetoothGatt.readCharacteristic test failed: "
                         + t.getClass().getSimpleName() + " - " + t.getMessage());
             } finally {
-                if (gatt != null) {
-                    gatt.close();
+                if (gattHolder[0] != null) {
+                    gattHolder[0].close();
                 }
             }
         }
