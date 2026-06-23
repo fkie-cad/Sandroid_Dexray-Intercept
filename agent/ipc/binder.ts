@@ -178,7 +178,7 @@ function hook_binder(){
                 var cmd = args[1]; // int
     
                 // value calculated from #define BINDER_WRITE_READ		_IOWR('b', 1, struct binder_write_read)
-                if(cmd != ptr(0xc0306201)) return;  // if 0xc0306201 then enter BINDER_WRITE_READ flow
+                if (cmd.toUInt32() !== 0xc0306201) return;  // if 0xc0306201 then enter BINDER_WRITE_READ flow
                 var data = args[2]; // void * -> pointer to binder_write_read
     
                 var binder_write_read = parse_struct_binder_write_read(data);
