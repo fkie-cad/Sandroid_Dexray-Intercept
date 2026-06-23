@@ -159,6 +159,20 @@ public class MainActivity extends Activity {
                 Log.w(TAG, "sendStickyBroadcast permission denied: " + se.getMessage());
             }
 
+            // 10) startForegroundService(Intent) ->
+            //     broadcast.ts: no hook currently; trigger present for future hook on
+            //     ContextWrapper.startForegroundService (API 26+)
+            //     Service will ANR after 5s without a posted notification - expected in test context
+            try {
+                Intent fgServiceIntent = new Intent(this, MyTestService.class);
+                fgServiceIntent.putExtra("fg_service_key", "fg_service_value");
+                fgServiceIntent.putExtra(MyTestService.EXTRA_START_FOREGROUND, true);
+                startForegroundService(fgServiceIntent);
+                Log.i(TAG, "startForegroundService OK");
+            } catch (Throwable t) {
+                Log.w(TAG, "startForegroundService failed: " + t.getMessage());
+            }
+
             Log.i(TAG, "runBroadcastTests completed");
 
         } catch (Throwable t) {
