@@ -37,6 +37,22 @@ public class MyTestService extends Service {
                 Log.w(TAG, "MyTestService: startActivity from foreground Service failed: "
                         + t.getMessage());
             }
+
+            // startActivity(Intent, Bundle) from foreground Service ->
+            // broadcast.ts: ContextWrapper.startActivity[Intent,Bundle] (BC-5)
+            // requires FLAG_ACTIVITY_NEW_TASK from non-Activity context
+            try {
+                Intent fromFgServiceBundle = new Intent(this, SecondActivity.class);
+                fromFgServiceBundle.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                fromFgServiceBundle.putExtra("from", "ForegroundServiceBundle");
+                android.os.Bundle activityOptions = new android.os.Bundle();
+                activityOptions.putString("opt_key", "opt_value");
+                startActivity(fromFgServiceBundle, activityOptions);
+                Log.i(TAG, "MyTestService: startActivity(Intent,Bundle) from foreground Service OK");
+            } catch (Throwable t) {
+                Log.w(TAG, "MyTestService: startActivity(Intent,Bundle) from foreground Service failed: "
+                        + t.getMessage());
+            }
             stopForeground(true);
         } else {
             // Background service path: startActivity is expected to be silently blocked
