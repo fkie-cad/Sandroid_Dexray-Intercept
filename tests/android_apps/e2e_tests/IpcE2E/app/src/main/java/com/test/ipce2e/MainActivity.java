@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Log.e(TAG, "Error in IpcE2E", t);
         } finally {
+            Log.i(TAG, "IpcE2E finished");
             finish();
         }
     }
@@ -57,7 +58,7 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runBinderTests() {
-        Log.i(TAG, "runBinderTests");
+        Log.i(TAG, "runBinderTests started");
 
         try {
             // 1) Settings.Secure.getString(...) -> binder.ts: handle_write(...) via libbinder.so ioctl
@@ -76,6 +77,7 @@ public class MainActivity extends Activity {
             );
             Log.i(TAG, "DEVICE_NAME: " + deviceName);
 
+            Log.i(TAG, "runBinderTests completed");
         } catch (Throwable t) {
             Log.e(TAG, "Error in runBinderTests", t);
         }
@@ -86,7 +88,7 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runBroadcastTests() {
-        Log.i(TAG, "runBroadcastTests");
+        Log.i(TAG, "runBroadcastTests started");
 
         try {
             // 1) sendBroadcast(Intent) ->
@@ -148,10 +150,16 @@ public class MainActivity extends Activity {
             // 9) sendStickyBroadcast(Intent) ->
             //    broadcast.ts: ContextWrapper.sendStickyBroadcast[Intent]
             //    -> PROFILE_HOOKING_TYPE="IPC_BROADCAST", event_type="broadcast.sticky_sent"
-            Intent sticky = new Intent("com.test.ipce2e.ACTION_STICKY");
-            sendStickyBroadcast(sticky);
+            //    requires android.permission.BROADCAST_STICKY in manifest
+            try {
+                Intent sticky = new Intent("com.test.ipce2e.ACTION_STICKY");
+                sendStickyBroadcast(sticky);
+                Log.i(TAG, "sendStickyBroadcast OK");
+            } catch (SecurityException se) {
+                Log.w(TAG, "sendStickyBroadcast permission denied: " + se.getMessage());
+            }
 
-            Log.i(TAG, "Broadcast tests completed");
+            Log.i(TAG, "runBroadcastTests completed");
 
         } catch (Throwable t) {
             Log.e(TAG, "Error in runBroadcastTests", t);
@@ -163,7 +171,7 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runIntentTests() {
-        Log.i(TAG, "runIntentTests");
+        Log.i(TAG, "runIntentTests started");
 
         try {
             // 1) Activity.getIntent() in MainActivity ->
@@ -206,7 +214,7 @@ public class MainActivity extends Activity {
             Uri data2 = customIntent.getData();
             Log.i(TAG, "Intent2 data: " + data2);
 
-            Log.i(TAG, "Intent tests completed");
+            Log.i(TAG, "runIntentTests completed");
 
         } catch (Throwable t) {
             Log.e(TAG, "Error in runIntentTests", t);
@@ -218,7 +226,7 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runSharedPrefsTests() {
-        Log.i(TAG, "runSharedPrefsTests");
+        Log.i(TAG, "runSharedPrefsTests started");
 
         try {
             // 1) getSharedPreferences(...) ->
@@ -277,7 +285,7 @@ public class MainActivity extends Activity {
             //    - Preferences.get(Key)/MutablePreferences.get(Key) -> event_type="datastore_prefs.get"
             SharedPrefsDataStoreHelper.runDataStoreTests(getApplicationContext());
 
-            Log.i(TAG, "SharedPrefs + DataStore tests completed");
+            Log.i(TAG, "runSharedPrefsTests completed");
 
         } catch (Throwable t) {
             Log.e(TAG, "Error in runSharedPrefsTests", t);
