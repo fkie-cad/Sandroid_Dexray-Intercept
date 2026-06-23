@@ -7,4 +7,6 @@ import androidx.room.RoomDatabase;
 @Database(entities = {User.class}, version = 1, exportSchema = false)
 public abstract class E2EDb extends RoomDatabase {
     public abstract UserDao userDao();
+    // Required for Flow hook trigger - defined in Kotlin DAO
+    public abstract FlowUserDao flowUserDao();
 }

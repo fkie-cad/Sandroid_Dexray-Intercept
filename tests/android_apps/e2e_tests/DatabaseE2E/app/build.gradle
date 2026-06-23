@@ -1,5 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
+    id 'org.jetbrains.kotlin.android' version '1.9.24'
+    id 'org.jetbrains.kotlin.kapt'    version '1.9.24'
 }
 
 android {
@@ -14,6 +16,12 @@ android {
         targetSdk 36
         versionCode 1
         versionName "1.0"
+
+        externalNativeBuild {
+            cmake {
+                cppFlags '-std=c++17'
+            }
+        }
     }
 
     buildTypes {
@@ -28,18 +36,37 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
+
+    kotlinOptions {
+        jvmTarget = '11'
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+
 }
 
 dependencies {
-    // Room
+    // Room - runtime + kapt for annotation processing + ktx for Flow return type
     implementation "androidx.room:room-runtime:2.6.1"
-    annotationProcessor "androidx.room:room-compiler:2.6.1"
+    kapt           "androidx.room:room-compiler:2.6.1"
+    implementation "androidx.room:room-ktx:2.6.1"
     implementation "androidx.sqlite:sqlite:2.3.1"
 
-    // SQLCipher
+    // Lifecycle - LiveData type + ProcessLifecycleOwner for observe hook trigger
+    implementation "androidx.lifecycle:lifecycle-livedata:2.7.0"
+    implementation "androidx.lifecycle:lifecycle-process:2.7.0"
+
+    // SQLCipher - includes SupportFactory for Room+SQLCipher integration
     implementation "net.zetetic:android-database-sqlcipher:4.5.0@aar"
-    implementation "androidx.sqlite:sqlite:2.3.1"
 
     // WCDB
     implementation "com.tencent.wcdb:wcdb-android:1.0.8"
+
+    // Coroutines - required for Flow collection in FlowTestHelper
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
 }

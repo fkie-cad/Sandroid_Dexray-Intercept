@@ -1,6 +1,7 @@
 // tests/android_apps/e2e_tests/DatabaseE2E/app/src/main/java/com/test/databasee2e/UserDao.java
 package com.test.databasee2e;
 
+import androidx.lifecycle.LiveData;
 import androidx.room.Dao;
 import androidx.room.Delete;
 import androidx.room.Insert;
@@ -28,4 +29,8 @@ public interface UserDao {
 
     @RawQuery
     List<User> rawSelect(SupportSQLiteQuery query);
+
+    // LiveData-backed query - triggers LiveData.observe hook when observed
+    @Query("SELECT * FROM e2e_user")
+    LiveData<List<User>> selectAllLive();
 }
