@@ -4,7 +4,6 @@ Presents a virtual BLE peripheral at address F0:F1:F2:F3:F4:F5
 with one readable/writable characteristic for BT-1 hook testing.
 """
 import asyncio
-import logging
 
 from bumble.device import Device
 from bumble.transport import open_transport
@@ -17,7 +16,7 @@ CHAR_UUID      = UUID("00001101-0000-1000-8000-00805F9B34FB")
 CHAR_VALUE     = bytes([0x01, 0x02, 0x03, 0x04])
 
 async def main():
-    print(f"Connecting to netsim...")
+    print("Connecting to netsim...")
     async with await open_transport("android-netsim") as transport:
         device = Device.with_hci(
             name="Bumble E2E",
