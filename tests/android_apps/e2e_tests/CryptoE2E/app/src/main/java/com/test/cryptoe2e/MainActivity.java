@@ -10,11 +10,14 @@ import android.security.keystore.KeyProperties;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.security.KeyStore;
 import java.security.KeyStore.LoadStoreParameter;
 import java.security.KeyStore.PasswordProtection;
 import java.security.KeyStore.ProtectionParameter;
 import java.security.KeyStore.SecretKeyEntry;
+import java.security.KeyStoreSpi;
 import java.security.Provider;
 import java.security.SecureRandom;
 import java.security.Security;
@@ -70,6 +73,7 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Log.e(TAG, "Error in CryptoE2E", t);
         } finally {
+            Log.i(TAG, "CryptoE2E finished");
             finish();
         }
     }
@@ -79,7 +83,7 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runAesTests() {
-        Log.i(TAG, "runAesTests");
+        Log.i(TAG, "runAesTests started");
 
         try {
             // Base key material
@@ -202,6 +206,8 @@ public class MainActivity extends Activity {
             int outLen4 = cipherVar.doFinal(plainBytes, 0, plainBytes.length, outBuf4, 0);
             Log.i(TAG, "doFinal(byte[],int,int,byte[],int): " + outLen4);
 
+            Log.i(TAG, "runAesTests completed");
+
         } catch (Throwable t) {
             Log.e(TAG, "Error in runAesTests", t);
         }
@@ -212,7 +218,7 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runBase64Tests() {
-        Log.i(TAG, "runBase64Tests");
+        Log.i(TAG, "runBase64Tests started");
 
         try {
             String inputString = "Hello Base64 E2E!";
@@ -266,6 +272,8 @@ public class MainActivity extends Activity {
             String encStr2 = Base64.encodeToString(inputBytes, 0, inputBytes.length, Base64.NO_WRAP);
             Log.i(TAG, "encodeToString(byte[],int,int,int): " + encStr2);
 
+            Log.i(TAG, "runBase64Tests completed");
+
         } catch (Throwable t) {
             Log.e(TAG, "Error in runBase64Tests", t);
         }
@@ -276,7 +284,7 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runKeystoreTests() {
-        Log.i(TAG, "runKeystoreTests");
+        Log.i(TAG, "runKeystoreTests started");
 
         try {
             // -------- Legacy / JCA BKS keystore tests (exercise current hooks) --------
@@ -364,6 +372,8 @@ public class MainActivity extends Activity {
                     LoadStoreParameter lsp = new SimpleLoadStoreParameter(lspPassword);
                     ks.load(lsp);
                     Log.i(TAG, "load(LoadStoreParameter) OK");
+                } catch (UnsupportedOperationException uoe) {
+                    Log.w(TAG, "load(LoadStoreParameter) unsupported for keystore type " + ks.getType());
                 } catch (Throwable t) {
                     Log.e(TAG, "load(LoadStoreParameter) failed", t);
                 }
@@ -479,6 +489,8 @@ public class MainActivity extends Activity {
                             new SimpleLoadStoreParameter("storepass".toCharArray());
                     ks.store(lspStore);
                     Log.i(TAG, "store(LoadStoreParameter) OK");
+                } catch (UnsupportedOperationException uoe) {
+                    Log.w(TAG, "store(LoadStoreParameter) unsupported for keystore type " + ks.getType());
                 } catch (Throwable t) {
                     Log.e(TAG, "store(LoadStoreParameter) failed", t);
                 }
@@ -492,6 +504,14 @@ public class MainActivity extends Activity {
                 Log.e(TAG, "runAndroidKeyStoreTests failed", t);
             }
 
+            try {
+                runLoadStoreParameterSupportSurvey();
+            } catch (Throwable t) {
+                Log.e(TAG, "runLoadStoreParameterSupportSurvey failed", t);
+            }
+
+            Log.i(TAG, "runKeystoreTests completed");
+
         } catch (Throwable t) {
             Log.e(TAG, "Error in runKeystoreTests", t);
         }
@@ -501,7 +521,7 @@ public class MainActivity extends Activity {
     // These use correct types/provider combinations on this runtime and are intended
     // as future hook targets (AndroidKeyStore + KeyGenParameterSpec).
     private void runAndroidKeyStoreTests() {
-        Log.i(TAG, "runAndroidKeyStoreTests (AndroidKeyStore)");
+        Log.i(TAG, "runAndroidKeyStoreTests (AndroidKeyStore) started");
 
         try {
             // 1) KeyStore.getInstance("AndroidKeyStore") ->
@@ -582,8 +602,93 @@ public class MainActivity extends Activity {
                 Log.e(TAG, "AndroidKeyStore.getCertificateChain(...) failed", t);
             }
 
+            Log.i(TAG, "runAndroidKeyStoreTests completed");
+
         } catch (Throwable t) {
             Log.e(TAG, "Error in runAndroidKeyStoreTests", t);
         }
     }
+
+    private void runLoadStoreParameterSupportSurvey() {
+        Log.i(TAG, "runLoadStoreParameterSupportSurvey");
+        try {
+            Provider[] providers = Security.getProviders();
+            if (providers == null || providers.length == 0) {
+                Log.w(TAG, "No security providers available for survey");
+                return;
+            }
+
+            for (Provider provider : providers) {
+                for (Provider.Service service : provider.getServices()) {
+                    if (!"KeyStore".equalsIgnoreCase(service.getType())) {
+                        continue;
+                    }
+                    String type = service.getAlgorithm();
+                    try {
+                        KeyStore ks = KeyStore.getInstance(type, provider);
+                        KeyStoreSpi spi = extractKeyStoreSpi(ks);
+                        if (spi == null) {
+                            Log.i(TAG, "Survey: type=" + type + " provider=" + provider.getName()
+                                    + " spi not accessible");
+                            continue;
+                        }
+                        Class<?> spiClass = spi.getClass();
+                        boolean loadSupported = overridesEngineLoadStoreParameter(spiClass);
+                        boolean storeSupported = overridesEngineStoreStoreParameter(spiClass);
+                        if (loadSupported || storeSupported) {
+                            Log.i(TAG, "Survey: type=" + type + " provider=" + provider.getName()
+                                    + " LoadStoreParameter override load=" + loadSupported
+                                    + " store=" + storeSupported);
+                        }
+                    } catch (Throwable t) {
+                        Log.w(TAG, "Survey error for type=" + type + " provider=" + provider.getName(), t);
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "Error in runLoadStoreParameterSupportSurvey", t);
+        }
+    }
+
+    private KeyStoreSpi extractKeyStoreSpi(KeyStore ks) {
+        if (ks == null) {
+            return null;
+        }
+        try {
+            Class<?> cls = ks.getClass();
+            while (cls != null && cls != Object.class) {
+                Field[] fields = cls.getDeclaredFields();
+                for (Field field : fields) {
+                    field.setAccessible(true);
+                    Object value = field.get(ks);
+                    if (value instanceof KeyStoreSpi) {
+                        return (KeyStoreSpi) value;
+                    }
+                }
+                cls = cls.getSuperclass();
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "extractKeyStoreSpi failed", t);
+        }
+        return null;
+    }
+
+    private boolean overridesEngineLoadStoreParameter(Class<?> spiClass) {
+        try {
+            Method m = spiClass.getMethod("engineLoad", LoadStoreParameter.class);
+            return m.getDeclaringClass() != KeyStoreSpi.class;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }
+
+    private boolean overridesEngineStoreStoreParameter(Class<?> spiClass) {
+        try {
+            Method m = spiClass.getMethod("engineStore", LoadStoreParameter.class);
+            return m.getDeclaringClass() != KeyStoreSpi.class;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }
+
 }
