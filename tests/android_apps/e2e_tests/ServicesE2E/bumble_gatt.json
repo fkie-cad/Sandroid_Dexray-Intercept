@@ -1,0 +1,17 @@
+{
+    "name": "Bumble E2E",
+    "address": "F0:F1:F2:F3:F4:F5",
+    "services": [
+        {
+            "uuid": "00001800-0000-1000-8000-00805F9B34FB",
+            "characteristics": [
+                {
+                    "uuid": "00001101-0000-1000-8000-00805F9B34FB",
+                    "properties": ["read", "write"],
+                    "permissions": ["readable", "writeable"],
+                    "value": "01020304"
+                }
+            ]
+        }
+    ]
+}
