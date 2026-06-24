@@ -15,14 +15,14 @@
 /*
  * Exercises libc socket syscalls hooked in sockets.ts via safeAttachExport:
  *
- *   send()     → "Libc::send"
- *   recv()     → "Libc::recv"
- *   sendmsg()  → "Libc::sendmsg"
- *   recvmsg()  → "Libc::recvmsg"
- *   close()    → "Libc::close"
+ *   send()     -> "Libc::send"
+ *   recv()     -> "Libc::recv"
+ *   sendmsg()  -> "Libc::sendmsg"
+ *   recvmsg()  -> "Libc::recvmsg"
+ *   close()    -> "Libc::close"
  *
  * Each test creates a loopback TCP pair in a single thread:
- *   listen() with backlog ≥ 1 → connect() (kernel buffers it) → accept()
+ *   listen() with backlog >= 1 -> connect() (kernel buffers it) -> accept()
  * This avoids pthreads while still producing real AF_INET sockets that
  * pass the hooks' type-filter (not "unix:stream").
  */
@@ -42,8 +42,8 @@ static int tests_failed = 0;
 
 /* ------------------------------------------------------------------ */
 /* Helper: create a connected loopback TCP pair in one thread.         */
-/*   *cli_fd  → connected client side                                  */
-/*   *srv_fd  → accepted server side                                   */
+/*   *cli_fd  -> connected client side                                  */
+/*   *srv_fd  -> accepted server side                                   */
 /* Returns 0 on success, -1 on failure (fds are closed on failure).   */
 /* ------------------------------------------------------------------ */
 static int make_loopback_pair(int *cli_fd, int *srv_fd) {
@@ -112,8 +112,8 @@ static int make_loopback_pair(int *cli_fd, int *srv_fd) {
 /* Test 1: send() / recv()                                             */
 /*                                                                     */
 /* sockets.ts hooks:                                                   */
-/*   send  → "Libc::send"                                              */
-/*   recv  → "Libc::recv"                                              */
+/*   send  -> "Libc::send"                                              */
+/*   recv  -> "Libc::recv"                                              */
 /*                                                                     */
 /* Data is exchanged in both directions to exercise both syscalls      */
 /* on both fds of the pair.                                            */
@@ -129,7 +129,7 @@ static void test_send_recv(void) {
     }
     TEST_ASSERT(1, "make_loopback_pair for send/recv");
 
-    /* send() from client → server */
+    /* send() from client -> server */
     const char *msg = "send-recv-payload";
     ssize_t sent = send(cli, msg, strlen(msg), 0);
     LOGI("send(%d, \"%s\", %zu, 0) -> %zd", cli, msg, strlen(msg), sent);
@@ -143,7 +143,7 @@ static void test_send_recv(void) {
     TEST_ASSERT(rcvd == sent, "recv() returned same byte count as send()");
     TEST_ASSERT(memcmp(buf, msg, (size_t)rcvd) == 0, "recv() data matches sent payload");
 
-    /* send() from server → client (reverse direction) */
+    /* send() from server -> client (reverse direction) */
     const char *reply = "reply-payload";
     ssize_t sent2 = send(srv, reply, strlen(reply), 0);
     LOGI("send(%d, \"%s\", %zu, 0) -> %zd", srv, reply, strlen(reply), sent2);
@@ -165,8 +165,8 @@ static void test_send_recv(void) {
 /* Test 2: sendmsg() / recvmsg()                                       */
 /*                                                                     */
 /* sockets.ts hooks:                                                   */
-/*   sendmsg → "Libc::sendmsg"                                         */
-/*   recvmsg → "Libc::recvmsg"                                         */
+/*   sendmsg -> "Libc::sendmsg"                                         */
+/*   recvmsg -> "Libc::recvmsg"                                         */
 /*                                                                     */
 /* A two-element iovec is used on both the send and receive sides to   */
 /* exercise the scatter/gather path of both syscalls.                  */
@@ -233,7 +233,7 @@ static void test_sendmsg_recvmsg(void) {
     TEST_ASSERT(memcmp(rbuf2, part2, strlen(part2)) == 0,
                 "recvmsg() scatter buf2 matches part2");
 
-    /* Reverse direction: sendmsg server → client */
+    /* Reverse direction: sendmsg server -> client */
     const char *rpart1 = "resp-";
     const char *rpart2 = "msg";
     struct iovec rsend_iov[2];
@@ -277,7 +277,7 @@ static void test_sendmsg_recvmsg(void) {
 /* Test 3: close() on a hook-tracked socket                            */
 /*                                                                     */
 /* sockets.ts hook:                                                    */
-/*   close → "Libc::close"                                             */
+/*   close -> "Libc::close"                                             */
 /*                                                                     */
 /* The hook only emits for file descriptors present in socket_list,    */
 /* i.e. those that previously passed through the native connect or     */
@@ -317,6 +317,73 @@ static void test_close_tracked(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Test 4: sendto() / recvfrom() on a UDP loopback pair                */
+/*                                                                     */
+/* sockets.ts hooks:                                                   */
+/*   sendto   -> socket.native.sendto                                  */
+/*   recvfrom -> Libc::recvfrom                                        */
+/*                                                                     */
+/* Uses AF_INET SOCK_DGRAM; no connect() so the explicit destination   */
+/* address path in the sendto hook is exercised (this.ipAddr != 0).   */
+/* recvfrom is called with a non-null src_addr pointer so the address- */
+/* extraction branch in the hook is also reached.                      */
+/* ------------------------------------------------------------------ */
+static void test_sendto_recvfrom(void) {
+    LOGI("");
+    LOGI("=== Native socket tests: sendto / recvfrom (UDP) ===");
+
+    /* Receiver: bound UDP socket on loopback, OS-assigned port */
+    int recv_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    TEST_ASSERT(recv_fd >= 0, "socket() for recvfrom test");
+    if (recv_fd < 0) return;
+
+    struct sockaddr_in recv_addr;
+    socklen_t addrlen = sizeof(recv_addr);
+    memset(&recv_addr, 0, sizeof(recv_addr));
+    recv_addr.sin_family      = AF_INET;
+    recv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    recv_addr.sin_port        = 0;
+
+    int rc = bind(recv_fd, (struct sockaddr *)&recv_addr, sizeof(recv_addr));
+    TEST_ASSERT(rc == 0, "bind() for recvfrom test");
+    if (rc != 0) { close(recv_fd); return; }
+
+    rc = getsockname(recv_fd, (struct sockaddr *)&recv_addr, &addrlen);
+    TEST_ASSERT(rc == 0, "getsockname() for recvfrom test");
+
+    /* Sender: unconnected UDP socket - uses explicit destination in sendto() */
+    int send_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    TEST_ASSERT(send_fd >= 0, "socket() sender for sendto test");
+    if (send_fd < 0) { close(recv_fd); return; }
+
+    /* sendto() with explicit destination address - exercises this.ipAddr != 0 branch */
+    const char *payload = "sendto-recvfrom-payload";
+    ssize_t sent = sendto(send_fd, payload, strlen(payload), 0,
+                          (struct sockaddr *)&recv_addr, sizeof(recv_addr));
+    LOGI("sendto(%d, \"%s\", %zu, 0, 127.0.0.1:%d) -> %zd",
+         send_fd, payload, strlen(payload), ntohs(recv_addr.sin_port), sent);
+    TEST_ASSERT(sent == (ssize_t)strlen(payload),
+                "sendto() returned correct byte count");
+
+    /* recvfrom() with non-null src_addr - exercises address-extraction branch */
+    char buf[64];
+    memset(buf, 0, sizeof(buf));
+    struct sockaddr_in src_addr;
+    socklen_t src_addrlen = sizeof(src_addr);
+    ssize_t rcvd = recvfrom(recv_fd, buf, sizeof(buf) - 1, 0,
+                            (struct sockaddr *)&src_addr, &src_addrlen);
+    LOGI("recvfrom(%d, buf, %zu, 0, &src) -> %zd, data=\"%s\"",
+         recv_fd, sizeof(buf) - 1, rcvd, buf);
+    TEST_ASSERT(rcvd == sent,
+                "recvfrom() returned same byte count as sendto()");
+    TEST_ASSERT(memcmp(buf, payload, (size_t)rcvd) == 0,
+                "recvfrom() data matches sent payload");
+
+    close(send_fd);
+    close(recv_fd);
+}
+
+/* ------------------------------------------------------------------ */
 /* Entry point                                                          */
 /* ------------------------------------------------------------------ */
 JNIEXPORT void JNICALL
@@ -342,6 +409,10 @@ Java_com_test_networke2e_NativeSocketTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("");
     LOGI(">> Running test_close_tracked...");
     test_close_tracked();
+
+    LOGI("");
+    LOGI(">> Running test_sendto_recvfrom...");
+    test_sendto_recvfrom();
 
     LOGI("========================================");
     LOGI("NativeSocketTests summary: %d passed, %d failed",
