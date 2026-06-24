@@ -82,7 +82,7 @@ public class DexTestUtils {
     // --- Native library path resolution ---------------------------------------
 
     /**
-     * Resolve the filesystem path of a native library after it has been loaded.
+     * Resolve the filesystem path of a native library.
      *
      * Two cases handled:
      *
@@ -96,8 +96,8 @@ public class DexTestUtils {
      *      locate the APK via ApplicationInfo.sourceDir (always valid), find the
      *      zip entry for the correct ABI, and extract it to filesDir.
      *
-     * Must be called AFTER System.loadLibrary / Runtime.loadLibrary has succeeded,
-     * because that guarantees the .so exists inside the APK at the expected path.
+     * Can be called before or after loadLibrary - extraction from the APK zip
+     * does not require the library to be loaded first.
      *
      * @param context  app context
      * @param libName  bare library name without "lib" prefix and ".so" suffix
