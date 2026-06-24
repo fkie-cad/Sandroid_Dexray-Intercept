@@ -519,8 +519,8 @@ abstract class JNIEnvInterceptor {
         methodPtr: NativePointer
     ): NativeCallback {
         const self = this;
-        const METHOD_ID_INDEX = 2;
         const method = JNI_ENV_METHODS[id];
+        const METHOD_ID_INDEX = method.name.includes("Nonvirtual") ? 3 : 2;
         const config = Config.getInstance();
 
         const paramTypes = method.args.map(
@@ -624,7 +624,7 @@ abstract class JNIEnvInterceptor {
         const self = this;
 
         const mainCallback = new NativeCallback(function (): NativeReturnValue {
-            const METHOD_ID_INDEX = 2;
+            const METHOD_ID_INDEX = method.name.includes("Nonvirtual") ? 3 : 2;
             // Retrieve thread ID directly since shellcode does not provide InvocationContext
             const threadId = Process.getCurrentThreadId();
             
@@ -695,8 +695,16 @@ abstract class JNIEnvInterceptor {
     ): NativeCallback {
         const self = this;
 
+        // Nonvirtual JNI calls insert an extra jclass at arg index 2, pushing
+        // jmethodID to index 3. The callback signature must expose index 3 so
+        // the shellcode delivers it as an explicit argument.
+        const isNonvirtual = method.name.includes("Nonvirtual");
+        const METHOD_ID_INDEX = isNonvirtual ? 3 : 2;
+        const cbParamTypes: string[] = isNonvirtual
+            ? ["pointer", "pointer", "pointer", "pointer"]      // env, obj, jclass, jmethodID
+            : ["pointer", "pointer", "pointer"];                // env, obj/cls, jmethodID
+
         const vaArgsCallback = new NativeCallback(function (): NativeReturnValue {
-            const METHOD_ID_INDEX = 2;
             const methodId = (arguments[METHOD_ID_INDEX] as NativeArgumentValue).toString();
             const javaMethod = self.methods.get(methodId) as JavaMethod;
 
@@ -716,6 +724,26 @@ abstract class JNIEnvInterceptor {
             // Mark NativeFunction signature as variadic
             originalParams.push("...");
 
+            const retType = Types.convertNativeJTypeToFridaType(method.ret);
+
+            // Guard: javaMethod may be absent if GetMethodID was never intercepted
+            // (e.g. method resolved before hooks were active, or wrong-index bug).
+            // Build a pass-through mainCallback with no Java-arg expansion so the
+            // real JNI function is still called safely instead of crashing.
+            if (javaMethod === undefined || !javaMethod.fridaParams) {
+                send({
+                    type: "error",
+                    message: "Failed to find corresponding method ID " +
+                        "for method \"" + method.name + "\" call."
+                });
+                const fallback = self.createJNIVarArgMainCallback(
+                    method, methodPtr, originalParams, callbackParams, retType
+                );
+                self.references.add(fallback);
+                self.fastMethodLookup.set(methodId, fallback);
+                return fallback;
+            }
+
             // Append Java argument types with C vararg promotions
             // float is promoted to double in C variadic functions
             javaMethod.fridaParams.forEach((p: string): void => {
@@ -724,7 +752,7 @@ abstract class JNIEnvInterceptor {
                 originalParams.push(promotedType);  // NativeFunction also uses promoted types!
             });
 
-            const retType = Types.convertNativeJTypeToFridaType(method.ret);
+            // const retType = Types.convertNativeJTypeToFridaType(method.ret);
 
             // Create and cache the mainCallback for this methodID
             const mainCallback = self.createJNIVarArgMainCallback(
@@ -735,7 +763,7 @@ abstract class JNIEnvInterceptor {
             self.fastMethodLookup.set(methodId, mainCallback);
 
             return mainCallback;
-        }, "pointer", ["pointer", "pointer", "pointer"]);
+        }, "pointer", cbParamTypes);
 
         return vaArgsCallback;
     }
