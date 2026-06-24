@@ -239,7 +239,7 @@ public class MainActivity extends Activity {
     //          hooks against real external endpoints.
     // ------------------------------------------------------------
     private void runUrlAndHttpUrlConnectionTests() {
-        Log.i(TAG, "runUrlAndHttpUrlConnectionTests");
+        Log.i(TAG, "runUrlAndHttpUrlConnectionTests started");
 
         // Phase 1 - local MiniHttpServer baseline
         MiniHttpServer server = null;
@@ -342,7 +342,7 @@ public class MainActivity extends Activity {
     //       transient failures without exhausting the full list.
     // ------------------------------------------------------------
     private void runHttpsUrlConnectionTests() {
-        Log.i(TAG, "runHttpsUrlConnectionTests");
+        Log.i(TAG, "runHttpsUrlConnectionTests started");
         for (String testUrl : HTTPS_FALLBACK_URLS) {
             HttpsURLConnection conn = null;
             try {
@@ -390,7 +390,7 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runWebViewTests() {
-        Log.i(TAG, "runWebViewTests");
+        Log.i(TAG, "runWebViewTests started");
 
         WebView webView = new WebView(this);
 
@@ -415,14 +415,17 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(client);
 
         // webview.load_url
-        webView.loadUrl("https://example.com");
+        Log.i(TAG, "WebView.loadUrl(String) - trigger");
+        webView.loadUrl("https://example.com");;
 
         // webview.load_url_with_headers
+        Log.i(TAG, "WebView.loadUrl(String,Map) - trigger");
         Map<String, String> headers = new HashMap<>();
         headers.put("X-WebView-Header", "1");
         webView.loadUrl("https://example.com?with_headers=1", headers);
 
         // webview.load_data
+        Log.i(TAG, "WebView.loadData - trigger");
         webView.loadData(
                 "<html><body><h1>NetworkE2E</h1></body></html>",
                 "text/html",
@@ -430,6 +433,7 @@ public class MainActivity extends Activity {
         );
 
         // webview.post_url
+        Log.i(TAG, "WebView.postUrl - trigger");
         byte[] postData;
         try {
             postData = "p=1".getBytes("UTF-8");
@@ -440,10 +444,28 @@ public class MainActivity extends Activity {
 
         // webview.url_override - invoked directly to guarantee the hook fires
         // regardless of whether the WebView engine processes the navigation.
+        // webview.url_override
+        Log.i(TAG, "WebViewClient.shouldOverrideUrlLoading - trigger (direct call)");
         try {
             client.shouldOverrideUrlLoading(webView, "https://example.com/override");
         } catch (Throwable t) {
             Log.e(TAG, "Error calling shouldOverrideUrlLoading", t);
+        }
+
+        // webview.page_started - direct call reaches super.onPageStarted() which is the hooked method
+        Log.i(TAG, "WebViewClient.onPageStarted - trigger (direct call)");
+        try {
+            client.onPageStarted(webView, "https://example.com/page_started", null);
+        } catch (Throwable t) {
+            Log.e(TAG, "Error calling onPageStarted", t);
+        }
+
+        // webview.page_finished - direct call reaches super.onPageFinished() which is the hooked method
+        Log.i(TAG, "WebViewClient.onPageFinished - trigger (direct call)");
+        try {
+            client.onPageFinished(webView, "https://example.com/page_finished");
+        } catch (Throwable t) {
+            Log.e(TAG, "Error calling onPageFinished", t);
         }
     }
 
@@ -454,7 +476,7 @@ public class MainActivity extends Activity {
     // Tries HTTP_GET_FALLBACK_URLS in order; stops at first success.
     // ------------------------------------------------------------
     private void runOkHttp3Tests() {
-        Log.i(TAG, "runOkHttp3Tests");
+        Log.i(TAG, "runOkHttp3Tests started");
         OkHttpClient client = new OkHttpClient.Builder()
                 .connectTimeout(3, TimeUnit.SECONDS)
                 .readTimeout(5, TimeUnit.SECONDS)
@@ -486,7 +508,7 @@ public class MainActivity extends Activity {
     // Tries HTTP_GET_FALLBACK_URLS in order; stops at first success.
     // ------------------------------------------------------------
     private void runOkHttpLegacyTests() {
-        Log.i(TAG, "runOkHttpLegacyTests");
+        Log.i(TAG, "runOkHttpLegacyTests started");
         com.squareup.okhttp.OkHttpClient client = new com.squareup.okhttp.OkHttpClient();
         client.setConnectTimeout(3, TimeUnit.SECONDS);
         client.setReadTimeout(5, TimeUnit.SECONDS);
@@ -523,7 +545,7 @@ public class MainActivity extends Activity {
     // instance, reusing the same api handle.
     // ------------------------------------------------------------
     private void runRetrofitTests() {
-        Log.i(TAG, "runRetrofitTests");
+        Log.i(TAG, "runRetrofitTests started");
 
         OkHttpClient okHttpClient = new OkHttpClient.Builder()
                 .connectTimeout(3, TimeUnit.SECONDS)
@@ -586,7 +608,7 @@ public class MainActivity extends Activity {
     // outcome, but a successful response confirms end-to-end health.
     // ------------------------------------------------------------
     private void runVolleyTests() {
-        Log.i(TAG, "runVolleyTests");
+        Log.i(TAG, "runVolleyTests started");
         try {
             RequestQueue queue = Volley.newRequestQueue(getApplicationContext());
 
@@ -634,7 +656,7 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------
 
     private void runSocketTests() {
-        Log.i(TAG, "runSocketTests");
+        Log.i(TAG, "runSocketTests started");
         try {
             runTcpSocketTests();
             Log.i(TAG, "runTcpSocketTests completed");
@@ -656,7 +678,7 @@ public class MainActivity extends Activity {
     }
 
     private void runTcpSocketTests() throws Exception {
-        Log.i(TAG, "runTcpSocketTests");
+        Log.i(TAG, "runTcpSocketTests started");
 
         // socket.java.server_accept (3 accepts)
         ServerSocket serverSocket = new ServerSocket(0, 3, InetAddress.getByName("127.0.0.1"));
@@ -667,6 +689,7 @@ public class MainActivity extends Activity {
             try {
                 for (int i = 0; i < 3; i++) {
                     Socket client = serverSocket.accept();
+                    Log.i(TAG, "ServerSocket.accept() - connection " + (i + 1));
                     InputStream  in  = client.getInputStream();
                     OutputStream out = client.getOutputStream();
                     byte[] buf = new byte[64];
@@ -684,17 +707,20 @@ public class MainActivity extends Activity {
         serverThread.start();
 
         // socket.java.init - Socket.$init(String, int)
+        Log.i(TAG, "Socket.$init(String,int) - trigger");
         Socket s1 = new Socket("127.0.0.1", port);
         s1.getOutputStream().write("hello1".getBytes());
         s1.close();
 
         // socket.java.connect - Socket.connect(SocketAddress)
+        Log.i(TAG, "Socket.connect(SocketAddress) - trigger");
         Socket s2 = new Socket();
         s2.connect(new InetSocketAddress("127.0.0.1", port));
         s2.getOutputStream().write("hello2".getBytes());
         s2.close();
 
         // socket.java.connect - Socket.connect(SocketAddress, int)
+        Log.i(TAG, "Socket.connect(SocketAddress,int) - trigger");
         Socket s3 = new Socket();
         s3.connect(new InetSocketAddress("127.0.0.1", port), 2000);
         s3.getOutputStream().write("hello3".getBytes());
@@ -704,7 +730,7 @@ public class MainActivity extends Activity {
     }
 
     private void runLocalSocketTests() throws Exception {
-        Log.i(TAG, "runLocalSocketTests");
+        Log.i(TAG, "runLocalSocketTests started");
 
         // socket.java.local_accept - LocalServerSocket.accept
         final String SOCKET_NAME = "networke2e_local";
@@ -713,7 +739,9 @@ public class MainActivity extends Activity {
 
         Thread serverThread = new Thread(() -> {
             try {
+                Log.i(TAG, "LocalServerSocket.accept() - waiting");
                 LocalSocket incoming = serverSocket.accept();
+                Log.i(TAG, "LocalServerSocket.accept() - connection received");
                 byte[] buf = new byte[32];
                 incoming.getInputStream().read(buf);
                 incoming.close();
@@ -726,6 +754,7 @@ public class MainActivity extends Activity {
         }, "local-server");
         serverThread.start();
 
+        Log.i(TAG, "LocalSocket.connect - trigger");
         LocalSocket client = new LocalSocket();
         client.connect(new LocalSocketAddress(SOCKET_NAME));
         client.getOutputStream().write("local".getBytes());
@@ -735,20 +764,24 @@ public class MainActivity extends Activity {
     }
 
     private void runUdpSocketTests() throws Exception {
-        Log.i(TAG, "runUdpSocketTests");
+        Log.i(TAG, "runUdpSocketTests started");
 
-        // socket.java.datagram_connect - DatagramSocket.connect(InetAddress, int)
         DatagramSocket receiver = new DatagramSocket(0, InetAddress.getByName("127.0.0.1"));
         int port = receiver.getLocalPort();
 
         DatagramSocket sender = new DatagramSocket();
+
+        // socket.java.datagram_connect - DatagramSocket.connect(InetAddress, int)
+        Log.i(TAG, "DatagramSocket.connect(InetAddress,int) - trigger");
         sender.connect(InetAddress.getByName("127.0.0.1"), port);
 
         byte[] outBuf = "udp-test".getBytes("UTF-8");
         sender.send(new DatagramPacket(outBuf, outBuf.length));
+        Log.i(TAG, "DatagramSocket.send - sent " + outBuf.length + " bytes");
 
         byte[] inBuf = new byte[64];
         receiver.receive(new DatagramPacket(inBuf, inBuf.length));
+        Log.i(TAG, "DatagramSocket.receive - received packet");
 
         sender.close();
         receiver.close();
@@ -766,7 +799,7 @@ public class MainActivity extends Activity {
     // Local URL is skipped if the server failed to start.
     // ------------------------------------------------------------
     private void runWebSocketTests() {
-        Log.i(TAG, "runWebSocketTests");
+        Log.i(TAG, "runWebSocketTests started");
 
         MiniWebSocketServer localServer = null;
         try {
