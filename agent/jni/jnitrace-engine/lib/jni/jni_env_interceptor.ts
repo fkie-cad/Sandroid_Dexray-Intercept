@@ -126,7 +126,7 @@ abstract class JNIEnvInterceptor {
         const jniEnv = this.threads.getJNIEnv(threadId);
         
         const jniEnvOffset = 4; // first methods to intercept
-        const jniEnvLength = 232; // number of methods in table
+        const jniEnvLength = 233; // number of methods in table; number of methods in table (232 = GetDirectBufferCapacity, 232 = GetObjectRefType)
 
         // Allocate space for new JNIEnv function table.
         const newJNIEnvStruct = Memory.alloc(Process.pointerSize * jniEnvLength);

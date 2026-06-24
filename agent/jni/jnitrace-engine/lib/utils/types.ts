@@ -72,6 +72,10 @@ const Types = {
         if (jtype === "jsize") {
             jtype = "jint";
         }
+        if (jtype === "jobjectRefType") {
+            // C enum (int-width); treat identically to jint
+            jtype = "jint";
+        }
         if (jtype === "jdouble") {
             return "double";
         }
