@@ -18,6 +18,9 @@ add_library(
 find_library(log-lib log)
 find_library(dl-lib dl)
 
+# Uncomment to enable fork+execve test (requires hook-side fix for Frida+fork hang)
+# target_compile_options(processnative PRIVATE -DENABLE_FORK_TEST)
+
 target_link_libraries(
         processnative
         ${log-lib}
