@@ -48,6 +48,7 @@ public class InMemoryDexClassLoaderTests {
         Log.i(TAG, "========================================");
 
         test_in_memory_dex_class_loader();
+        test_in_memory_dex_class_loader_multi_buffer();
 
         Log.i(TAG, "========================================");
         Log.i(TAG, "InMemoryDexClassLoaderTests summary: " + passed + " passed, " + failed + " failed");
@@ -86,6 +87,46 @@ public class InMemoryDexClassLoaderTests {
             }
         } catch (Throwable t) {
             fail("InMemoryDexClassLoader.$init", t.toString());
+        }
+    }
+
+    private void test_in_memory_dex_class_loader_multi_buffer() {
+        Log.i(TAG, "");
+        Log.i(TAG, "=== InMemoryDexClassLoader.$init(ByteBuffer[], ClassLoader) ===");
+
+        // Multi-buffer constructor added in API 27.
+        // Not yet hooked in dex_unpacking.ts - trigger present for future hook coverage.
+        if (android.os.Build.VERSION.SDK_INT < 27) {
+            Log.i(TAG, "Skipping - multi-buffer constructor requires API 27+ (device is API "
+                    + android.os.Build.VERSION.SDK_INT + ")");
+            return;
+        }
+
+        byte[] dexBytes = DexTestUtils.readAssetBytes(context, "test_classes.dex");
+        if (dexBytes == null) {
+            fail("readAssetBytes(test_classes.dex) for multi-buffer", "returned null");
+            return;
+        }
+        Log.i(TAG, "DEX bytes read for multi-buffer: " + dexBytes.length + " bytes");
+
+        ByteBuffer buffer = ByteBuffer.wrap(dexBytes);
+
+        try {
+            InMemoryDexClassLoader loader = new InMemoryDexClassLoader(
+                new ByteBuffer[]{ buffer },
+                getClass().getClassLoader()
+            );
+            pass("InMemoryDexClassLoader.$init(ByteBuffer[], ClassLoader) created: "
+                    + loader.getClass().getSimpleName());
+
+            try {
+                Class<?> payload = loader.loadClass("TestPayload");
+                pass("loadClass(TestPayload) from multi-buffer loader resolved: " + payload.getName());
+            } catch (ClassNotFoundException e) {
+                fail("loadClass(TestPayload) from multi-buffer loader", e.getMessage());
+            }
+        } catch (Throwable t) {
+            fail("InMemoryDexClassLoader.$init(ByteBuffer[], ClassLoader)", t.toString());
         }
     }
 }
