@@ -176,8 +176,8 @@ Java_com_test_jnie2e_EnvRefTests_runTests(JNIEnv *env, jclass clazz) {
     test_global_and_weak_refs(env);
 
     LOGI("");
-    LOGI(">> Skipping test_get_object_ref_type...");
-    //test_get_object_ref_type(env);
+    LOGI(">> Running test_get_object_ref_type...");
+    test_get_object_ref_type(env);
 
     LOGI("========================================");
     LOGI("EnvRefTests summary: %d passed, %d failed", tests_passed, tests_failed);
