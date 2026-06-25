@@ -23,6 +23,7 @@ logs_.*
 logs*
 *.md
 !tests/android_apps/e2e_tests/**/THIRD_PARTY_LICENSES.md
+!tests/android_apps/e2e_tests/test_results.md
 #docs/_build/
 
 samples/unpacking/apktool_out/
