@@ -18,6 +18,7 @@ against the test app corpus `tests/android_apps/e2e_tests/*`
       adb logcat -v color threadtime -s CATEGORY_TAG1:'*' -s CATEGORY_TAG2:'*' -s CATEGORY_TAG3:'*' 
       ```
       where `CATEGORY_TAGn` are the tags defined in the Java / native code for the app and used for filtering the logs
+      
       4. run app with hooks activated: `dexray-intercept -s -v --enable-catory com.test.categorye2e`
       5. check adb logs, cli output and the generated `profile_com.test.categorye2e_YYYY-MM-DD_hh-mm-ss.json`
 
