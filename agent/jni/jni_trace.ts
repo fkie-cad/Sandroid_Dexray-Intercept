@@ -490,6 +490,14 @@ function maybeAttachNumericArrayValues(
     eventData.array_values = values;
 }
 
+const JNI_REF_TYPE_NAMES: { [key: number]: string } = {
+    0: "JNIInvalidRefType",
+    1: "JNILocalRefType",
+    2: "JNIGlobalRefType",
+    3: "JNIWeakGlobalRefType"
+};
+
+
 interface JniConfigPayload {
     libraries: string[];
     backtrace: "fuzzy" | "accurate" | "none";
@@ -1090,6 +1098,17 @@ const jniEnvCallback: JNIInvocationCallback = {
                             const info = directBuffers.get(key) || { address: "", capacity: 0 };
                             info.capacity = Number.isNaN(capNum) ? info.capacity : capNum;
                             directBuffers.set(key, info);
+                        }
+                        break;
+                    }
+
+                    case "GetObjectRefType": {
+                        const refTypeNum = Number(retVal);
+                        if (!Number.isNaN(refTypeNum)) {
+                            const name = JNI_REF_TYPE_NAMES[refTypeNum];
+                            if (name !== undefined) {
+                                eventData.return_value = name;
+                            }
                         }
                         break;
                     }
