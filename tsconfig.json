@@ -10,7 +10,6 @@
     "esModuleInterop": true,
     "noImplicitAny": false,
     "strictNullChecks": false,
-    "skipLibCheck": true,
     "resolveJsonModule": true
   }
 }
