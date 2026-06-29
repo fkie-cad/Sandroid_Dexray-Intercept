@@ -14,9 +14,6 @@ import { JNICallbackManager } from "./internal/jni_callback_manager";
 
 import { JNILibraryWatcher } from ".";
 
-/* @ts-ignore - _Module.findExportByName exists at runtime in all Frida versions */
-const _Module: any = Module;
-
 const REGISTER_NATIVE_SYMBOLS = {
     // art::ClassLinker::RegisterNative(art::Thread*, art::ArtMethod*, void const*)
     // Present on Android 12+ (API 31-35).
@@ -220,7 +217,7 @@ export function run (callbackManager: JNICallbackManager): void {
 
         // Try ClassLinker symbols first (Android 12+)
         for (const symbol of REGISTER_NATIVE_SYMBOLS.classLinker) {
-            hookAddress = _Module.findExportByName("libart.so", symbol);
+            hookAddress = libart.findExportByName(symbol);
             if (hookAddress !== null) {
                 strategy = "ClassLinker";
                 break;
@@ -230,7 +227,7 @@ export function run (callbackManager: JNICallbackManager): void {
         // Fallback to ArtMethod symbols (Android 8-11)
         if (hookAddress === null) {
             for (const symbol of REGISTER_NATIVE_SYMBOLS.artMethod) {
-                hookAddress = _Module.findExportByName("libart.so", symbol);
+                hookAddress = libart.findExportByName(symbol);
                 if (hookAddress !== null) {
                     strategy = "ArtMethod";
                     break;
@@ -407,10 +404,10 @@ export function run (callbackManager: JNICallbackManager): void {
     // Install RegisterNative hook; dlsym and JNIEnv::RegisterNatives remain as backstops.
     setupRegisterNativeHook();
 
-    const dlopenRef = _Module.findExportByName(null, "dlopen");
-    const dlopenExtRef = _Module.findExportByName(null, "android_dlopen_ext");
-    const dlsymRef = _Module.findExportByName(null, "dlsym");
-    const dlcloseRef = _Module.findExportByName(null, "dlclose");
+    const dlopenRef = Module.findGlobalExportByName("dlopen");
+    const dlopenExtRef = Module.findGlobalExportByName("android_dlopen_ext");
+    const dlsymRef = Module.findGlobalExportByName("dlsym");
+    const dlcloseRef = Module.findGlobalExportByName("dlclose");
 
     /**
      * Common handler for both dlopen() and android_dlopen_ext().
