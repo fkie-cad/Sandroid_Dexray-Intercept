@@ -26,10 +26,14 @@ class JNICallbackManager {
         }
     }
 
+    // CHANGED: NativeArgumentValue[] -> NativeCallbackArgumentValue[]
+    // NativeArgumentValue was a frida-gum v16 global that no longer exists in v19.
+    // NativeCallbackArgumentValue is the v19 equivalent, defined in @types/frida-gum@19
+    // as RecursiveValuesOf<NativeCallbackArgumentTypeMap>.
     public doBeforeCallback (
         method: string,
         ctx: JNIInvocationContext, 
-        args: NativeArgumentValue[]
+        args: NativeCallbackArgumentValue[]
     ): void {
         if (this.callbacks.has(method)) {
             const cb = this.callbacks.get(method);
@@ -39,11 +43,13 @@ class JNICallbackManager {
         }
     }
 
+    // CHANGED: NativeReturnValue -> NativeCallbackReturnValue (both occurrences)
+    // Same reason: NativeReturnValue was v16, NativeCallbackReturnValue is v19.
     public doAfterCallback (
         method: string,
         ctx: JNIInvocationContext,
-        retval: NativeReturnValue
-    ): NativeReturnValue {
+        retval: NativeCallbackReturnValue
+    ): NativeCallbackReturnValue {
         if (this.callbacks.has(method)) {
             const cb = this.callbacks.get(method);
             if (cb?.onLeave !== undefined) {
