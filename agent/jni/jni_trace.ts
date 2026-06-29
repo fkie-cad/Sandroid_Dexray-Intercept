@@ -18,10 +18,6 @@ const PROFILE_HOOKING_TYPE = "JNI_TRACE";
 // Track which library paths were already reported
 const seenLibraries = new Set<string>();
 
-// Optional global; Frida provides Process at runtime.
-declare const Process: any;
-declare const DebugSymbol: any;
-
 // Track array lengths by array handle string
 const byteArrayLengths = new Map<string, number>();
 
@@ -643,7 +639,7 @@ const jniEnvCallback: JNIInvocationCallback = {
                 try {
                     const info = arrayElementInfo.get(key);
                     const elemSize = info ? info.elemSize : 1;
-                    const elemsPtr = args[ELEMS_INDEX];
+                    const elemsPtr = args[ELEMS_INDEX] as NativePointer;
                     const raw = elemsPtr.readByteArray(len * elemSize);
                     if (raw) {
                         const arr = new Uint8Array(raw);
@@ -986,7 +982,7 @@ const jniEnvCallback: JNIInvocationCallback = {
                                 try {
                                     const info = key ? arrayElementInfo.get(key) : undefined;
                                     const elemSize = info ? info.elemSize : 1;
-                                    const bufPtr = retVal;
+                                    const bufPtr = retVal as NativePointer;
                                     const raw = bufPtr.readByteArray(len * elemSize);
                                     if (raw) {
                                         const arr = new Uint8Array(raw);
@@ -1051,7 +1047,7 @@ const jniEnvCallback: JNIInvocationCallback = {
                         // void* GetDirectBufferAddress(JNIEnv*, jobject buf)
                         const BUF_INDEX = 1;
                         const bufHandle = rawArgs[BUF_INDEX];
-                        const addrPtr = retVal;
+                        const addrPtr = retVal as NativePointer;
 
                         if (addrPtr && typeof addrPtr.toString === "function") {
                             eventData.direct_buffer_address = addrPtr.toString();
@@ -1062,7 +1058,7 @@ const jniEnvCallback: JNIInvocationCallback = {
                             const info = directBuffers.get(key);
                             if (info) {
                                 eventData.direct_buffer_capacity = info.capacity;
-                                if (!jniConfig.hide_data && info.capacity > 0 && addrPtr && typeof addrPtr.readByteArray === "function") {
+                                if (!jniConfig.hide_data && info.capacity > 0 && addrPtr) {
                                     try {
                                         const MAX_BYTES = 0x400; // 1KB safety cap
                                         const toRead = Math.min(info.capacity, MAX_BYTES);
