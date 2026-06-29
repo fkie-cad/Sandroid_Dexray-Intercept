@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { JNIEnvInterceptor } from "../jni_env_interceptor";
 import { JNIThreadManager } from "../jni_thread_manager";
 
@@ -21,7 +20,7 @@ class JNIEnvInterceptorARM extends JNIEnvInterceptor {
     /**
      * Pointer to the current va_list used by the JNI “V” call.
      * Treated as a linear block of arguments.
-     */   
+     */
     private vaList: NativePointer;
 
     /**
@@ -30,14 +29,12 @@ class JNIEnvInterceptorARM extends JNIEnvInterceptor {
      */
     private vaListOffset: number;
 
-
     public constructor (
         references: ReferenceManager,
         threads: JNIThreadManager,
         callbackManager: JNICallbackManager
     ) {
         super(references, threads, callbackManager);
-
         this.vaList = NULL;
         this.vaListOffset = 0;
     }
@@ -49,8 +46,8 @@ class JNIEnvInterceptorARM extends JNIEnvInterceptor {
      * Frida uses this stub as an Interceptor target so that
      * an InvocationContext is available before the actual
      * JNI callback runs.
-     */    
-    public createStubFunction (): NativeCallback {
+     */
+    public createStubFunction (): NativePointer {
         const stub = Memory.alloc(Process.pageSize);
 
         Memory.patchCode(stub, Process.pageSize, (code: NativePointer): void => {
@@ -62,7 +59,7 @@ class JNIEnvInterceptorARM extends JNIEnvInterceptor {
             // pop { pc }
             const POP_PC = 0xe49df004;
             cw.putInstruction(POP_PC);
-
+            cw.flush();
         });
 
         return stub;
@@ -94,7 +91,7 @@ class JNIEnvInterceptorARM extends JNIEnvInterceptor {
     protected buildVaArgParserShellcode (
         text: NativePointer,
         _: NativePointer,
-        parser: NativeCallback
+        parser: NativeCallback<NativeCallbackReturnType, NativeCallbackArgumentType[]>
     ): void {
         const DATA_OFFSET = 0x400;
 

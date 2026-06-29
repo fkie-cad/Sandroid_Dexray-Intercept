@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { JNIEnvInterceptor } from "../jni_env_interceptor";
 import { JNIThreadManager } from "../jni_thread_manager";
 
@@ -86,7 +85,6 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
         callbackManager: JNICallbackManager
     ) {
         super(references, threads, callbackManager);
-
         this.grOffset = 0;
         this.grOffsetStart = 0;
         this.fpOffset = 0;
@@ -94,7 +92,7 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
         this.overflowPtr = NULL;
         this.regSavePtr = NULL;
     }
-    
+
     /**
      * Generates a small x86-64 trampoline in the given executable
      * memory region.
@@ -135,8 +133,8 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
      */
     protected buildVaArgParserShellcode (
         text: NativePointer,
-        _data: NativePointer,       
-        parser: NativeCallback
+        _data: NativePointer,
+        parser: NativeCallback<NativeCallbackReturnType, NativeCallbackArgumentType[]>
     ): void {
         // Use in-page data area to guarantee RIP-relative addresses
         // are within ±2GB (32-bit signed displacement limit).
@@ -230,7 +228,6 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
             // Restore original register state
             for (let i = regs.length - END_INDEX; i >= FIRST_ELEM_INDEX; i--) {
                 regRestoreOffset = i * Process.pointerSize;
-
                 cw.putMovRegNearPtr("rdi", dataBase.add(regRestoreOffset));
 
                 if (i > SKIP_FIRST_COPY) {
@@ -318,8 +315,7 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
         // overflow_arg_area
         this.overflowPtr = vaList.add(Process.pointerSize).readPointer();
         // reg_save_area
-        this.regSavePtr = vaList.add(Process.pointerSize * DATA_OFFSET)
-            .readPointer();
+        this.regSavePtr = vaList.add(Process.pointerSize * DATA_OFFSET).readPointer();
     }
 
     /**
@@ -379,9 +375,7 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
             } else {
                 // Spilled to stack
                 const reverseId = method.fridaParams.length - paramId - OFFSET;
-                currentPtr = this.overflowPtr.add(
-                    reverseId * Process.pointerSize
-                );
+                currentPtr = this.overflowPtr.add(reverseId * Process.pointerSize);
             }
         } else {
             // Integer/pointer argument
@@ -393,9 +387,7 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
             } else {
                 // Spilled to stack
                 const reverseId = method.fridaParams.length - paramId - OFFSET;
-                currentPtr = this.overflowPtr.add(
-                    reverseId * Process.pointerSize
-                );
+                currentPtr = this.overflowPtr.add(reverseId * Process.pointerSize);
             }
         }
 

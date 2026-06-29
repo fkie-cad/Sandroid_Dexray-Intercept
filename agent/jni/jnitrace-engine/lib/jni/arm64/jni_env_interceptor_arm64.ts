@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { JNIEnvInterceptor } from "../jni_env_interceptor";
 import { JNIThreadManager } from "../jni_thread_manager";
 
@@ -75,7 +74,6 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
         callbackManager: JNICallbackManager
     ) {
         super(references, threads, callbackManager);
-
         this.stack = NULL;
         this.stackIndex = 0;
         this.grTop = NULL;
@@ -85,7 +83,7 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
         this.vrOffs = 0;
         this.vrOffsIndex = 0;
     }
-    
+
     /**
      * Creates a small ARM64 stub function suitable for Interceptor.replace().
      *
@@ -101,14 +99,12 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
         const stub = Memory.alloc(Process.pageSize);
         const NOP = 0xd503201f;
         const RET = 0xd65f03c0;
-
         // NOP sled
         for (let i = 0; i < 8; i++) {
             stub.add(i * 4).writeU32(NOP);
         }
         // Final RET
         stub.add(8 * 4).writeU32(RET);
-
         return stub;
     }
 
@@ -174,7 +170,7 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
     protected buildVaArgParserShellcode (
         text: NativePointer,
         _: NativePointer,
-        parser: NativeCallback
+        parser: NativeCallback<NativeCallbackReturnType, NativeCallbackArgumentType[]>
     ): void {
         const DATA_OFFSET = 0x400;
         const BITS_IN_BYTE = 8;
@@ -182,7 +178,8 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
         const NUM_REGS = 31;
         const NUM_REG_NO_LR = 30;
         const NUM_FP_REGS = 8;  // v0-v7
-        
+
+
         // Store parser pointer at text+0x400
         text.add(DATA_OFFSET).writePointer(parser);
 
@@ -263,7 +260,6 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
             // adrp x0, #0
             cw.putInstruction(ADRP_X0_0);
 
-            
             // Restore general-purpose registers x1-x29
             // x30 (link register) is restored later; x0 is restored after
             for (let i = 1; i < NUM_REG_NO_LR; i++) {
@@ -400,17 +396,14 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
         let currentPtr = NULL;
 
         if (method.fridaParams[paramId] === "float" ||
-          method.fridaParams[paramId] === "double") {
+            method.fridaParams[paramId] === "double") {
             if (this.vrOffsIndex < MAX_VR_REG_NUM) {
                 currentPtr = this.vrTop
                     .add(this.vrOffs)
                     .add(this.vrOffsIndex * Process.pointerSize * VR_REG_SIZE);
-
                 this.vrOffsIndex++;
             } else {
-                currentPtr = this.stack.add(
-                    this.stackIndex * Process.pointerSize
-                );
+                currentPtr = this.stack.add(this.stackIndex * Process.pointerSize);
                 this.stackIndex++;
             }
         } else {
@@ -418,12 +411,9 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
                 currentPtr = this.grTop
                     .add(this.grOffs)
                     .add(this.grOffsIndex * Process.pointerSize);
-
                 this.grOffsIndex++;
             } else {
-                currentPtr = this.stack.add(
-                    this.stackIndex * Process.pointerSize
-                );
+                currentPtr = this.stack.add(this.stackIndex * Process.pointerSize);
                 this.stackIndex++;
             }
         }

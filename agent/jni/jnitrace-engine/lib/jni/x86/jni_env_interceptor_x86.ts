@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { JNIEnvInterceptor } from "../jni_env_interceptor";
 import { JNIThreadManager } from "../jni_thread_manager";
 
@@ -73,7 +72,7 @@ class JNIEnvInterceptorX86 extends JNIEnvInterceptor {
     protected buildVaArgParserShellcode (
         text: NativePointer,
         _: NativePointer,
-        parser: NativeCallback
+        parser: NativeCallback<NativeCallbackReturnType, NativeCallbackArgumentType[]>
     ): void {
         // Store parser pointer at text + 0x400 (not actually used by
         // this implementation, but kept for consistency with other
@@ -143,7 +142,7 @@ class JNIEnvInterceptorX86 extends JNIEnvInterceptor {
             cw.flush();
         });
     }
-    
+
      /**
      * Initializes internal state for extracting arguments from an
      * x86 va_list. Here va_list is treated as a linear block of
@@ -182,7 +181,7 @@ class JNIEnvInterceptorX86 extends JNIEnvInterceptor {
         method: JavaMethod,
         paramId: number
     ): NativePointer {
-        let currentPtr = this.vaList.add(this.vaListOffset);
+        const currentPtr = this.vaList.add(this.vaListOffset);
         this.vaListOffset += Types.sizeOf(method.fridaParams[paramId]);
         return currentPtr;
     }
