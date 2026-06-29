@@ -1,5 +1,3 @@
-import "./compat.js";
-
 import { Config } from "./utils/config";
 import { ConfigBuilder } from "./utils/config_builder";
 
@@ -13,6 +11,7 @@ import JAVA_VM_METHODS from "./data/java_vm.json";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { run } from "./engine.js";
+
 /* eslint-enable @typescript-eslint/no-require-imports */
 const globalCallbackManager: JNICallbackManager = new JNICallbackManager();
 
@@ -24,7 +23,7 @@ interface JNIInvocationCallback {
      * Called whenever a JNI API call is about to run. Arguments to that JNI API
      * call can be modified by replacing values in the `args` array.
      */
-    onEnter?: (this: JNIInvocationContext, args: NativeArgumentValue[]) => void;
+    onEnter?: (this: JNIInvocationContext, args: NativeCallbackArgumentValue[]) => void;
 
     /**
      * Called immediately after a JNI API has run. The return value from that
@@ -85,16 +84,16 @@ interface JNIInvocationContext {
  * Wrapper class for return values from a traced JNI API call.
  */
 class JNINativeReturnValue {
-    private value: NativeReturnValue;
+    private value: NativeCallbackReturnValue;
 
-    public constructor (value: NativeReturnValue) {
+    public constructor (value: NativeCallbackReturnValue) {
         this.value = value;
     }
     
     /**
      * Get the return value of the JNI call.
      */
-    public get (): NativeReturnValue {
+    public get (): NativeCallbackReturnValue {
         return this.value;
     }
     
@@ -104,7 +103,7 @@ class JNINativeReturnValue {
      * 
      * @param value - the new value that should be returned
      */
-    public replace (value: NativeReturnValue): void {
+    public replace (value: NativeCallbackReturnValue): void {
         this.value = value;
     }
 }
