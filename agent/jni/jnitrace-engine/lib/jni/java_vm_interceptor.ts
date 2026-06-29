@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { JNIThreadManager } from "./jni_thread_manager";
 import { JNIEnvInterceptor } from "./jni_env_interceptor";
 import { JavaVM } from "./java_vm";
@@ -15,13 +14,9 @@ const JNI_ENV_INDEX = 1;
 
 class JavaVMInterceptor {
     private readonly references: ReferenceManager;
-
     private readonly threads: JNIThreadManager;
-
     private readonly jniEnvInterceptor: JNIEnvInterceptor;
-
     private readonly callbackManager: JNICallbackManager;
-
     private shadowJavaVM: NativePointer;
 
     public constructor (
@@ -34,7 +29,6 @@ class JavaVMInterceptor {
         this.threads = threads;
         this.jniEnvInterceptor = jniEnvInterceptor;
         this.callbackManager = callbackManager;
-
         this.shadowJavaVM = NULL;
     }
 
@@ -71,78 +65,100 @@ class JavaVMInterceptor {
         }
 
         this.shadowJavaVM = newJavaVM;
-
         return newJavaVM;
     }
 
     private createJavaVMIntercept (
         id: number,
         methodAddr: NativePointer
-    ): NativeCallback {
+    ): NativeCallback<NativeCallbackReturnType, NativeCallbackArgumentType[]> {
         const self = this;
         const method = JavaVM.getInstance().methods[id];
         const config = Config.getInstance();
+
         const fridaArgs = method.args.map(
             (a: string): string => Types.convertNativeJTypeToFridaType(a)
         );
         const fridaRet = Types.convertNativeJTypeToFridaType(method.ret);
 
 
-        const nativeFunction = new NativeFunction(methodAddr, fridaRet, fridaArgs);
-        const nativeCallback = new NativeCallback(function (
-            this: InvocationContext
-        ): NativeReturnValue {
-            const threadId = this.threadId;
-            const javaVM = self.threads.getJavaVM();
+        // CHANGED: cast type strings to v19 NativeFunction generic type parameters.
+        // Same pattern as jni_env_interceptor.ts; types are computed dynamically
+        // from JavaVM method definitions; cast asserts all strings are valid types.
+        const nativeFunction = new NativeFunction(
+            methodAddr,
+            fridaRet as NativeFunctionReturnType,
+            fridaArgs as NativeFunctionArgumentType[]
+        ) as NativeFunction<NativeFunctionReturnValue, NativeFunctionArgumentValue[]>;
 
-            let localArgs: NativePointer[] = [].slice.call(arguments);
-            let jniEnv: NativePointer = NULL;
+        const nativeCallback = new NativeCallback(
+            // CHANGED: this: InvocationContext -> this: CallbackContext | InvocationContext
+            // CHANGED: rest params replace [].slice.call(arguments)
+            // CHANGED: this.threadId -> Process.getCurrentThreadId()
+            function (
+                this: CallbackContext | InvocationContext,
+                ...callArgs: NativeCallbackArgumentValue[]
+            ): NativeCallbackReturnValue {
+                // CHANGED: Process.getCurrentThreadId() replaces this.threadId.
+                // this.threadId is not available on CallbackContext; it only exists
+                // on InvocationContext (Interceptor.attach callbacks). NativeCallback
+                // bodies receive CallbackContext, so getCurrentThreadId() is correct.
+                const threadId = Process.getCurrentThreadId();
+                const javaVM = self.threads.getJavaVM();
 
-            localArgs[JAVA_VM_INDEX] = javaVM;
+                const localArgs: NativeCallbackArgumentValue[] = callArgs;
+                localArgs[JAVA_VM_INDEX] = javaVM;
 
-            const ctx: JNIInvocationContext = {
-                methodDef: method,
-                jniAddress: methodAddr,
-                threadId: threadId
-            };
-            
-            if (config.backtrace === "accurate") {
-                ctx.backtrace = Thread.backtrace(this.context, Backtracer.ACCURATE);
-            } else if (config.backtrace === "fuzzy") {
-                ctx.backtrace = Thread.backtrace(this.context, Backtracer.FUZZY);
-            }
-
-            self.callbackManager.doBeforeCallback(method.name, ctx, localArgs);
-
-            let ret = nativeFunction.apply(null, localArgs);
-
-            ret = self.callbackManager.doAfterCallback(method.name, ctx, ret);
-
-            if (method.name === "GetEnv" ||
-                    method.name === "AttachCurrentThread" ||
-                    method.name === "AttachCurrentThreadAsDaemon"
-            ) {
-
-                if (ret === JNI_OK) {
-                    self.threads.setJNIEnv(
-                        threadId, localArgs[JNI_ENV_INDEX].readPointer()
-                    );
+                const ctx: JNIInvocationContext = {
+                    methodDef: method,
+                    jniAddress: methodAddr,
+                    threadId: threadId
+                };
+                
+                if (config.backtrace === "accurate") {
+                    ctx.backtrace = Thread.backtrace(this.context, Backtracer.ACCURATE);
+                } else if (config.backtrace === "fuzzy") {
+                    ctx.backtrace = Thread.backtrace(this.context, Backtracer.FUZZY);
                 }
 
-                if (!self.jniEnvInterceptor.isInitialised()) {
-                    jniEnv = self.jniEnvInterceptor.create();
-                } else {
-                    jniEnv = self.jniEnvInterceptor.get();
+                self.callbackManager.doBeforeCallback(method.name, ctx, localArgs);
+
+                let ret = nativeFunction.apply(
+                    null,
+                    localArgs as NativeFunctionArgumentValue[]
+                ) as NativeCallbackReturnValue;
+
+                ret = self.callbackManager.doAfterCallback(method.name, ctx, ret);
+
+                if (method.name === "GetEnv" ||
+                        method.name === "AttachCurrentThread" ||
+                        method.name === "AttachCurrentThreadAsDaemon"
+                ) {
+
+                    if (ret === JNI_OK) {
+                        self.threads.setJNIEnv(
+                            threadId, 
+                            (localArgs[JNI_ENV_INDEX] as NativePointer).readPointer()
+                        );
+                    }
+
+                    let jniEnv: NativePointer;
+                    if (!self.jniEnvInterceptor.isInitialised()) {
+                        jniEnv = self.jniEnvInterceptor.create();
+                    } else {
+                        jniEnv = self.jniEnvInterceptor.get();
+                    }
+                    // CHANGED: explicit cast; localArgs[1] is JNIEnv** (pointer)
+                    (localArgs[JNI_ENV_INDEX] as NativePointer).writePointer(jniEnv);
                 }
 
-                localArgs[JNI_ENV_INDEX].writePointer(jniEnv);
-            }
-
-            return ret;
-        } as NativeCallbackImplementation, fridaRet, fridaArgs);
+                return ret;
+            } as NativeCallbackImplementation<NativeCallbackReturnValue, NativeCallbackArgumentValue[]>,
+            fridaRet as NativeCallbackReturnType,
+            fridaArgs as NativeCallbackArgumentType[]
+        );
 
         this.references.add(nativeCallback);
-
         return nativeCallback;
     }
 }
