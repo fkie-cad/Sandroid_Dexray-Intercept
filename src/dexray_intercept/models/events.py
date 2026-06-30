@@ -93,6 +93,8 @@ class CryptoEvent(Event):
         self.iv_hex = None
         self.iv_length = 0
         self.plaintext = None
+        self.update_call = None
+        self.doFinal_variant = None
     
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
@@ -101,7 +103,8 @@ class CryptoEvent(Event):
         fields = [
             'algorithm', 'operation_mode', 'operation_mode_desc',
             'input_hex', 'output_hex', 'input_length', 'output_length',
-            'key_hex', 'key_length', 'iv_hex', 'iv_length', 'plaintext'
+            'key_hex', 'key_length', 'iv_hex', 'iv_length', 'plaintext',
+            'update_call', 'doFinal_variant'
         ]
         
         for field in fields:
@@ -219,8 +222,12 @@ class IPCEvent(Event):
         self.transaction_desc = None
         self.sender_pid = None
         self.code = None
-        self.data_size = 0
+        self.data_size = None
         self.payload_hex = None
+        self.receiver_permission = None
+        self.receiver_class = None
+        self.actions = None
+        self.bundle = None
     
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
@@ -229,7 +236,8 @@ class IPCEvent(Event):
             'key', 'value', 'file', 'method', 'data', 'intent_name',
             'intent', 'intent_details', 'intent_flag', 'extras_formatted',
             'transaction_type', 'transaction_desc', 'sender_pid', 'code',
-            'data_size', 'payload_hex'
+            'data_size', 'payload_hex', 'receiver_permission', 'receiver_class',
+            'actions', 'bundle'
         ]
         
         for field in fields:
@@ -250,6 +258,7 @@ class ServiceEvent(Event):
         self.device_address = None
         self.device_name = None
         self.value_hex = None
+        self.value_length = None
         self.destination_address = None
         self.message_text = None
         self.phone_number = None
@@ -267,17 +276,19 @@ class ServiceEvent(Event):
         self.camera_id = None
         self.camera_count = None
         self.success = None
+        self.adapter_available = None
+        self.kill_apps = None
     
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
         
         fields = [
-            'event_description', 'characteristic_uuid', 'device_address',
-            'device_name', 'value_hex', 'destination_address', 'message_text',
-            'phone_number', 'imei', 'property_key', 'property_value',
-            'provider', 'latitude', 'longitude', 'accuracy', 'has_location',
-            'content_type', 'content', 'item_count', 'camera_id',
-            'camera_count', 'success'
+            'event_description', 'characteristic_uuid', #'characteristic_value',
+            'device_address', 'device_name', 'value_hex', 'value_length',
+            'destination_address', 'message_text', 'phone_number', 'imei',
+            'property_key', 'property_value', 'provider', 'latitude', 'longitude',
+            'accuracy', 'has_location', 'content_type', 'content', 'item_count',
+            'camera_id', 'camera_count', 'success', 'adapter_available', 'kill_apps'
         ]
         
         for field in fields:

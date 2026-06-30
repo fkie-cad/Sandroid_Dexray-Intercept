@@ -23,6 +23,7 @@ class ServiceParser(BaseParser):
             'device_address': 'device_address',
             'device_name': 'device_name',
             'value_hex': 'value_hex',
+            'value_length': 'value_length',
             'destination_address': 'destination_address',
             'message_text': 'message_text',
             'phone_number': 'phone_number',
@@ -39,7 +40,9 @@ class ServiceParser(BaseParser):
             'item_count': 'item_count',
             'camera_id': 'camera_id',
             'camera_count': 'camera_count',
-            'success': 'success'
+            'success': 'success',
+            'adapter_available': 'adapter_available',
+            'kill_apps': 'kill_apps',
         }
         
         for json_field, event_field in field_mapping.items():
@@ -64,8 +67,14 @@ class ServiceParser(BaseParser):
                 event.event_description = 'Bluetooth adapter access'
             elif event_type == 'bluetooth.adapter.enable':
                 event.event_description = 'Bluetooth adapter enable'
+            elif event_type == 'bluetooth.adapter.disable':
+                event.event_description = 'Bluetooth adapter disable'
+            elif event_type == 'bluetooth.adapter.start_discovery':
+                event.event_description = 'Bluetooth device discovery started'
             elif event_type == 'bluetooth.device.create_bond':
                 event.event_description = 'Bluetooth device pairing'
+            elif event_type == 'bluetooth.gatt.get_characteristic_value':
+                event.event_description = 'Bluetooth GATT characteristic value read after async callback'
         
         # Telephony events
         elif event_type.startswith('telephony.'):
