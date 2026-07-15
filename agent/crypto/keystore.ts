@@ -1,5 +1,6 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Java } from "../utils/javalib.js"
+import { bytesToHexSafe } from "../utils/misc.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "CRYPTO_KEYSTORE"
@@ -32,7 +33,7 @@ function createKeystoreEvent(eventType: string, data: any): void {
 function charArrayToString(charArray: any): string {
     if (charArray == null) return '(null)';
     if (!StringCls) return '(StringCls not initialized)';
-    return StringCls.$new(charArray);
+    return StringCls.$new(charArray).toString();
 }
 
 // hook functions
@@ -50,7 +51,8 @@ function hookKeystoreConstructor(KeyStore: any): void {
         ctor,
         function(original, keyStoreSpi: any, provider: any, type: string) {
             createKeystoreEvent("crypto.keystore.constructor", {
-                keystore_spi: keyStoreSpi ? keyStoreSpi.toString() : null,
+                // $className extracts the class name only - toString() includes a run-varying identity hash
+                keystore_spi_class: keyStoreSpi ? keyStoreSpi.$className : null,
                 provider: provider ? provider.toString() : null,
                 type: type
             });
@@ -333,12 +335,25 @@ function hookKeystoreSetKeyEntry(KeyStore: any): void {
         "keystore:KeyStore.setKeyEntry[String,Key,char[],Certificate[]]",
         setKeyEntry,
         function(original, alias, key, charArray, certs) {
+            let keyHex: string | null = null;
+            if (key) {
+                try {
+                    // getEncoded() returns null for hardware-backed keys - caught silently
+                    const encoded = key.getEncoded();
+                    keyHex = encoded
+                        ? bytesToHexSafe(Array.from(encoded) as number[])
+                        : null;
+                } catch (_) {}
+            }
             createKeystoreEvent("crypto.keystore.set_key_entry", {
                 method: "setKeyEntry(String, Key, char[], Certificate[])",
                 alias: alias,
-                key: key ? key.toString() : null,
+                key_class: key ? key.$className : null,
+                key_algorithm: key ? key.getAlgorithm() : null,
+                key_format: key ? key.getFormat() : null,
+                key_hex: keyHex,
                 password: charArrayToString(charArray),
-                certs: certs ? certs.toString() : null
+                cert_count: certs ? certs.length : null
             });
             return original.call(this, alias, key, charArray, certs);
         }
@@ -361,8 +376,9 @@ function hookKeystoreSetKeyEntry2(KeyStore: any): void {
             createKeystoreEvent("crypto.keystore.set_key_entry", {
                 method: "setKeyEntry(String, byte[], Certificate[])",
                 alias: alias,
-                key: key ? key.toString() : null,
-                certs: certs ? certs.toString() : null
+                // Array.from converts the Java byte array proxy for hex encoding
+                key_hex: key ? bytesToHexSafe(Array.from(key) as number[]) : null,
+                cert_count: certs ? certs.length : null
             });
             return original.call(this, alias, key, certs);
         }
@@ -450,61 +466,70 @@ function hookKeystoreGetEntry(KeyStore: any): void {
 
 // helper / dump functions
 
-function dumpProtectionParameter(protection) {
-    if (protection != null) {
-        var protectionCls = protection.$className;
-        if (protectionCls.localeCompare("android.security.keystore.KeyProtection") == 0) {
-            return "" + protectionCls + " [implement dumping if needed]";
-        }
-        else if (protectionCls.localeCompare("java.security.KeyStore.CallbackHandlerProtection") == 0) {
-            return "" + protectionCls + " [implement dumping if needed]";
-        }
-        else if (protectionCls.localeCompare("java.security.KeyStore.PasswordProtection") == 0) {
-            var getPasswordMethod = Java.use('java.security.KeyStore.PasswordProtection')['getPassword'];
-            var password = getPasswordMethod.call(protection);
-            return "password: " + charArrayToString(password);
-        }
-        else if (protectionCls.localeCompare("android.security.KeyStoreParameter") == 0) {
-            var isEncryptionRequiredMethod = Java.use('android.security.KeyStoreParameter')['isEncryptionRequired'];
-            var result = isEncryptionRequiredMethod.call(protection);
-            return "isEncryptionRequired: " + result;
-        }
-        else
-            return "Unknown protection parameter type: " + protectionCls;
+function dumpProtectionParameter(protection: any): any {
+    if (protection == null) return null;
+    const protectionCls = protection.$className;
+    // Frida $className uses $ for inner classes - comparisons must match
+    if (protectionCls.localeCompare("android.security.keystore.KeyProtection") == 0) {
+        return { protection_class: protectionCls };
+    } else if (protectionCls.localeCompare("java.security.KeyStore$CallbackHandlerProtection") == 0) {
+        return { protection_class: protectionCls };
+    } else if (protectionCls.localeCompare("java.security.KeyStore$PasswordProtection") == 0) {
+        const getPasswordMethod = Java.use('java.security.KeyStore$PasswordProtection')['getPassword'];
+        const password = getPasswordMethod.call(protection);
+        return {
+            protection_class: protectionCls,
+            password: charArrayToString(password)
+        };
+    } else if (protectionCls.localeCompare("android.security.KeyStoreParameter") == 0) {
+        const isEncryptionRequiredMethod = Java.use('android.security.KeyStoreParameter')['isEncryptionRequired'];
+        const encryptionRequired = isEncryptionRequiredMethod.call(protection);
+        return {
+            protection_class: protectionCls,
+            encryption_required: encryptionRequired
+        };
+    } else {
+        return { protection_class: protectionCls };
     }
-    else
-        return "null";
 }
 
-function dumpKeyStoreEntry(entry) {
-    if (entry != null) {
-        var entryCls = entry.$className;
-        var castedEntry = Java.cast(entry, Java.use(entryCls));
-        if (entryCls.localeCompare("java.security.KeyStore$PrivateKeyEntry") == 0) {
-            var getPrivateKeyEntryMethod = Java.use('java.security.KeyStore$PrivateKeyEntry')['getPrivateKey'];
-            var key = getPrivateKeyEntryMethod.call(castedEntry);
-            return "" + entryCls + " [implement key dumping if needed] " + key.$className;
+function dumpKeyStoreEntry(entry: any): any {
+    if (entry == null) return null;
+    const entryCls = entry.$className;
+    const castedEntry = Java.cast(entry, Java.use(entryCls));
+    if (entryCls.localeCompare("java.security.KeyStore$PrivateKeyEntry") == 0) {
+        const key = Java.use('java.security.KeyStore$PrivateKeyEntry')['getPrivateKey'].call(castedEntry);
+        return {
+            entry_class: entryCls,
+            key_class: key ? key.$className : null
+        };
+    } else if (entryCls.localeCompare("java.security.KeyStore$SecretKeyEntry") == 0) {
+        const key = Java.use('java.security.KeyStore$SecretKeyEntry')['getSecretKey'].call(castedEntry);
+        // hardware-backed AndroidKeyStore keys do not expose encoded bytes
+        if (key.$className.localeCompare("android.security.keystore.AndroidKeyStoreSecretKey") == 0) {
+            return {
+                entry_class: entryCls,
+                key_class: key.$className,
+                key_hex: null
+            };
         }
-        else if (entryCls.localeCompare("java.security.KeyStore$SecretKeyEntry") == 0) {
-            var getSecretKeyMethod = Java.use('java.security.KeyStore$SecretKeyEntry')['getSecretKey'];
-            var key = getSecretKeyMethod.call(castedEntry);
-            var keyGetFormatMethod = Java.use(key.$className)['getFormat'];
-            var keyGetEncodedMethod = Java.use(key.$className)['getEncoded'];
-            if (key.$className.localeCompare("android.security.keystore.AndroidKeyStoreSecretKey") == 0)
-                return "keyClass: android.security.keystore.AndroidKeyStoreSecretKey can't dump";
-            return "keyFormat: " + keyGetFormatMethod.call(key) + ", encodedKey: '" + keyGetEncodedMethod.call(key) + "', key: " + key;
-        }
-        else if (entryCls.localeCompare("java.security.KeyStore$TrustedCertificateEntry") == 0) {
-            return "" + entryCls + " [implement key dumping if needed]";
-        }
-        else if (entryCls.localeCompare("android.security.WrappedKeyEntry") == 0) {
-            return "" + entryCls + " [implement key dumping if needed]";
-        }
-        else
-            return "Unknown key entry type: " + entryCls;
+        const keyFormat = Java.use(key.$className)['getFormat'].call(key);
+        const encodedBytes = Java.use(key.$className)['getEncoded'].call(key);
+        return {
+            entry_class: entryCls,
+            key_class: key.$className,
+            key_format: keyFormat ? keyFormat.toString() : null,
+            key_hex: encodedBytes
+                ? bytesToHexSafe(Array.from(encodedBytes) as number[])
+                : null
+        };
+    } else if (entryCls.localeCompare("java.security.KeyStore$TrustedCertificateEntry") == 0) {
+        return { entry_class: entryCls };
+    } else if (entryCls.localeCompare("android.security.WrappedKeyEntry") == 0) {
+        return { entry_class: entryCls };
+    } else {
+        return { entry_class: entryCls };
     }
-    else
-        return "null";
 }
 
 // --- List of utility functions ---------------------------------------------------
