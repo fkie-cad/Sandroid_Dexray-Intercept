@@ -119,6 +119,10 @@ export function bytesToHex(bytes) {
     return hex.join('');
 }
 
+export function bytesToHexSafe(bytes: number[] | null): string {
+    if (!bytes || bytes.length === 0) return "";
+    return bytesToHex(new Uint8Array(bytes));
+}
 
 /*
 works only without frida-compile
