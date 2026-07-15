@@ -19,11 +19,6 @@ function createEncodingEvent(eventType: string, data: any): void {
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
 }
 
-//function bytesToHexSafe(bytes: number[] | null): string {
-//    if (!bytes || bytes.length === 0) return "";
-//    return bytesToHex(new Uint8Array(bytes));
-//}
-
 function bytesToStringSafe(bytes: number[] | null): string {
     if (!bytes || bytes.length === 0) return "";
     try {
