@@ -1,5 +1,5 @@
 import { log, devlog, am_send } from "../utils/logging.js"
-import { Where, bytesToHex } from "../utils/misc.js"
+import { Where, bytesToHexSafe } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
 
@@ -24,10 +24,10 @@ function createAESEvent(eventType: string, data: any): void {
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
 }
 
-function bytesToHexSafe(bytes: number[] | null): string {
-    if (!bytes || bytes.length === 0) return "";
-    return bytesToHex(new Uint8Array(bytes));
-}
+//function bytesToHexSafe(bytes: number[] | null): string {
+//    if (!bytes || bytes.length === 0) return "";
+//    return bytesToHex(new Uint8Array(bytes));
+//}
 
 function extractPlaintext(hexData: string, opmode: number): string | null {
     if (!hexData) return null;
@@ -55,8 +55,14 @@ export function install_aes_secrets() {
         );
         if (!ivParameterSpec) return;
 
+        // Method references are cached before any .implementation assignment.
+        // Re-accessing .$init after the first assignment replaces the overload
+        // dispatcher on the wrapper, causing subsequent .overload() calls to fail.
+        const skInitMethod = secretKeySpec.$init;
+        const ivInitMethod = ivParameterSpec.$init;
+
         const skInit1 = safeOverload(
-            secretKeySpec.$init, "aes:SecretKeySpec.$init", "[B", "java.lang.String"
+            skInitMethod, "aes:SecretKeySpec.$init", "[B", "java.lang.String"
         );
         if (skInit1) {
             skInit1.implementation = safeImplementation(
@@ -74,7 +80,7 @@ export function install_aes_secrets() {
         }
 
         const skInit2 = safeOverload(
-            secretKeySpec.$init, "aes:SecretKeySpec.$init",
+            skInitMethod, "aes:SecretKeySpec.$init",
             "[B", "int", "int", "java.lang.String"
         );
         if (skInit2) {
@@ -85,7 +91,8 @@ export function install_aes_secrets() {
                     createAESEvent("crypto.key.creation", {
                         algorithm: algorithm,
                         key_length: length,
-                        key_hex: bytesToHexSafe(keyBytes.slice(offset, offset + length))
+                        // Array.from is required - Java byte array proxies do not have .slice()
+                        key_hex: bytesToHexSafe(Array.from(keyBytes).slice(offset, offset + length) as number[])
                     });
                     return original.call(this, keyBytes, offset, length, algorithm);
                 }
@@ -93,7 +100,7 @@ export function install_aes_secrets() {
         }
 
         const ivInit = safeOverload(
-            ivParameterSpec.$init, "aes:IvParameterSpec.$init", "[B"
+            ivInitMethod, "aes:IvParameterSpec.$init", "[B"
         );
         if (ivInit) {
             ivInit.implementation = safeImplementation(
@@ -215,6 +222,7 @@ export function install_aes_info() {
         }
 
         // Specific update overloads, filter(Boolean) removes any null from failed resolution
+        // args[0] is the input byte array across all update overloads.
         const updateMethods = [
             safeOverload(cipher.update, "aes:Cipher.update", '[B'),
             safeOverload(cipher.update, "aes:Cipher.update", '[B', 'int', 'int'),
@@ -230,10 +238,12 @@ export function install_aes_info() {
                     const cipherId = this.hashCode();
                     const session = activeCipherSessions.get(cipherId);
                     if (session) {
+                        const inputArr = args[0] as number[] | null;
                         createAESEvent("crypto.cipher.update", {
                             algorithm: this.getAlgorithm(),
                             operation_mode: session.opmode,
-                            update_call: index + 1   // index captured from forEach closure
+                            update_call: index + 1,   // index captured from forEach closure
+                            input_length: inputArr ? inputArr.length : 0
                         });
                     }
                     return original.apply(this, args);
@@ -241,10 +251,10 @@ export function install_aes_info() {
             );
         });
 
-        // doFinal variants, zero-arg overload via safeOverload with no signatures
+        // doFinal variants - zero-arg overload via safeOverload with no signatures.
+        // doFinal(byte[], int) does not exist in javax.crypto.Cipher and is omitted
         const doFinalMethods = [
             safeOverload(cipher.doFinal, "aes:Cipher.doFinal"),
-            safeOverload(cipher.doFinal, "aes:Cipher.doFinal", '[B', 'int'),
             safeOverload(cipher.doFinal, "aes:Cipher.doFinal", '[B', 'int', 'int'),
             safeOverload(cipher.doFinal, "aes:Cipher.doFinal", '[B', 'int', 'int', '[B'),
             safeOverload(cipher.doFinal, "aes:Cipher.doFinal", '[B', 'int', 'int', '[B', 'int')
@@ -262,12 +272,23 @@ export function install_aes_info() {
                         const algorithm = this.getAlgorithm();
                         const iv = this.getIV();
                         const stack = threadInstance.currentThread().getStackTrace();
+                        // args[2] is the input byte count for overloads that take (byte[], int, int, ...)
+                        // index 0 is the no-arg overload - no input array, input_length stays 0
+                        const inputLength: number = (index > 0 && args.length >= 3)
+                            ? (args[2] as number) : 0;
+                        // index 0 and 1 return byte[] - output_length is result.length
+                        // index 2 and 3 return int byte count written into caller-provided buffer
+                        const outputLength: number = (index <= 1)
+                            ? (result !== null ? result.length : 0)
+                            : (result as number);
                         createAESEvent("crypto.cipher.operation", {
                             algorithm: algorithm,
                             operation_mode: session.opmode,
                             key_hex: bytesToHexSafe(session.key),
                             iv_hex: bytesToHexSafe(iv),
                             doFinal_variant: index + 1,
+                            input_length: inputLength,
+                            output_length: outputLength,
                             stack_trace: Where(stack)
                         });
                         activeCipherSessions.delete(cipherId);
