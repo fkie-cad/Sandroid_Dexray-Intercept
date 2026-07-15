@@ -1,5 +1,5 @@
 import { log, devlog, am_send } from "../utils/logging.js"
-import { Where, bytesToHex } from "../utils/misc.js"
+import { Where, bytesToHexSafe } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
 
@@ -19,15 +19,17 @@ function createEncodingEvent(eventType: string, data: any): void {
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
 }
 
-function bytesToHexSafe(bytes: number[] | null): string {
-    if (!bytes || bytes.length === 0) return "";
-    return bytesToHex(new Uint8Array(bytes));
-}
+//function bytesToHexSafe(bytes: number[] | null): string {
+//    if (!bytes || bytes.length === 0) return "";
+//    return bytesToHex(new Uint8Array(bytes));
+//}
 
 function bytesToStringSafe(bytes: number[] | null): string {
     if (!bytes || bytes.length === 0) return "";
     try {
-        return String.fromCharCode(...bytes.filter(b => b >= 32 && b <= 126));
+        // Array.from converts Java byte array proxies to JS arrays before filtering
+        const jsBytes = Array.from(bytes) as number[];
+        return String.fromCharCode(...jsBytes.filter(b => b >= 32 && b <= 126));
     } catch {
         return "";
     }
@@ -44,21 +46,28 @@ function install_base64_hooks(): void {
         if (!threadDef) return;
         const threadInstance = threadDef.$new();
 
+        // Method references are cached before any .implementation assignment.
+        // Re-accessing the method after the first assignment replaces the overload
+        // dispatcher on the wrapper, causing subsequent .overload() calls to fail.
+        const decodeFn = base64.decode;
+        const encodeFn = base64.encode;
+        const encodeToStringFn = base64.encodeToString;
+
         const decodeStrInt = safeOverload(
-            base64.decode, "encodings:Base64.decode", 'java.lang.String', 'int'
+            decodeFn, "encodings:Base64.decode", 'java.lang.String', 'int'
         );
         if (decodeStrInt) {
             decodeStrInt.implementation = safeImplementation(
                 "encodings:Base64.decode[String,int]",
                 decodeStrInt,
-                function(original, str: string, flag: number) {
-                    const result = original.call(this, str, flag);
+                function(original, str: string, flags: number) {
+                    const result = original.call(this, str, flags);
                     if (result.length !== 0) {
                         const stack = threadInstance.currentThread().getStackTrace();
                         createEncodingEvent("crypto.base64.decode", {
                             method: "decode(String, int)",
                             input_string: str,
-                            flag: flag,
+                            flags: flags,
                             input_length: str.length,
                             output_length: result.length,
                             output_hex: bytesToHexSafe(result),
@@ -72,19 +81,19 @@ function install_base64_hooks(): void {
         }
 
         const decodeByteInt = safeOverload(
-            base64.decode, "encodings:Base64.decode", '[B', 'int'
+            decodeFn, "encodings:Base64.decode", '[B', 'int'
         );
         if (decodeByteInt) {
             decodeByteInt.implementation = safeImplementation(
                 "encodings:Base64.decode[byte[],int]",
                 decodeByteInt,
-                function(original, input: number[], flag: number) {
-                    const result = original.call(this, input, flag);
+                function(original, input: number[], flags: number) {
+                    const result = original.call(this, input, flags);
                     if (result.length !== 0) {
                         const stack = threadInstance.currentThread().getStackTrace();
                         createEncodingEvent("crypto.base64.decode", {
                             method: "decode(byte[], int)",
-                            flag: flag,
+                            flags: flags,
                             input_length: input.length,
                             input_hex: bytesToHexSafe(input),
                             output_length: result.length,
@@ -99,7 +108,7 @@ function install_base64_hooks(): void {
         }
 
         const decodeByteIntIntInt = safeOverload(
-            base64.decode, "encodings:Base64.decode", '[B', 'int', 'int', 'int'
+            decodeFn, "encodings:Base64.decode", '[B', 'int', 'int', 'int'
         );
         if (decodeByteIntIntInt) {
             decodeByteIntIntInt.implementation = safeImplementation(
@@ -115,7 +124,7 @@ function install_base64_hooks(): void {
                             length: len,
                             flags: flags,
                             input_length: input.length,
-                            input_hex: bytesToHexSafe(input.slice(offset, offset + len)),
+                            input_hex: bytesToHexSafe(Array.from(input).slice(offset, offset + len) as number[]),
                             output_length: result.length,
                             output_hex: bytesToHexSafe(result),
                             decoded_content: bytesToStringSafe(result),
@@ -128,7 +137,7 @@ function install_base64_hooks(): void {
         }
 
         const encodeByteInt = safeOverload(
-            base64.encode, "encodings:Base64.encode", '[B', 'int'
+            encodeFn, "encodings:Base64.encode", '[B', 'int'
         );
         if (encodeByteInt) {
             encodeByteInt.implementation = safeImplementation(
@@ -155,7 +164,7 @@ function install_base64_hooks(): void {
         }
 
         const encodeByteIntIntInt = safeOverload(
-            base64.encode, "encodings:Base64.encode", '[B', 'int', 'int', 'int'
+            encodeFn, "encodings:Base64.encode", '[B', 'int', 'int', 'int'
         );
         if (encodeByteIntIntInt) {
             encodeByteIntIntInt.implementation = safeImplementation(
@@ -171,8 +180,8 @@ function install_base64_hooks(): void {
                             length: len,
                             flags: flags,
                             input_length: input.length,
-                            input_hex: bytesToHexSafe(input.slice(offset, offset + len)),
-                            input_content: bytesToStringSafe(input.slice(offset, offset + len)),
+                            input_hex: bytesToHexSafe(Array.from(input).slice(offset, offset + len) as number[]),
+                            input_content: bytesToStringSafe(Array.from(input).slice(offset, offset + len) as number[]),
                             output_length: result.length,
                             output_hex: bytesToHexSafe(result),
                             stack_trace: Where(stack)
@@ -184,7 +193,7 @@ function install_base64_hooks(): void {
         }
 
         const encodeToStringIntIntInt = safeOverload(
-            base64.encodeToString, "encodings:Base64.encodeToString", '[B', 'int', 'int', 'int'
+            encodeToStringFn, "encodings:Base64.encodeToString", '[B', 'int', 'int', 'int'
         );
         if (encodeToStringIntIntInt) {
             encodeToStringIntIntInt.implementation = safeImplementation(
@@ -200,8 +209,8 @@ function install_base64_hooks(): void {
                             length: len,
                             flags: flags,
                             input_length: input.length,
-                            input_hex: bytesToHexSafe(input.slice(offset, offset + len)),
-                            input_content: bytesToStringSafe(input.slice(offset, offset + len)),
+                            input_hex: bytesToHexSafe(Array.from(input).slice(offset, offset + len) as number[]),
+                            input_content: bytesToStringSafe(Array.from(input).slice(offset, offset + len) as number[]),
                             output_string: result,
                             output_length: result.length,
                             stack_trace: Where(stack)
@@ -213,7 +222,7 @@ function install_base64_hooks(): void {
         }
 
         const encodeToStringByteInt = safeOverload(
-            base64.encodeToString, "encodings:Base64.encodeToString", '[B', 'int'
+            encodeToStringFn, "encodings:Base64.encodeToString", '[B', 'int'
         );
         if (encodeToStringByteInt) {
             encodeToStringByteInt.implementation = safeImplementation(
