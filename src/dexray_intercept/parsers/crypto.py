@@ -30,7 +30,9 @@ class CryptoParser(BaseParser):
             'key_hex': 'key_hex',
             'key_length': 'key_length',
             'iv_hex': 'iv_hex',
-            'iv_length': 'iv_length'
+            'iv_length': 'iv_length',
+            'update_call': 'update_call',
+            'doFinal_variant': 'doFinal_variant'
         }
         
         for json_field, event_field in field_mapping.items():
@@ -59,15 +61,22 @@ class CryptoParser(BaseParser):
                 event.plaintext = data['decoded_content']
             if 'input_content' in data:
                 event.plaintext = data['input_content']
+            # Accept 'flag' as a legacy alias, older profiles emitted 'flag' on decode events
             if 'flags' in data:
                 event.add_metadata('flags', data['flags'])
+            elif 'flag' in data:
+                event.add_metadata('flags', data['flag'])
             if 'method' in data:
                 event.add_metadata('method', data['method'])
         
         # Handle Keystore events
         if event_type.startswith('crypto.keystore.'):
-            keystore_fields = ['alias', 'password', 'type', 'provider', 'keystore_type', 
-                             'method', 'aliases', 'parameter', 'input_stream']
+            keystore_fields = [
+                'alias', 'password', 'type', 'provider', 'keystore_type',
+                'method', 'aliases', 'parameter', 'input_stream',
+                'keystore_spi_class', 'key_class', 'key_algorithm',
+                'key_format', 'key_hex', 'cert_count', 'entry', 'protection'
+            ]
             for field in keystore_fields:
                 if field in data:
                     event.add_metadata(field, data[field])
