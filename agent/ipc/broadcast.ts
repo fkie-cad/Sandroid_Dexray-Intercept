@@ -1,5 +1,5 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { Where } from "../utils/misc.js"
+import { devlog, am_send } from "../utils/logging.js"
+import { Where, toNullableInt, getIdentityHash } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
 
@@ -15,9 +15,8 @@ function createBroadcastEvent(eventType: string, data: any): void {
 }
 
 function getStackTrace() {
-    const threadDef = Java.use('java.lang.Thread');
-    const threadInstance = threadDef.$new();
-    return Where(threadInstance.currentThread().getStackTrace());
+    const Thread = Java.use('java.lang.Thread');
+    return Where(Thread.currentThread().getStackTrace());
 }
 
 /*
@@ -40,8 +39,8 @@ function hook_broadcasts() {
                 if (component) intentData.component = component.getClassName();
                 const action = intent.getAction();
                 if (action) intentData.action = action;
-                const data = intent.getData();
-                if (data) intentData.data_uri = data.toString();
+                const data = intent.getDataString();
+                if (data) intentData.data_uri = data;
                 const extras = intent.getExtras();
                 if (extras) intentData.extras = extras.toString();
                 intentData.flags = intent.getFlags();
@@ -64,7 +63,7 @@ function hook_broadcasts() {
                     function(original, intent: any) {
                         const intentInfo = getIntentInfo(intent);
                         createBroadcastEvent("broadcast.sent", {
-                            class: 'android.content.ContextWrapper',
+                            source_class: 'android.content.ContextWrapper',
                             method: 'sendBroadcast',
                             intent: intentInfo,
                             stack_trace: getStackTrace()
@@ -86,7 +85,7 @@ function hook_broadcasts() {
                     function(original, intent: any, receiverPermission: string) {
                         const intentInfo = getIntentInfo(intent);
                         createBroadcastEvent("broadcast.sent", {
-                            class: 'android.content.ContextWrapper',
+                            source_class: 'android.content.ContextWrapper',
                             method: 'sendBroadcast',
                             intent: intentInfo,
                             receiver_permission: receiverPermission,
@@ -111,7 +110,7 @@ function hook_broadcasts() {
                     function(original, intent: any) {
                         const intentInfo = getIntentInfo(intent);
                         createBroadcastEvent("broadcast.sticky_sent", {
-                            class: 'android.content.ContextWrapper',
+                            source_class: 'android.content.ContextWrapper',
                             method: 'sendStickyBroadcast',
                             intent: intentInfo,
                             stack_trace: getStackTrace()
@@ -135,10 +134,9 @@ function hook_broadcasts() {
                     function(original, intent: any) {
                         const intentInfo = getIntentInfo(intent);
                         createBroadcastEvent("activity.started", {
-                            class: 'android.content.ContextWrapper',
+                            source_class: 'android.content.ContextWrapper',
                             method: 'startActivity',
-                            intent: intentInfo,
-                            stack_trace: getStackTrace()
+                            intent: intentInfo
                         });
                         return original.call(this, intent);
                     }
@@ -157,11 +155,37 @@ function hook_broadcasts() {
                     function(original, intent: any, bundle: any) {
                         const intentInfo = getIntentInfo(intent);
                         createBroadcastEvent("activity.started", {
-                            class: 'android.content.ContextWrapper',
+                            source_class: 'android.content.ContextWrapper',
                             method: 'startActivity',
                             intent: intentInfo,
-                            bundle: bundle ? bundle.toString() : null,
-                            stack_trace: getStackTrace()
+                    function(original, intent: any) {
+                        const intentInfo = getIntentInfo(intent);
+                        createBroadcastEvent("activity.started", {
+                            source_class: 'android.app.Activity',
+                            method: 'startActivity',
+                            intent: intentInfo
+                        });
+                        return original.call(this, intent);
+                    }
+                );
+            }
+
+            const activityStart2 = safeOverload(
+                Activity.startActivity,
+                "broadcast:Activity.startActivity",
+                'android.content.Intent', 'android.os.Bundle'
+            );
+            if (activityStart2) {
+                activityStart2.implementation = safeImplementation(
+                    "broadcast:Activity.startActivity[Intent,Bundle]",
+                    activityStart2,
+                    function(original, intent: any, bundle: any) {
+                        const intentInfo = getIntentInfo(intent);
+                        createBroadcastEvent("activity.started", {
+                            source_class: 'android.app.Activity',
+                            method: 'startActivity',
+                            intent: intentInfo,
+                            bundle: bundle ? bundle.toString() : null
                         });
                         return original.call(this, intent, bundle);
                     }
