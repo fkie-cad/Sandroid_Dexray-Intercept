@@ -50,6 +50,85 @@ function hook_broadcasts() {
             return intentData;
         };
 
+        const getReceiverInfo = (receiver: any) => {
+            const receiverData: any = {};
+            try {
+                if (!receiver) {
+                    receiverData.is_null = true;
+                    return receiverData;
+                }
+
+                try {
+                    receiverData.receiver_identity = getIdentityHash(receiver);
+                } catch (_) {}
+
+                try {
+                    if (receiver.$className) {
+                        receiverData.receiver_class = String(receiver.$className);
+                    }
+                } catch (_) {}
+
+                if (!receiverData.receiver_class) {
+                    try {
+                        const cls = receiver.getClass();
+                        if (cls) receiverData.receiver_class = String(cls.getName());
+                    } catch (_) {}
+                }
+
+                try {
+                    receiverData.receiver_string = String(receiver.toString());
+                } catch (_) {}
+            } catch (e) {
+                receiverData.error = `Error extracting receiver: ${e}`;
+            }
+            return receiverData;
+        };
+
+        const getIntentFilterActions = (filter: any): string[] => {
+            const actions: string[] = [];
+            if (!filter) return actions;
+
+            try {
+                const count = filter.countActions();
+                for (let i = 0; i < count; i++) {
+                    actions.push(String(filter.getAction(i)));
+                }
+            } catch (_) {}
+
+            return actions;
+        };
+
+        const handleRegisterReceiverResult = (
+            receiver: any,
+            filter: any,
+            result: any,
+            extraData: any = {}
+        ): void => {
+            const actions = getIntentFilterActions(filter);
+
+            if (!receiver) {
+                createBroadcastEvent("broadcast.sticky_query", {
+                    source_class: 'android.content.ContextWrapper',
+                    method: 'registerReceiver',
+                    actions,
+                    sticky_intent: result ? getIntentInfo(result) : null,
+                    ...extraData,
+                    stack_trace: getStackTrace()
+                });
+                return;
+            }
+
+            createBroadcastEvent("receiver.registered", {
+                source_class: 'android.content.ContextWrapper',
+                method: 'registerReceiver',
+                ...getReceiverInfo(receiver),
+                actions,
+                ...extraData,
+                stack_trace: getStackTrace()
+            });
+        };
+
+
         if (ContextWrapper.sendBroadcast) {
             const sendBroadcast1 = safeOverload(
                 ContextWrapper.sendBroadcast,
@@ -499,7 +578,9 @@ function hook_broadcasts() {
                     "broadcast:ContextWrapper.registerReceiver[BroadcastReceiver,IntentFilter]",
                     registerReceiver1,
                     function(original, receiver: any, filter: any) {
-                        return original.call(this, receiver, filter);
+                        const result = original.call(this, receiver, filter);
+                        handleRegisterReceiverResult(receiver, filter, result);
+                        return result;
                     }
                 );
             }
@@ -515,7 +596,81 @@ function hook_broadcasts() {
                     "broadcast:ContextWrapper.registerReceiver[BroadcastReceiver,IntentFilter,String,Handler]",
                     registerReceiver2,
                     function(original, receiver: any, filter: any, broadcastPermission: string, scheduler: any) {
-                        return original.call(this, receiver, filter, broadcastPermission, scheduler);
+                        const result = original.call(this, receiver, filter, broadcastPermission, scheduler);
+                        handleRegisterReceiverResult(receiver, filter, result, {
+                            receiver_permission: broadcastPermission
+                        });
+                        return result;
+                    }
+                );
+            }
+
+            // 3-arg overload - required on API 33+ with RECEIVER_EXPORTED / RECEIVER_NOT_EXPORTED flag
+            const registerReceiver3 = safeOverload(
+                ContextWrapper.registerReceiver,
+                "broadcast:ContextWrapper.registerReceiver",
+                'android.content.BroadcastReceiver', 'android.content.IntentFilter', 'int'
+            );
+            if (registerReceiver3) {
+                registerReceiver3.implementation = safeImplementation(
+                    "broadcast:ContextWrapper.registerReceiver[BroadcastReceiver,IntentFilter,int]",
+                    registerReceiver3,
+                    function(original, receiver: any, filter: any, flags: number) {
+                        const result = original.call(this, receiver, filter, flags);
+                        handleRegisterReceiverResult(receiver, filter, result, {
+                            flags: flags
+                        });
+                        return result;
+                    }
+                );
+            }
+
+            // 5-arg overload - flag-bearing version of BroadcastReceiver, IntentFilter, String, Handler
+            const registerReceiver5 = safeOverload(
+                ContextWrapper.registerReceiver,
+                "broadcast:ContextWrapper.registerReceiver",
+                'android.content.BroadcastReceiver', 'android.content.IntentFilter',
+                'java.lang.String', 'android.os.Handler', 'int'
+            );
+            if (registerReceiver5) {
+                registerReceiver5.implementation = safeImplementation(
+                    "broadcast:ContextWrapper.registerReceiver[BroadcastReceiver,IntentFilter,String,Handler,int]",
+                    registerReceiver5,
+                    function(original, receiver: any, filter: any, broadcastPermission: string, scheduler: any, flags: number) {
+                        const result = original.call(this, receiver, filter, broadcastPermission, scheduler, flags);
+                        handleRegisterReceiverResult(receiver, filter, result, {
+                            receiver_permission: broadcastPermission,
+                            flags: flags
+                        });
+                        return result;
+                    }
+                );
+            }
+        }
+
+        if (ContextWrapper.unregisterReceiver) {
+            const unregisterReceiver1 = safeOverload(
+                ContextWrapper.unregisterReceiver,
+                "broadcast:ContextWrapper.unregisterReceiver",
+                'android.content.BroadcastReceiver'
+            );
+            if (unregisterReceiver1) {
+                unregisterReceiver1.implementation = safeImplementation(
+                    "broadcast:ContextWrapper.unregisterReceiver[BroadcastReceiver]",
+                    unregisterReceiver1,
+                    function(original, receiver: any) {
+                        const receiverInfo = getReceiverInfo(receiver);
+
+                        const result = original.call(this, receiver);
+
+                        createBroadcastEvent("receiver.unregistered", {
+                            source_class: 'android.content.ContextWrapper',
+                            method: 'unregisterReceiver',
+                            ...receiverInfo,
+                            stack_trace: getStackTrace()
+                        });
+
+                        return result;
                     }
                 );
             }
