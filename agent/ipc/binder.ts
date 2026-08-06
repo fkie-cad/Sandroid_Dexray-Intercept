@@ -1,5 +1,5 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { Java } from "../utils/javalib.js"
+import { bytesToHexSafe } from "../utils/misc.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { safeAttachExport } from "../utils/safe_native.js"
 
 const PROFILE_HOOKING_TYPE: string = "IPC_BINDER"
@@ -47,7 +47,17 @@ var binder_driver_command_protocol = {  // enum binder_driver_command_protocol
     "BC_DEAD_BINDER_DONE": 16,
 };
 
-
+// Reserved framework Binder transaction codes (see android.os.IBinder).
+// Encoded as ('_'<<24) | (c1<<16) | (c2<<8) | c3, i.e. an ASCII tag like '_PNG'.
+// These are liveness/introspection control calls, NOT real data transactions,
+// so we label them instead of emitting anonymous "Binder Transaction" entries.
+var binder_reserved_transaction_codes = {
+    0x5F504E47: "PING_TRANSACTION",          // '_PNG'  (IBinder.PING_TRANSACTION)
+    0x5F444D50: "DUMP_TRANSACTION",          // '_DMP'
+    0x5F4E5446: "INTERFACE_TRANSACTION",     // '_NTF'
+    0x5F434D44: "SHELL_COMMAND_TRANSACTION", // '_CMD'
+    0x5F535052: "SYSPROPS_TRANSACTION",      // '_SPR'
+};
 
 
 // http://androidxref.com/kernel_3.18/xref/drivers/staging/android/uapi/binder.h#129
@@ -113,31 +123,37 @@ function parse_binder_transaction_data(binder_transaction_data) {
 function handle_write(write_buffer, write_size, write_consumed) { // binder_thread_write
     var cmd = write_buffer.readU32() & 0xff;
     var ptr = write_buffer.add(write_consumed + 4); // 4 = sizeof(uint32_t), the first 4 bytes contain "cmd"
-    var end = write_buffer.add(write_size);
+    // var end = write_buffer.add(write_size);
 
     switch (cmd) {
         // Implement cases from binder_driver_command_protocol, we're only interested in BC_TRANSACTION / BC_REPLY
         case binder_driver_command_protocol.BC_TRANSACTION:
         case binder_driver_command_protocol.BC_REPLY:
             // log('INFO', "TRANSACTION / BC_REPLY!");
-            var binder_transaction_data = parse_binder_transaction_data(ptr);
+            let binder_transaction_data = parse_binder_transaction_data(ptr);
 
             // Send structured binder transaction data
-            const payload = hexdump(binder_transaction_data.data.ptr.buffer, {
-                length: binder_transaction_data.data_size,
-                ansi: true,
-            });
-            
+            const dataSize = Number(binder_transaction_data.data_size);
+            const rawBytes = dataSize > 0
+                ? Array.from(new Uint8Array(binder_transaction_data.data.ptr.buffer.readByteArray(dataSize) as ArrayBuffer))
+                : null;
+            let payload_hex = bytesToHexSafe(rawBytes)
+
+            const txn_code = binder_transaction_data.code;
+            const reserved_desc = (binder_reserved_transaction_codes as any)[txn_code];
+
             createBinderEvent("binder.transaction", {
                 transaction_type: cmd === binder_driver_command_protocol.BC_TRANSACTION ? "BC_TRANSACTION" : "BC_REPLY",
+                transaction_desc: reserved_desc || null,   // e.g. "PING_TRANSACTION" for control calls
+                is_control: reserved_desc ? true : false,   // lets the console filter/label these
                 target_handle: binder_transaction_data.target.handle,
-                code: binder_transaction_data.code,
+                code: txn_code,
                 flags: binder_transaction_data.flags,
                 sender_pid: binder_transaction_data.sender_pid,
                 sender_euid: binder_transaction_data.sender_euid,
-                data_size: binder_transaction_data.data_size,
-                offsets_size: binder_transaction_data.offsets_size,
-                payload_hex: payload
+                data_size: dataSize,
+                offsets_size: Number(binder_transaction_data.offsets_size),
+                payload_hex: payload_hex
             });
             break;
         default:
@@ -170,26 +186,46 @@ function parse_struct_binder_write_read(binder_write_read) {
 }
 
 
-function hook_binder(){
-    Java.perform(function(){
-        safeAttachExport("libbinder.so", "ioctl", "binder:ioctl", {
-            onEnter: function(args) {
-                var fd = args[0]; // int
-                var cmd = args[1]; // int
+// function hook_binder(){
+//     Java.perform(function(){
+//         safeAttachExport("libbinder.so", "ioctl", "binder:ioctl", {
+//             onEnter: function(args) {
+//                 var fd = args[0]; // int
+//                 var cmd = args[1]; // int
     
-                // value calculated from #define BINDER_WRITE_READ		_IOWR('b', 1, struct binder_write_read)
-                if (cmd.toUInt32() !== 0xc0306201) return;  // if 0xc0306201 then enter BINDER_WRITE_READ flow
-                var data = args[2]; // void * -> pointer to binder_write_read
+//                 // value calculated from #define BINDER_WRITE_READ		_IOWR('b', 1, struct binder_write_read)
+//                 if (cmd.toUInt32() !== 0xc0306201) return;  // if 0xc0306201 then enter BINDER_WRITE_READ flow
+//                 var data = args[2]; // void * -> pointer to binder_write_read
     
-                var binder_write_read = parse_struct_binder_write_read(data);
+//                 var binder_write_read = parse_struct_binder_write_read(data);
     
-                if(binder_write_read.write_size > 0) {
-                    handle_write(binder_write_read.write_buffer, binder_write_read.write_size, binder_write_read.write_consumed);
-                }
-                //am_send(PROFILE_HOOKING_TYPE,"[Libbinder::ioctl] "+binder_write_read)
+//                 if(binder_write_read.write_size > 0) {
+//                     handle_write(binder_write_read.write_buffer, binder_write_read.write_size, binder_write_read.write_consumed);
+//                 }
+//                 //am_send(PROFILE_HOOKING_TYPE,"[Libbinder::ioctl] "+binder_write_read)
 
+//             }
+//         })
+//     });
+// }
+
+function hook_binder(){
+    // safeAttachExport is a native-only operation - no Java runtime context needed
+    safeAttachExport("libbinder.so", "ioctl", "binder:ioctl", {
+        onEnter: function(args) {
+            var fd = args[0]; // int
+            var cmd = args[1]; // int
+
+            // value calculated from #define BINDER_WRITE_READ _IOWR('b', 1, struct binder_write_read)
+            if (cmd.toUInt32() !== 0xc0306201) return;  // if 0xc0306201 then enter BINDER_WRITE_READ flow
+            var data = args[2]; // void * -> pointer to binder_write_read
+
+            var binder_write_read = parse_struct_binder_write_read(data);
+
+            if(binder_write_read.write_size > 0) {
+                handle_write(binder_write_read.write_buffer, binder_write_read.write_size, binder_write_read.write_consumed);
             }
-        })
+        }
     });
 }
 
