@@ -1,9 +1,13 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
-import { safePerform, safeUse, safeDeferred, safeImplementation } from "../utils/safe_java.js";
+import { safePerform, safeUse, safeImplementation } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "IPC_INTENT"
+
+// Guards against any getData() firing triggered by our own intent extraction,
+// regardless of which hook initiated the extraction
+let _inIntentExtraction = false;
 
 function createIntentEvent(eventType: string, data: any): void {
     const event = {
@@ -34,9 +38,11 @@ function extractIntentData(intent: any): any {
             intentData.action = action;
         }
         
-        const data = intent.getData();
-        if (data) {
-            intentData.data_uri = data.toString();
+        // getDataString() returns the URI as a plain String without calling getData(),
+        // avoiding re-entry into the Intent.getData hook
+        const dataStr = intent.getDataString();
+        if (dataStr) {
+            intentData.data_uri = dataStr;
         }
         
         const type = intent.getType();
@@ -57,11 +63,11 @@ function extractIntentData(intent: any): any {
             while (keys.hasNext()) {
                 const key = keys.next();
                 let value = extras.get(key);
-                let type = "null";
+                let valueType = "null";
                 
                 if (value) {
                     try {
-                        type = value.getClass().getSimpleName();
+                        valueType = value.getClass().getSimpleName();
                         if (value.getClass().isArray()) {
                             value = Java.use('org.json.JSONArray').$new(value);
                         }
@@ -72,7 +78,7 @@ function extractIntentData(intent: any): any {
                 }
                 
                 extrasData[key] = {
-                    type: type,
+                    type: valueType,
                     value: value
                 };
             }
@@ -90,27 +96,46 @@ function extractIntentData(intent: any): any {
 }
 
 function hookGetData(this: any, original: any): any {
-    const intentData = extractIntentData(this);
-
-    createIntentEvent("intent.data_accessed", {
-        intent: intentData,
-        method: 'getData',
-        stack_trace: getStackTrace()
-    });
-
-    return original.call(this);
+    if (_inIntentExtraction) {
+        return original.call(this);
+    }
+    const result = original.call(this);
+    // Only emit when getData() returned an actual URI.
+    // Framework lifecycle calls on intents with no data URI produce null
+    // and are not security-relevant, suppressing them eliminates all
+    // cross-hook and lifecycle artifacts without affecting genuine events.
+    if (result === null) {
+        return result;
+    }
+    _inIntentExtraction = true;
+    try {
+        const intentData = extractIntentData(this);
+        createIntentEvent("intent.data_accessed", {
+            intent: intentData,
+            method: 'getData',
+            stack_trace: getStackTrace()
+        });
+    } finally {
+        _inIntentExtraction = false;
+    }
+    return result;
 }
 
 function hookGetIntent(this: any, original: any): any {
-    const intent = original.call(this);
-    const intentData = extractIntentData(intent);
-    
-    createIntentEvent("intent.accessed", {
-        intent: intentData,
-        method: 'getIntent',
-        stack_trace: getStackTrace()
-    });
-    
+    _inIntentExtraction = true;
+    let intent: any;
+    try {
+        intent = original.call(this);
+        const intentData = extractIntentData(intent);
+        createIntentEvent("intent.accessed", {
+            intent: intentData,
+            source_class: this.$className,
+            method: 'getIntent',
+            stack_trace: getStackTrace()
+        });
+    } finally {
+        _inIntentExtraction = false;
+    }
     return intent;
 }
 
