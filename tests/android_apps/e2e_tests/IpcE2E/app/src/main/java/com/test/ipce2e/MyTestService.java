@@ -82,15 +82,19 @@ public class MyTestService extends Service {
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm != null && nm.getNotificationChannel(CHANNEL_ID) == null) {
             NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    "IPC E2E Test",
-                    NotificationManager.IMPORTANCE_MIN);
+                CHANNEL_ID, "IPC E2E Test", NotificationManager.IMPORTANCE_MIN);
             nm.createNotificationChannel(channel);
         }
         Notification notification = new Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("IPC E2E foreground test")
-                .setSmallIcon(android.R.drawable.ic_menu_info_details)
-                .build();
-        startForeground(1, notification);
+            .setContentTitle("IPC E2E foreground test")
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .build();
+        // API 34+ requires a foreground service type in both manifest and startForeground call
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(1, notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(1, notification);
+        }
     }
 }

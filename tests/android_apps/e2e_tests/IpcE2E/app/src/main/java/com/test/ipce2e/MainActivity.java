@@ -1,18 +1,32 @@
 package com.test.ipce2e;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
 import android.provider.Settings;
 import android.util.Log;
+
+import java.util.ArrayList;
+
 
 public class MainActivity extends Activity {
 
     private static final String TAG = "IPC_E2E";
+
+    private ServiceConnection mTestServiceConn;
+    private boolean mTestServiceBound = false;
+
+    private final ArrayList<BroadcastReceiver> mRegisteredReceivers = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,6 +64,61 @@ public class MainActivity extends Activity {
         } finally {
             Log.i(TAG, "IpcE2E finished");
             finish();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        unbindTestServiceIfNeeded();
+        unregisterDynamicReceivers();
+        super.onDestroy();
+    }
+
+    private void trackRegisteredReceiver(BroadcastReceiver receiver) {
+        if (receiver != null && !mRegisteredReceivers.contains(receiver)) {
+            mRegisteredReceivers.add(receiver);
+        }
+    }
+
+    private void unregisterDynamicReceivers() {
+        if (mRegisteredReceivers.isEmpty()) {
+            return;
+        }
+
+        ArrayList<BroadcastReceiver> receivers = new ArrayList<>(mRegisteredReceivers);
+        mRegisteredReceivers.clear();
+
+        for (BroadcastReceiver receiver : receivers) {
+            try {
+                unregisterReceiver(receiver);
+                Log.i(TAG, "unregisterReceiver OK: " + receiver.getClass().getName());
+                Log.i(TAG, "unregisterDynamicReceivers count: " + mRegisteredReceivers.size());
+            } catch (Throwable t) {
+                Log.w(TAG, "unregisterReceiver failed: " + t.getMessage());
+            }
+        }
+    }
+
+    private void unbindTestServiceIfNeeded() {
+        if (mTestServiceConn == null) {
+            mTestServiceBound = false;
+            return;
+        }
+
+        ServiceConnection conn = mTestServiceConn;
+        mTestServiceConn = null;
+
+        if (!mTestServiceBound) {
+            return;
+        }
+
+        mTestServiceBound = false;
+
+        try {
+            unbindService(conn);
+            Log.i(TAG, "onDestroy unbindService OK");
+        } catch (Throwable t) {
+            Log.w(TAG, "onDestroy unbindService failed: " + t.getMessage());
         }
     }
 
@@ -133,19 +202,54 @@ public class MainActivity extends Activity {
             //    -> PROFILE_HOOKING_TYPE="IPC_BROADCAST", event_type="service.stopped"
             stopService(serviceIntent);
 
-            // 7) registerReceiver(BroadcastReceiver, IntentFilter) ->
-            //    broadcast.ts: ContextWrapper.registerReceiver[BroadcastReceiver,IntentFilter]
-            //    (hooked but no event emitted; used to verify hook safety)
-            TestReceiver receiver1 = new TestReceiver();
-            IntentFilter filter = new IntentFilter("com.test.ipce2e.ACTION_SIMPLE");
-            registerReceiver(receiver1, filter);
+            // 7) registerReceiver - API 33+ requires explicit exported/not-exported flag.
+            //    On API 33+, use registerReceiver(BroadcastReceiver,IntentFilter,int).
+            //    On older APIs, use the legacy 2-arg overload.
+            try {
+                TestReceiver receiver1 = new TestReceiver();
+                IntentFilter filter = new IntentFilter("com.test.ipce2e.ACTION_SIMPLE");
 
-            // 8) registerReceiver(BroadcastReceiver, IntentFilter, String, Handler) ->
-            //    broadcast.ts: ContextWrapper.registerReceiver[BroadcastReceiver,IntentFilter,String,Handler]
-            //    (hooked but no event emitted; used to verify hook safety)
-            TestReceiver receiver2 = new TestReceiver();
-            Handler handler = new Handler(getMainLooper());
-            registerReceiver(receiver2, filter, "com.test.ipce2e.PERMISSION_TEST", handler);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    registerReceiver(receiver1, filter, Context.RECEIVER_NOT_EXPORTED);
+                } else {
+                    registerReceiver(receiver1, filter);
+                }
+
+                trackRegisteredReceiver(receiver1);
+                Log.i(TAG, "registerReceiver(simple dynamic receiver) OK");
+            } catch (Throwable t) {
+                Log.w(TAG, "registerReceiver(simple dynamic receiver) failed: " + t.getMessage());
+            }
+
+            // 8) registerReceiver with permission.
+            //    API 33+ requires explicit exported/not-exported flag.
+            try {
+                TestReceiver receiver2 = new TestReceiver();
+                IntentFilter filter2 = new IntentFilter("com.test.ipce2e.ACTION_PERMISSION");
+                Handler handler = new Handler(getMainLooper());
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    registerReceiver(
+                            receiver2,
+                            filter2,
+                            "com.test.ipce2e.PERMISSION_TEST",
+                            handler,
+                            Context.RECEIVER_NOT_EXPORTED
+                    );
+                } else {
+                    registerReceiver(
+                            receiver2,
+                            filter2,
+                            "com.test.ipce2e.PERMISSION_TEST",
+                            handler
+                    );
+                }
+
+                trackRegisteredReceiver(receiver2);
+                Log.i(TAG, "registerReceiver(permission dynamic receiver) OK");
+            } catch (Throwable t) {
+                Log.w(TAG, "registerReceiver(permission dynamic receiver) failed: " + t.getMessage());
+            }
 
             // 9) sendStickyBroadcast(Intent) ->
             //    broadcast.ts: ContextWrapper.sendStickyBroadcast[Intent]
@@ -160,18 +264,150 @@ public class MainActivity extends Activity {
             }
 
             // 10) startForegroundService(Intent) ->
-            //     broadcast.ts: no hook currently; trigger present for future hook on
-            //     ContextWrapper.startForegroundService (API 26+)
-            //     Service will ANR after 5s without a posted notification - expected in test context
+            //     broadcast.ts: ContextWrapper.startForegroundService
+            //     -> PROFILE_HOOKING_TYPE="IPC_BROADCAST", event_type may depend on current hooks.
+            //     MyTestService should promote itself to foreground when EXTRA_START_FOREGROUND is true.
             try {
                 Intent fgServiceIntent = new Intent(this, MyTestService.class);
                 fgServiceIntent.putExtra("fg_service_key", "fg_service_value");
                 fgServiceIntent.putExtra(MyTestService.EXTRA_START_FOREGROUND, true);
-                startForegroundService(fgServiceIntent);
-                Log.i(TAG, "startForegroundService OK");
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(fgServiceIntent);
+                    Log.i(TAG, "startForegroundService OK");
+                } else {
+                    startService(fgServiceIntent);
+                    Log.i(TAG, "startService fallback for foreground service test OK");
+                }
             } catch (Throwable t) {
                 Log.w(TAG, "startForegroundService failed: " + t.getMessage());
             }
+
+            // 11) sendOrderedBroadcast(Intent, String) - 2-arg
+            //     broadcast.ts: ContextWrapper.sendOrderedBroadcast[Intent,String]
+            //     -> PROFILE_HOOKING_TYPE="IPC_BROADCAST", event_type="broadcast.ordered_sent"
+            Intent orderedSimple = new Intent("com.test.ipce2e.ACTION_ORDERED_2ARG");
+            orderedSimple.putExtra("ordered_key", "ordered_simple_value");
+            sendOrderedBroadcast(orderedSimple, null);
+            Log.i(TAG, "sendOrderedBroadcast(2-arg) OK");
+
+            // 12) sendOrderedBroadcast(Intent,String,BroadcastReceiver,Handler,int,String,Bundle) - 7-arg
+            //     broadcast.ts: ContextWrapper.sendOrderedBroadcast[Intent,String,BroadcastReceiver,Handler,int,String,Bundle]
+            //     -> PROFILE_HOOKING_TYPE="IPC_BROADCAST", event_type="broadcast.ordered_sent"
+            Intent orderedFull = new Intent("com.test.ipce2e.ACTION_ORDERED_7ARG");
+            orderedFull.putExtra("ordered_key", "ordered_full_value");
+            sendOrderedBroadcast(
+                    orderedFull,
+                    null,
+                    new BroadcastReceiver() {
+                        @Override
+                        public void onReceive(Context context, Intent intent) {
+                            Log.i(TAG, "sendOrderedBroadcast(7-arg) final result receiver fired");
+                        }
+                    },
+                    null,
+                    RESULT_OK,
+                    "initial_data",
+                    null
+            );
+            Log.i(TAG, "sendOrderedBroadcast(7-arg) OK");
+
+            // 13) bindService(Intent, ServiceConnection, int)
+            //     broadcast.ts: ContextWrapper.bindService[Intent,ServiceConnection,int]
+            //     -> PROFILE_HOOKING_TYPE="IPC_BROADCAST", event_type="service.bound"
+            //     unbindService called from onServiceConnected async, or onDestroy fallback.
+            ServiceConnection conn = new ServiceConnection() {
+                @Override
+                public void onServiceConnected(ComponentName name, IBinder service) {
+                    Log.i(TAG, "bindService onServiceConnected: " + name);
+
+                    try {
+                        unbindService(this);
+                        Log.i(TAG, "unbindService OK");
+                    } catch (Throwable t) {
+                        Log.w(TAG, "unbindService failed: " + t.getMessage());
+                    } finally {
+                        if (mTestServiceConn == this) {
+                            mTestServiceConn = null;
+                        }
+                        mTestServiceBound = false;
+                    }
+                }
+
+                @Override
+                public void onServiceDisconnected(ComponentName name) {
+                    Log.i(TAG, "bindService onServiceDisconnected: " + name);
+
+                    if (mTestServiceConn == this) {
+                        mTestServiceConn = null;
+                    }
+                    mTestServiceBound = false;
+                }
+            };
+
+            mTestServiceConn = conn;
+            mTestServiceBound = false;
+
+            boolean boundOk = bindService(
+                    new Intent(this, MyTestService.class),
+                    conn,
+                    Context.BIND_AUTO_CREATE
+            );
+
+            mTestServiceBound = boundOk;
+            if (!boundOk) {
+                mTestServiceConn = null;
+            }
+
+            Log.i(TAG, "bindService result: " + boundOk);
+
+            // 14) registerReceiver - 2-arg and 4-arg: only safe without flags on API < 33.
+            //     On API 33+ these can throw SecurityException because exported flag is mandatory.
+            //     Complements the existing flag-bearing test cases above.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                try {
+                    TestReceiver recv2arg = new TestReceiver();
+                    registerReceiver(
+                            recv2arg,
+                            new IntentFilter("com.test.ipce2e.ACTION_TEST_2ARG")
+                    );
+                    trackRegisteredReceiver(recv2arg);
+                    Log.i(TAG, "registerReceiver(2-arg) OK");
+                } catch (Throwable t) {
+                    Log.w(TAG, "registerReceiver(2-arg) failed: " + t.getMessage());
+                }
+
+                try {
+                    TestReceiver recv4arg = new TestReceiver();
+                    registerReceiver(
+                            recv4arg,
+                            new IntentFilter("com.test.ipce2e.ACTION_TEST_4ARG"),
+                            null,
+                            null
+                    );
+                    trackRegisteredReceiver(recv4arg);
+                    Log.i(TAG, "registerReceiver(4-arg) OK");
+                } catch (Throwable t) {
+                    Log.w(TAG, "registerReceiver(4-arg) failed: " + t.getMessage());
+                }
+            }
+
+            // 15) startActivityForResult(Intent, int) - 2-arg
+            //     broadcast.ts: Activity.startActivityForResult[Intent,int]
+            //     -> PROFILE_HOOKING_TYPE="IPC_BROADCAST", event_type="activity.started_for_result"
+            //     Note: hook fires synchronously; onActivityResult may not fire because MainActivity finishes.
+            Intent forResult2arg = new Intent(this, SecondActivity.class);
+            forResult2arg.putExtra("launched_by", "startActivityForResult_2arg");
+            startActivityForResult(forResult2arg, 9001);
+            Log.i(TAG, "startActivityForResult(2-arg) OK");
+
+            // 16) startActivityForResult(Intent, int, Bundle) - 3-arg
+            //     broadcast.ts: Activity.startActivityForResult[Intent,int,Bundle]
+            //     -> PROFILE_HOOKING_TYPE="IPC_BROADCAST", event_type="activity.started_for_result"
+            Intent forResult3arg = new Intent(this, SecondActivity.class);
+            forResult3arg.putExtra("launched_by", "startActivityForResult_3arg");
+            startActivityForResult(forResult3arg, 9002, null);
+            Log.i(TAG, "startActivityForResult(3-arg) OK");
 
             Log.i(TAG, "runBroadcastTests completed");
 
@@ -297,6 +533,7 @@ public class MainActivity extends Activity {
             //    - DataStore.getData -> event_type="datastore.get"
             //    - Preferences$Key.$init(String) -> event_type="datastore_prefs.key_init"
             //    - Preferences.get(Key)/MutablePreferences.get(Key) -> event_type="datastore_prefs.get"
+            //    - Also exercises both direct runBlocking calls and dispatched GlobalScope coroutine calls
             SharedPrefsDataStoreHelper.runDataStoreTests(getApplicationContext());
 
             Log.i(TAG, "runSharedPrefsTests completed");
