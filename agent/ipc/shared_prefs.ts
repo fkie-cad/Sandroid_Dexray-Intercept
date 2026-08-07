@@ -115,8 +115,12 @@ function hook_datastore() {
     devlog("Installing DataStore hooks");
 
     safePerform("shared_prefs:hook_datastore", () => {
+        // androidx.datastore.core.DataStore is an interface; hooking its
+        // methods never fires. The concrete implementation is SingleProcessDataStore.
+        // updateData(block: Function2, $completion: Continuation): Object   (suspend)
+        // getData(): Flow
         const DataStore = safeUse(
-            "androidx.datastore.core.DataStore",
+            "androidx.datastore.core.SingleProcessDataStore",
             "shared_prefs:hook_datastore"
         );
         if (DataStore && (DataStore as any).updateData && (DataStore as any).updateData.overloads) {
