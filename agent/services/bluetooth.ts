@@ -5,6 +5,8 @@ import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils
 
 const PROFILE_HOOKING_TYPE: string = "BLUETOOTH"
 
+let _inBluetoothDisable = false;
+
 function createBluetoothEvent(eventType: string, data: any): void {
     const event = {
         event_type: eventType,
@@ -177,15 +179,24 @@ function hook_bluetooth() {
                     "bluetooth:BluetoothAdapter.disable[]",
                     disableNoArg,
                     function(original) {
-                        const stack = threadInstance.currentThread().getStackTrace();
-                        const result = original.call(this);
-                        createBluetoothEvent("bluetooth.adapter.disable", {
-                            library: 'android.bluetooth.BluetoothAdapter',
-                            method: 'disable',
-                            success: result,
-                            stack_trace: Where(stack)
-                        });
-                        return result;
+                        if (_inBluetoothDisable) {
+                            return original.call(this);
+                        }
+
+                        _inBluetoothDisable = true;
+                        try {
+                            const stack = threadInstance.currentThread().getStackTrace();
+                            const result = original.call(this);
+                            createBluetoothEvent("bluetooth.adapter.disable", {
+                                library: 'android.bluetooth.BluetoothAdapter',
+                                method: 'disable',
+                                success: result,
+                                stack_trace: Where(stack)
+                            });
+                            return result;
+                        } finally {
+                            _inBluetoothDisable = false;
+                        }
                     }
                 );
             }
@@ -201,16 +212,25 @@ function hook_bluetooth() {
                     "bluetooth:BluetoothAdapter.disable[boolean]",
                     disableWithKillApps,
                     function(original, killApps: boolean) {
-                        const stack = threadInstance.currentThread().getStackTrace();
-                        const result = original.call(this, killApps);
-                        createBluetoothEvent("bluetooth.adapter.disable", {
-                            library: 'android.bluetooth.BluetoothAdapter',
-                            method: 'disable',
-                            success: result,
-                            kill_apps: killApps,
-                            stack_trace: Where(stack)
-                        });
-                        return result;
+                        if (_inBluetoothDisable) {
+                            return original.call(this, killApps);
+                        }
+
+                        _inBluetoothDisable = true;
+                        try {
+                            const stack = threadInstance.currentThread().getStackTrace();
+                            const result = original.call(this, killApps);
+                            createBluetoothEvent("bluetooth.adapter.disable", {
+                                library: 'android.bluetooth.BluetoothAdapter',
+                                method: 'disable',
+                                success: result,
+                                kill_apps: killApps,
+                                stack_trace: Where(stack)
+                            });
+                            return result;
+                        } finally {
+                            _inBluetoothDisable = false;
+                        }
                     }
                 );
             }
@@ -230,6 +250,30 @@ function hook_bluetooth() {
                             library: 'android.bluetooth.BluetoothAdapter',
                             method: 'startDiscovery',
                             success: result,
+                            stack_trace: Where(stack)
+                        });
+                        return result;
+                    }
+                );
+            }
+            
+            // Capture adapter address in the Bluetooth category so users enabling only
+            // bluetooth hooks receive device-address access events
+            const getAddressRef = safeOverload(
+                BluetoothAdapter.getAddress,
+                "bluetooth:BluetoothAdapter.getAddress"
+            );
+            if (getAddressRef) {
+                getAddressRef.implementation = safeImplementation(
+                    "bluetooth:BluetoothAdapter.getAddress",
+                    getAddressRef,
+                    function(original) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+                        const result = original.call(this);
+                        createBluetoothEvent("bluetooth.adapter.get_address", {
+                            library: 'android.bluetooth.BluetoothAdapter',
+                            method: 'getAddress',
+                            mac_address: result,
                             stack_trace: Where(stack)
                         });
                         return result;
