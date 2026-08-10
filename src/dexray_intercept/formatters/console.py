@@ -372,15 +372,34 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] [{event.event_type}] {event.method or 'unknown'}")
         
         elif event.event_type == 'binder.transaction':
-            transaction_desc = event.transaction_desc or 'Unknown'
-            sender_pid = event.sender_pid or 'unknown'
-            code = event.code or 'unknown'
-            data_size = event.data_size or 0
-            lines.append(f"\n[*] [Binder] {transaction_desc}:")
-            lines.append(f"[*] Sender PID: {sender_pid}, Code: {code}, Data Size: {data_size} bytes")
-            if event.payload_hex:
-                payload_preview = truncate_string(event.payload_hex, 200)
-                lines.append(f"[*] Payload Preview: {payload_preview}")
+            is_control    = getattr(event, 'is_control', None)
+            trans_desc    = getattr(event, 'transaction_desc', None)
+            trans_type    = getattr(event, 'transaction_type', None)
+            sender_pid    = event.sender_pid or 'unknown'
+            code          = event.code or 0
+            data_size     = event.data_size or 0
+            
+            if is_control:
+                # Control/liveness call — compact single line, no payload dump
+                lines.append(
+                    f"[*] [Binder] Control Transaction: {trans_desc or 'Unknown'} "
+                    f"(PID: {sender_pid}, Code: 0x{code:08X})"
+                )
+            
+            else:
+                # Real data transaction
+                label = trans_desc or trans_type or 'Transaction'
+                lines.append(f"\n[*] [Binder] {label}:")
+                lines.append(
+                    f"[*] Sender PID: {sender_pid}, "
+                    f"Code: 0x{code:08X}, Data Size: {data_size} bytes"
+                )
+                if event.payload_hex:
+                    payload_dump = hexdump(
+                        event.payload_hex, header=True, ansi=True,
+                        truncate=True, max_bytes=0x50
+                    )
+                    lines.append(f"[*] Payload:\n{payload_dump}")
         
         elif event.event_type.startswith('intent.'):
             lines.append(f"\n[*] [Intent] {event.event_type}:")
@@ -396,23 +415,50 @@ class ConsoleFormatter(BaseFormatter):
                     lines.append(f"[*] Data URI: {intent_info['data_uri']}")
                 if intent_info.get('mime_type'):
                     lines.append(f"[*] MIME Type: {intent_info['mime_type']}")
-            if event.extras_formatted:
-                lines.append("[*] Extras:")
-                for extra in event.extras_formatted:
-                    lines.append(f"    {extra}")
+                extras = intent_info.get('extras')
+                if extras and isinstance(extras, dict):
+                    lines.append("[*] Extras:")
+                    for key, val in extras.items():
+                        if isinstance(val, dict):
+                            lines.append(f"    {key} ({val.get('type', '?')}): {val.get('value', '')}")
+                        else:
+                            lines.append(f"    {key}: {val}")
         
         elif event.event_type.startswith('broadcast.'):
             lines.append(f"\n[*] [Broadcast] {event.event_type}:")
             if event.intent_name:
                 lines.append(f"[*] Intent: {event.intent_name}")
-            if event.intent_details:
-                details = event.intent_details
+            if event.intent:
+                details = event.intent
                 if details.get('action'):
                     lines.append(f"[*] Action: {details['action']}")
                 if details.get('component'):
                     lines.append(f"[*] Component: {details['component']}")
                 if details.get('data_uri'):
                     lines.append(f"[*] Data URI: {details['data_uri']}")
+        
+        elif event.event_type.startswith('activity.'):
+            lines.append(f"\n[*] [Activity] {event.event_type}:")
+            if event.intent_name:
+                lines.append(f"[*] Intent: {event.intent_name}")
+            if event.method:
+                lines.append(f"[*] Method: {event.method}")
+            if event.declaring_class:
+                lines.append(f"[*] Declaring Class: {event.declaring_class}")
+            if event.method_signature:
+                lines.append(f"[*] Signature: {event.method_signature}")
+            if event.source_class:
+                lines.append(f"[*] Source Class: {event.source_class}")
+            if event.receiver_class:
+                lines.append(f"[*] Receiver Class: {event.receiver_class}")
+            if event.receiver_identity:
+                lines.append(f"[*] Receiver Identity: {event.receiver_identity}")
+            if event.request_code is not None:
+                lines.append(f"[*] Request Code: {event.request_code}")
+            if event.stream:
+                lines.append(f"[*] Stream: {event.stream}")
+            if event.thread_name:
+                lines.append(f"[*] Thread: {event.thread_name}")
         
         else:
             lines.append(f"[*] [IPC] {event.event_type}")
@@ -454,15 +500,41 @@ class ConsoleFormatter(BaseFormatter):
         # Location events
         elif event.event_type.startswith('location.'):
             lines.append(f"\n[*] [Location] {event.event_description or event.event_type}:")
+
             if event.provider:
                 lines.append(f"[*] Provider: {event.provider}")
+
             if event.latitude is not None and event.longitude is not None:
                 lines.append(f"[*] Coordinates: {event.latitude}, {event.longitude}")
+            elif event.latitude is not None:
+                lines.append(f"[*] Latitude: {event.latitude}")
+            elif event.longitude is not None:
+                lines.append(f"[*] Longitude: {event.longitude}")
+
             if event.accuracy is not None:
                 lines.append(f"[*] Accuracy: {event.accuracy}m")
+
             if event.has_location is not None:
                 lines.append(f"[*] Has Location: {event.has_location}")
-        
+
+            if event.min_time_ms is not None:
+                lines.append(f"[*] Min Time: {event.min_time_ms}ms")
+
+            if event.min_distance_m is not None:
+                lines.append(f"[*] Min Distance: {event.min_distance_m}m")
+
+            if event.has_listener is not None:
+                lines.append(f"[*] Has Listener: {event.has_listener}")
+
+            if event.has_looper is not None:
+                lines.append(f"[*] Has Looper: {event.has_looper}")
+
+            if event.overload:
+                lines.append(f"[*] Overload: {event.overload}")
+
+            if event.library and event.event_type == 'location.fused_provider.get_last_location':
+                lines.append(f"[*] Client: {event.library}")
+    
         # Clipboard events
         elif event.event_type.startswith('clipboard.'):
             lines.append(f"\n[*] [Clipboard] {event.event_description or event.event_type}:")
