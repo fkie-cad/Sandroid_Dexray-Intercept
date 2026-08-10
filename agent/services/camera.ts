@@ -99,19 +99,20 @@ function hook_camera() {
             "camera:hook_camera"
         );
         if (Camera2CameraManager) {
+            // Hook Camera2 CameraManager methods
             // CameraManager.openCamera(String cameraId, StateCallback, Handler)
-            const openCameraRef = safeOverload(
+            // Legacy Camera2 overload used on API 21+.
+            const openCameraHandlerRef = safeOverload(
                 Camera2CameraManager.openCamera,
-                "camera:CameraManager.openCamera",
+                "camera:CameraManager.openCamera[handler]",
                 "java.lang.String",
                 "android.hardware.camera2.CameraDevice$StateCallback",
                 "android.os.Handler"
             );
-            // Hook Camera2 CameraManager methods
-            if (openCameraRef) {
-                openCameraRef.implementation = safeImplementation(
-                    "camera:CameraManager.openCamera",
-                    openCameraRef,
+            if (openCameraHandlerRef) {
+                openCameraHandlerRef.implementation = safeImplementation(
+                    "camera:CameraManager.openCamera[handler]",
+                    openCameraHandlerRef,
                     function (original, cameraId: string, callback: any, handler: any) {
                         const stack = threadInstance.currentThread().getStackTrace();
 
@@ -121,6 +122,7 @@ function hook_camera() {
                             camera_id: cameraId,
                             has_callback: callback !== null,
                             has_handler: handler !== null,
+                            overload: "handler",
                             stack_trace: Where(stack)
                         });
 
@@ -129,9 +131,43 @@ function hook_camera() {
                 );
             }
 
+            // CameraManager.openCamera(String cameraId, Executor, StateCallback)
+            // API 28+ overload. Hooked separately so apps using executor-based Camera2
+            // opening are covered in addition to the Handler overload above.
+            const openCameraExecutorRef = safeOverload(
+                Camera2CameraManager.openCamera,
+                "camera:CameraManager.openCamera[executor]",
+                "java.lang.String",
+                "java.util.concurrent.Executor",
+                "android.hardware.camera2.CameraDevice$StateCallback"
+            );
+            if (openCameraExecutorRef) {
+                openCameraExecutorRef.implementation = safeImplementation(
+                    "camera:CameraManager.openCamera[executor]",
+                    openCameraExecutorRef,
+                    function (original, cameraId: string, executor: any, callback: any) {
+                        const stack = threadInstance.currentThread().getStackTrace();
+
+                        createCameraEvent("camera.camera2.open", {
+                            library: "android.hardware.camera2.CameraManager",
+                            method: "openCamera",
+                            camera_id: cameraId,
+                            has_executor: executor !== null,
+                            has_callback: callback !== null,
+                            overload: "executor",
+                            stack_trace: Where(stack)
+                        });
+
+                        return original.call(this, cameraId, executor, callback);
+                    }
+                );
+            }
+
             // CameraManager.getCameraIdList()
-            const getCameraIdListRef = Camera2CameraManager.getCameraIdList;
-            // Hook getCameraIdList
+            const getCameraIdListRef = safeOverload(
+                Camera2CameraManager.getCameraIdList,
+                "camera:CameraManager.getCameraIdList"
+            );
             if (getCameraIdListRef) {
                 getCameraIdListRef.implementation = safeImplementation(
                     "camera:CameraManager.getCameraIdList",
