@@ -61,7 +61,7 @@ class FileSystemEvent(Event):
         data = {'file_path': self.file_path}
 
         # Only include non-None values
-        # NOTE: hexdump_display is excluded - it's only for console display and contains ANSI codes
+        # hexdump_display is excluded - it's only for console display and contains ANSI codes
         optional_fields = [
             'operation', 'buffer_size', 'offset', 'length', 'data_hex',
             'plaintext', 'file_type', 'is_large_data', 'fd', 'parent_path',
@@ -213,11 +213,20 @@ class IPCEvent(Event):
         self.file = None
         self.method = None
         self.data = None
+
+        # new/raw IPC fields
+        self.stream = None
+        self.hook_family = None
+        self.declaring_class = None
+        self.method_signature = None
+        self.receiver_identity = None
+        self.thread_id = None
+        self.thread_name = None
+        self.stack_trace = None
+
         self.intent_name = None
         self.intent = None
-        self.intent_details = None
         self.intent_flag = None
-        self.extras_formatted = None
         self.transaction_type = None
         self.transaction_desc = None
         self.sender_pid = None
@@ -228,16 +237,30 @@ class IPCEvent(Event):
         self.receiver_class = None
         self.actions = None
         self.bundle = None
+        self.source_class = None
+        self.flags = None
+        self.is_control = None # bool: True = control/liveness, False = data tx
+        self.notification_id = None
+        self.foreground_service_type = None
+        self.request_code = None
+        self.initial_data = None
+        self.initial_code = None
+        self.options = None
     
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
         
         fields = [
-            'key', 'value', 'file', 'method', 'data', 'intent_name',
-            'intent', 'intent_details', 'intent_flag', 'extras_formatted',
-            'transaction_type', 'transaction_desc', 'sender_pid', 'code',
-            'data_size', 'payload_hex', 'receiver_permission', 'receiver_class',
-            'actions', 'bundle'
+            'key', 'value', 'file', 'method', 'data',
+            'stream', 'hook_family', 'declaring_class', 'method_signature',
+            'receiver_identity', 'thread_id', 'thread_name',
+            'intent_name', 'intent', 'intent_flag',
+            'transaction_type', 'transaction_desc',
+            'sender_pid', 'code', 'data_size', 'payload_hex',
+            'receiver_permission', 'receiver_class', 'actions', 'bundle',
+            'source_class', 'flags', 'is_control', 'notification_id',
+            'foreground_service_type', 'request_code', 'initial_data',
+            'initial_code', 'options', 
         ]
         
         for field in fields:
@@ -254,48 +277,155 @@ class ServiceEvent(Event):
     def __init__(self, event_type: str, timestamp: str = None):
         super().__init__(event_type, timestamp)
         self.event_description = None
+
+        # generic hook metadata
+        self.library = None
+        self.method = None
+
+        # bluetooth GATT
         self.characteristic_uuid = None
-        self.device_address = None
-        self.device_name = None
         self.value_hex = None
         self.value_length = None
+
+        # bluetooth adapter / device
+        self.adapter_available = None
+        self.kill_apps = None
+        self.mac_address = None
+        self.device_address = None
+        self.device_name = None
+
+        # SMS
         self.destination_address = None
+        self.service_center_address = None
         self.message_text = None
+        self.text_length = None
+        self.message_parts = None
+        self.parts_count = None
+        self.has_sent_intent = None
+        self.has_delivery_intent = None
+        self.has_sent_intents = None
+        self.has_delivery_intents = None
+
+        # telephony manager
         self.phone_number = None
+        self.imsi = None
+        self.device_id = None
         self.imei = None
+        self.sim_operator = None
+        self.denied = None
+        self.error = None
+
+        # system / build
         self.property_key = None
         self.property_value = None
+        self.build_properties = None
+
+        # wifi
+        self.ssid = None
+        self.bssid = None
+
+        # content resolver
+        self.uri = None
+        self.has_result = None
+        self.action = None
+
+        # secure settings
+        self.settings_key = None
+        self.settings_value = None
+
+        # location
         self.provider = None
         self.latitude = None
         self.longitude = None
         self.accuracy = None
         self.has_location = None
+        self.min_time_ms = None
+        self.min_distance_m = None
+        self.has_listener = None
+        self.has_looper = None
+        self.overload = None
+
+        # clipboard
         self.content_type = None
         self.content = None
         self.item_count = None
+        self.has_clip = None
+        self.item_index = None
+        self.total_items = None
+        self.content_length = None
+        self.error_message = None
+
+        # camera
         self.camera_id = None
         self.camera_count = None
+        self.camera_ids = None
+        self.has_callback = None
+        self.has_handler = None
+        self.has_executor = None
+
+        # generic result
         self.success = None
-        self.adapter_available = None
-        self.kill_apps = None
-    
+
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
-        
+
         fields = [
-            'event_description', 'characteristic_uuid', #'characteristic_value',
-            'device_address', 'device_name', 'value_hex', 'value_length',
-            'destination_address', 'message_text', 'phone_number', 'imei',
-            'property_key', 'property_value', 'provider', 'latitude', 'longitude',
-            'accuracy', 'has_location', 'content_type', 'content', 'item_count',
-            'camera_id', 'camera_count', 'success', 'adapter_available', 'kill_apps'
+            'event_description',
+
+            # generic hook metadata
+            'library', 'method',
+
+            # bluetooth GATT
+            'characteristic_uuid', 'value_hex', 'value_length',
+
+            # bluetooth adapter / device
+            'adapter_available', 'kill_apps', 'mac_address',
+            'device_address', 'device_name',
+
+            # SMS
+            'destination_address', 'service_center_address', 'message_text',
+            'text_length', 'message_parts', 'parts_count',
+            'has_sent_intent', 'has_delivery_intent',
+            'has_sent_intents', 'has_delivery_intents',
+
+            # telephony manager
+            'phone_number', 'imsi', 'device_id', 'imei', 'sim_operator',
+            'denied', 'error',
+
+            # system / build
+            'property_key', 'property_value', 'build_properties',
+
+            # wifi
+            'ssid', 'bssid',
+
+            # content resolver
+            'uri', 'has_result', 'action',
+
+            # secure settings
+            'settings_key', 'settings_value',
+
+            # location
+            'provider', 'latitude', 'longitude', 'accuracy', 'has_location',
+            'min_time_ms', 'min_distance_m', 'has_listener', 'has_looper',
+            'overload',
+
+            # clipboard
+            'content_type', 'content', 'item_count', 'has_clip',
+            'item_index', 'total_items', 'content_length', 'error_message',
+
+            # camera
+            'camera_id', 'camera_count', 'camera_ids',
+            'has_callback', 'has_handler', 'has_executor',
+
+            # generic result
+            'success',
         ]
-        
+
         for field in fields:
             value = getattr(self, field)
             if value is not None:
                 data[field] = value
-                
+
         return data
 
 
