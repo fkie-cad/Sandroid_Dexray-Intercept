@@ -101,6 +101,12 @@ export function safeImplementation(
         try {
             return hookLogic.apply(this, [original, ...args]);
         } catch (error) {
+            // intentional propagation - the hook already handled the event and
+            // deliberately rethrows the original exception; do not treat as failure,
+            // do not call original again, just propagate the wrapped cause
+            if (error instanceof PropagateException) {
+                throw error.cause;
+            }
             hookError(context, error);
             return original.apply(this, args);
         }
@@ -128,4 +134,17 @@ export function safeDeferred(context: string, fn: () => void): () => void {
             hookError(`${context}:deferred`, error);
         }
     };
+}
+
+/**
+ * Wraps an exception to signal intentional propagation from inside hookLogic.
+ *
+ * When hookLogic catches an exception from original.call() and needs to
+ * propagate it to the caller after emitting an event, throwing PropagateException
+ * tells safeImplementation to rethrow the original cause without treating it as
+ * a hook failure, without logging a spurious HOOK ERROR, and without calling
+ * original a second time.
+ */
+export class PropagateException {
+    constructor(public readonly cause: any) {}
 }

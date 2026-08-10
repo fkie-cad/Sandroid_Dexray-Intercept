@@ -124,6 +124,53 @@ export function bytesToHexSafe(bytes: number[] | null): string {
     return bytesToHex(new Uint8Array(bytes));
 }
 
+export function toNullableInt(value: any): number | null {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (typeof value === "number") {
+        return Number.isFinite(value) ? value : null;
+    }
+
+    try {
+        const stringValue = value.toString();
+        const parsed = parseInt(stringValue, 10);
+        return Number.isFinite(parsed) ? parsed : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+export function getThreadInfo() {
+    try {
+        const Thread = Java.use('java.lang.Thread');
+        const current = Thread.currentThread();
+        return {
+            thread_id: String(current.getId()),
+            thread_name: String(current.getName())
+        };
+    } catch (e) {
+        return {
+            thread_id: null,
+            thread_name: null,
+            thread_error: String(e)
+        };
+    }
+}
+
+export function getIdentityHash(obj: any): string | null {
+    try {
+        if (!obj) return null;
+        const System = Java.use('java.lang.System');
+        return String(System.identityHashCode(obj));
+    } catch (e) {
+        return null;
+    }
+}
+
+
+
 /*
 works only without frida-compile
 export function demangleAndExtractFunctionName(lib: string,mangled: string): string {
