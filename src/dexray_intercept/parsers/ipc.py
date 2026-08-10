@@ -24,22 +24,51 @@ class IPCParser(BaseParser):
             'file': 'file',
             'method': 'method',
             'data': 'data',
+
+            'stream': 'stream',
+            'hook_family': 'hook_family',
+            'declaring_class': 'declaring_class',
+            'method_signature': 'method_signature',
+            'receiver_identity': 'receiver_identity',
+            'thread_id': 'thread_id',
+            'thread_name': 'thread_name',
+            'stack_trace': 'stack_trace',
+
             'intent_name': 'intent_name',
             'intent': 'intent',
-            'intent_details': 'intent_details',
             'intent_flag': 'intent_flag',
-            'extras_formatted': 'extras_formatted',
             'transaction_type': 'transaction_type',
+            'transaction_desc': 'transaction_desc',
+            'is_control': 'is_control',
             'sender_pid': 'sender_pid',
             'code': 'code',
             'data_size': 'data_size',
-            'payload_hex': 'payload_hex'
+            'payload_hex': 'payload_hex',
+            'receiver_permission': 'receiver_permission',
+            'receiver_class': 'receiver_class',
+            'actions': 'actions',
+            'bundle': 'bundle',
+            'source_class': 'source_class',
+            'flags': 'flags',
+            'notification_id': 'notification_id',
+            'foreground_service_type': 'foreground_service_type',
+            'request_code': 'request_code',
+            'initial_data': 'initial_data',
+            'initial_code': 'initial_code',
+            'options': 'options',
         }
         
-        for json_field, event_field in field_mapping.items():
-            if json_field in data:
-                setattr(event, event_field, data[json_field])
-        
+        for json_field, value in data.items():
+            if json_field == 'event_type':
+                continue
+
+            event_field = field_mapping.get(json_field, json_field)
+
+            if hasattr(event, event_field):
+                setattr(event, event_field, value)
+            else:
+                event.add_metadata(json_field, value)
+
         return event
 
 
@@ -84,8 +113,8 @@ class BinderParser(IPCParser):
         """Parse JSON data into IPCEvent for binder operations"""
         event = super().parse_json_data(data, timestamp)
         
-        # Add transaction type description
-        if event and event.transaction_type:
+        # Only fall back to generic label when the JS hook didn't supply one
+        if event and not event.transaction_desc and event.transaction_type:
             trans_type = event.transaction_type
             if trans_type == 'BC_TRANSACTION':
                 event.transaction_desc = 'Binder Transaction'
@@ -93,7 +122,7 @@ class BinderParser(IPCParser):
                 event.transaction_desc = 'Binder Reply'
             else:
                 event.transaction_desc = f'Unknown ({trans_type})'
-        
+
         return event
 
 
@@ -113,16 +142,6 @@ class IntentParser(IPCParser):
                 event.intent_name = intent_info['component']
             elif 'action' in intent_info:
                 event.intent_name = intent_info['action']
-            
-            # Format extras for better display
-            if 'extras' in intent_info and intent_info['extras']:
-                extras_formatted = []
-                for key, extra_data in intent_info['extras'].items():
-                    if isinstance(extra_data, dict) and 'type' in extra_data and 'value' in extra_data:
-                        extras_formatted.append(f"{key} ({extra_data['type']}): {extra_data['value']}")
-                    else:
-                        extras_formatted.append(f"{key}: {extra_data}")
-                event.extras_formatted = extras_formatted
         
         return event
     
@@ -174,15 +193,6 @@ class BroadcastParser(IPCParser):
                 event.intent_name = intent_info['component']
             elif 'action' in intent_info:
                 event.intent_name = intent_info['action']
-            
-            # Extract intent details
-            event.intent_details = {
-                'action': intent_info.get('action'),
-                'component': intent_info.get('component'),
-                'data_uri': intent_info.get('data_uri'),
-                'flags': intent_info.get('flags'),
-                'extras': intent_info.get('extras')
-            }
         
         # Handle legacy format with artifact field
         elif event and hasattr(event, 'metadata') and 'artifact' in event.metadata:
