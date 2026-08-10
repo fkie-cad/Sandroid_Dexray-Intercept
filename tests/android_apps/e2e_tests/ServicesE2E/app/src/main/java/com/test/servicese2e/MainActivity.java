@@ -38,6 +38,8 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends Activity {
@@ -107,16 +109,26 @@ public class MainActivity extends Activity {
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
 
         if (adapter != null) {
+            // enable() and disable() hook triggers
+            // enable() is async - wait for STATE_ON before proceeding to GATT test
             try {
                 adapter.enable();
             } catch (Throwable t) {
                 Log.w(TAG, "adapter.enable failed: " + t.getMessage());
             }
-            try {
-                adapter.disable();
-            } catch (Throwable t) {
-                Log.w(TAG, "adapter.disable failed: " + t.getMessage());
+
+            // poll for STATE_ON with 5s timeout - enable() is asynchronous
+            int waited = 0;
+            while (adapter.getState() != BluetoothAdapter.STATE_ON && waited < 5000) {
+                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+                waited += 200;
             }
+            if (adapter.getState() != BluetoothAdapter.STATE_ON) {
+                Log.w(TAG, "Bluetooth did not reach STATE_ON within 5s - GATT tests may fail");
+            } else {
+                Log.i(TAG, "Bluetooth STATE_ON confirmed after " + waited + "ms");
+            }
+
             try {
                 adapter.startDiscovery();
             } catch (Throwable t) {
@@ -153,7 +165,6 @@ public class MainActivity extends Activity {
         }
 
         // BluetoothGatt.readCharacteristic hook trigger
-        // waits for STATE_CONNECTED, then service discovery, then reads characteristic
         // requires bumble GATT server running via netsim with address F0:F1:F2:F3:F4:F5
         if (adapter != null) {
             BluetoothGatt[] gattHolder     = new BluetoothGatt[1];
@@ -167,7 +178,6 @@ public class MainActivity extends Activity {
                     if (newState == android.bluetooth.BluetoothProfile.STATE_CONNECTED) {
                         Log.i(TAG, "BluetoothGatt connected, status=" + status);
                         connectedLatch.countDown();
-                        // service discovery required before any characteristic operations
                         gatt.discoverServices();
                     } else if (newState == android.bluetooth.BluetoothProfile.STATE_DISCONNECTED) {
                         Log.w(TAG, "BluetoothGatt disconnected, status=" + status);
@@ -181,14 +191,42 @@ public class MainActivity extends Activity {
                 public void onServicesDiscovered(BluetoothGatt gatt, int status) {
                     Log.i(TAG, "onServicesDiscovered status=" + status
                             + " services=" + gatt.getServices().size());
+                    for (android.bluetooth.BluetoothGattService s : gatt.getServices()) {
+                        Log.i(TAG, "  service: " + s.getUuid());
+                        for (BluetoothGattCharacteristic c : s.getCharacteristics()) {
+                            Log.i(TAG, "    characteristic: " + c.getUuid()
+                                    + " properties=" + c.getProperties());
+                        }
+                    }
                     discoveredLatch.countDown();
                 }
 
+                // pre-API-33 path - value is set on the characteristic object before callback fires
+                // getValue() here captures the actual remote value on API 24-32
                 @Override
                 public void onCharacteristicRead(BluetoothGatt gatt,
                         BluetoothGattCharacteristic characteristic, int status) {
-                    Log.i(TAG, "onCharacteristicRead status=" + status
+                    Log.i(TAG, "onCharacteristicRead (pre-33) status=" + status
                             + " uuid=" + characteristic.getUuid());
+                    byte[] value = characteristic.getValue();
+                    Log.i(TAG, "characteristic.getValue() pre-33 length="
+                            + (value != null ? value.length : 0));
+                    readLatch.countDown();
+                }
+
+                // API 33+ path - value arrives as byte[] parameter; explicit getValue()
+                // call still triggers the hook so coverage is consistent across API levels
+                @Override
+                @SuppressWarnings("NewApi")
+                public void onCharacteristicRead(BluetoothGatt gatt,
+                        BluetoothGattCharacteristic characteristic,
+                        byte[] value, int status) {
+                    Log.i(TAG, "onCharacteristicRead (33+) status=" + status
+                            + " uuid=" + characteristic.getUuid()
+                            + " value_length=" + value.length);
+                    byte[] fetched = characteristic.getValue();
+                    Log.i(TAG, "characteristic.getValue() 33+ length="
+                            + (fetched != null ? fetched.length : 0));
                     readLatch.countDown();
                 }
             };
@@ -241,6 +279,15 @@ public class MainActivity extends Activity {
                 if (gattHolder[0] != null) {
                     gattHolder[0].close();
                 }
+            }
+        }
+
+        // disable() called after GATT test - hook fires; on API 33+ also hooks disable(boolean)
+        if (adapter != null) {
+            try {
+                adapter.disable();
+            } catch (Throwable t) {
+                Log.w(TAG, "adapter.disable failed: " + t.getMessage());
             }
         }
     }
@@ -297,31 +344,76 @@ public class MainActivity extends Activity {
                 Handler cameraHandler = new Handler(cameraThread.getLooper());
 
                 for (String id : ids) {
+                    // CameraManager.openCamera(String, StateCallback, Handler)
+                    // -> camera.ts: CameraManager.openCamera[handler]
+                    // -> PROFILE_HOOKING_TYPE="CAMERA", event_type="camera.camera2.open"
                     try {
                         CountDownLatch latch = new CountDownLatch(1);
                         manager.openCamera(id, new CameraDevice.StateCallback() {
                             @Override
                             public void onOpened(CameraDevice cameraDevice) {
-                                Log.i(TAG, "CameraManager.openCamera id=" + id + " opened");
+                                Log.i(TAG, "CameraManager.openCamera(handler) id=" + id + " opened");
                                 latch.countDown();
                                 cameraDevice.close();
                             }
+
                             @Override
                             public void onDisconnected(CameraDevice cameraDevice) {
-                                Log.w(TAG, "CameraManager.openCamera id=" + id + " disconnected");
+                                Log.w(TAG, "CameraManager.openCamera(handler) id=" + id + " disconnected");
                                 latch.countDown();
                                 cameraDevice.close();
                             }
+
                             @Override
                             public void onError(CameraDevice cameraDevice, int error) {
-                                Log.w(TAG, "CameraManager.openCamera id=" + id + " error=" + error);
+                                Log.w(TAG, "CameraManager.openCamera(handler) id=" + id + " error=" + error);
                                 latch.countDown();
                                 cameraDevice.close();
                             }
                         }, cameraHandler);
                         latch.await(2, TimeUnit.SECONDS);
                     } catch (Throwable t) {
-                        Log.e(TAG, "openCamera id=" + id + " failed", t);
+                        Log.e(TAG, "openCamera(handler) id=" + id + " failed", t);
+                    }
+
+                    // CameraManager.openCamera(String, Executor, StateCallback)
+                    // -> camera.ts: CameraManager.openCamera[executor]
+                    // -> PROFILE_HOOKING_TYPE="CAMERA", event_type="camera.camera2.open"
+                    // API 28+ only; skipped on older devices.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ExecutorService cameraExecutor = Executors.newSingleThreadExecutor();
+                        try {
+                            CountDownLatch executorLatch = new CountDownLatch(1);
+                            manager.openCamera(id, cameraExecutor, new CameraDevice.StateCallback() {
+                                @Override
+                                public void onOpened(CameraDevice cameraDevice) {
+                                    Log.i(TAG, "CameraManager.openCamera(executor) id=" + id + " opened");
+                                    cameraDevice.close();
+                                    executorLatch.countDown();
+                                }
+
+                                @Override
+                                public void onDisconnected(CameraDevice cameraDevice) {
+                                    Log.w(TAG, "CameraManager.openCamera(executor) id=" + id + " disconnected");
+                                    cameraDevice.close();
+                                    executorLatch.countDown();
+                                }
+
+                                @Override
+                                public void onError(CameraDevice cameraDevice, int error) {
+                                    Log.w(TAG, "CameraManager.openCamera(executor) id=" + id + " error=" + error);
+                                    cameraDevice.close();
+                                    executorLatch.countDown();
+                                }
+                            });
+                            executorLatch.await(2, TimeUnit.SECONDS);
+                        } catch (Throwable t) {
+                            Log.e(TAG, "openCamera(executor) id=" + id + " failed", t);
+                        } finally {
+                            cameraExecutor.shutdown();
+                        }
+                    } else {
+                        Log.i(TAG, "CameraManager.openCamera(executor) skipped - API < 28");
                     }
                 }
 
