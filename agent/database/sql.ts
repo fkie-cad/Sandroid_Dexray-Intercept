@@ -1700,312 +1700,864 @@ function hook_sql_related_stuff(){
 }
 
 // the room library is a famous SQL library on Android
+// function hook_room_library() {
+//     safePerform("database:hook_room_library", () => {
+//         //console.log("ROOM hooks being installed");
+
+//         // Hook the Room.databaseBuilder method
+//         const Room = safeUse("androidx.room.Room", "database:hook_room_library");
+//         if (!Room) {
+//             return;
+//         }
+
+//         const databaseBuilderRef = safeOverload(
+//             Room.databaseBuilder,
+//             "database:Room.databaseBuilder[Context,Class,String]",
+//             "android.content.Context", "java.lang.Class", "java.lang.String"
+//         );
+//         if (databaseBuilderRef) {
+//             databaseBuilderRef.implementation = safeImplementation(
+//                 "database:Room.databaseBuilder[Context,Class,String]",
+//                 databaseBuilderRef,
+//                 function (original, context: any, klass: any, dbName: string) {
+//                     createDatabaseEvent("database.room.builder", {
+//                         method: "Room.databaseBuilder(Context, Class, String)",
+//                         database_name: dbName,
+//                         database_class: klass.toString(),
+//                         database_type: "Room"
+//                     });
+//                     return original.call(this, context, klass, dbName);
+//                 }
+//             );
+//         }
+
+//         // // Hook SQLiteDatabase.openOrCreateDatabase (only if SQLCipher is present)
+//         // const SQLiteDatabase = safeUse(
+//         //     "net.sqlcipher.database.SQLiteDatabase",
+//         //     "database:hook_room_library"
+//         // );
+//         // if (SQLiteDatabase) {
+//         //     const openOrCreate_File_String = safeOverload(
+//         //         SQLiteDatabase.openOrCreateDatabase,
+//         //         "database:SQLiteDatabase.openOrCreateDatabase[File,String]_Room",
+//         //         "java.io.File",
+//         //         "java.lang.String"
+//         //     );
+//         //     if (openOrCreate_File_String) {
+//         //         openOrCreate_File_String.implementation = safeImplementation(
+//         //             "database:SQLiteDatabase.openOrCreateDatabase[File,String]_Room",
+//         //             openOrCreate_File_String,
+//         //             function (original, file: any, password: string) {
+//         //                 const methodVal = "SQLiteDatabase.openOrCreateDatabase(File, String), ";
+//         //                 const logVal = `Opening or creating database with file: ${file.getAbsolutePath()} and password: ${password}`;
+//         //                 am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
+//         //                 //console.log(logVal);
+//         //                 return original.call(this, file, password);
+//         //             }
+//         //         );
+//         //     }
+
+//         //     const openOrCreate_String_String = safeOverload(
+//         //         SQLiteDatabase.openOrCreateDatabase,
+//         //         "database:SQLiteDatabase.openOrCreateDatabase[String,String]_Room",
+//         //         "java.lang.String",
+//         //         "java.lang.String"
+//         //     );
+//         //     if (openOrCreate_String_String) {
+//         //         openOrCreate_String_String.implementation = safeImplementation(
+//         //             "database:SQLiteDatabase.openOrCreateDatabase[String,String]_Room",
+//         //             openOrCreate_String_String,
+//         //             function (original, path: string, password: string) {
+//         //                 const methodVal = "SQLiteDatabase.openOrCreateDatabase(String, String), ";
+//         //                 const logVal = `Opening or creating database with path: ${path} and password: ${password}`;
+//         //                 am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
+//         //                 //console.log(logVal);
+//         //                 return original.call(this, path, password);
+//         //             }
+//         //         );
+//         //     }
+
+//         //     // Hook PRAGMA key setting for SQLCipher
+//         //     const execSQL_String_SQLCipherRoom = safeOverload(
+//         //         SQLiteDatabase.execSQL,
+//         //         "database:SQLiteDatabase.execSQL[String]_Room_SQLCipherPragma",
+//         //         "java.lang.String"
+//         //     );
+//         //     if (execSQL_String_SQLCipherRoom) {
+//         //         execSQL_String_SQLCipherRoom.implementation = safeImplementation(
+//         //             "database:SQLiteDatabase.execSQL[String]_Room_SQLCipherPragma",
+//         //             execSQL_String_SQLCipherRoom,
+//         //             function (original, sql: string) {
+//         //                 if (sql.toLowerCase().includes("pragma key")) {
+//         //                     createDatabaseEvent("database.sqlcipher.pragma", {
+//         //                         method: "SQLiteDatabase.execSQL(String)",
+//         //                         sql: sql,
+//         //                         pragma_type: "key",
+//         //                         database_type: "SQLCipher"
+//         //                     });
+//         //                 }
+//         //                 return original.call(this, sql);
+//         //             }
+//         //         );
+//         //     }
+//         // } // End if (SQLiteDatabase)
+
+//         // Hook SupportSQLiteOpenHelper.Callback onCreate / onOpen
+//         const SupportSQLiteOpenHelper_Callback = safeUse(
+//             "androidx.sqlite.db.SupportSQLiteOpenHelper$Callback",
+//             "database:hook_room_library"
+//         );
+//         if (SupportSQLiteOpenHelper_Callback) {
+//             const onCreateRef = SupportSQLiteOpenHelper_Callback.onCreate;
+//             if (onCreateRef) {
+//                 onCreateRef.implementation = safeImplementation(
+//                     "database:SupportSQLiteOpenHelper.Callback.onCreate",
+//                     onCreateRef,
+//                     function (original, db: any) {
+//                         createDatabaseEvent("database.room.callback", {
+//                             method: "SupportSQLiteOpenHelper.Callback.onCreate(SupportSQLiteDatabase)",
+//                             database_object: db.toString(),
+//                             callback_type: "onCreate",
+//                             database_type: "Room"
+//                         });
+//                         return original.call(this, db);
+//                     }
+//                 );
+//             }
+
+
+//             const onOpenRef = SupportSQLiteOpenHelper_Callback.onOpen;
+//             if (onOpenRef) {
+//                 onOpenRef.implementation = safeImplementation(
+//                     "database:SupportSQLiteOpenHelper.Callback.onOpen",
+//                     onOpenRef,
+//                     function (original, db: any) {
+//                         createDatabaseEvent("database.room.callback", {
+//                             method: "SupportSQLiteOpenHelper.Callback.onOpen(SupportSQLiteDatabase)",
+//                             database_object: db.toString(),
+//                             callback_type: "onOpen",
+//                             database_type: "Room"
+//                         });
+//                         return original.call(this, db);
+//                     }
+//                 );
+//             }
+//         } // End if (SupportSQLiteOpenHelper_Callback)
+
+
+//             // Hook DAO methods (insert, update, delete)
+//         const Dao = safeUse("androidx.room.RoomDatabase", "database:hook_room_library");
+//         if (Dao) {
+//             const insertRef = safeOverload(
+//                 Dao.insert,
+//                 "database:RoomDatabase.insert[Object]",
+//                 "java.lang.Object"
+//             );
+//             if (insertRef) {
+//                 insertRef.implementation = safeImplementation(
+//                     "database:RoomDatabase.insert[Object]",
+//                     insertRef,
+//                     function (original, entity: any) {
+//                         createDatabaseEvent("database.room.dao", {
+//                             method: "RoomDatabase.insert(Object)",
+//                             entity: entity.toString(),
+//                             dao_operation: "insert",
+//                             database_type: "Room"
+//                         });
+//                         return original.call(this, entity);
+//                     }
+//                 );
+//             }
+
+//             const updateRef = safeOverload(
+//                 Dao.update,
+//                 "database:RoomDatabase.update[Object]",
+//                 "java.lang.Object"
+//             );
+//             if (updateRef) {
+//                 updateRef.implementation = safeImplementation(
+//                     "database:RoomDatabase.update[Object]",
+//                     updateRef,
+//                     function (original, entity: any) {
+//                         createDatabaseEvent("database.room.dao", {
+//                             method: "RoomDatabase.update(Object)",
+//                             entity: entity.toString(),
+//                             dao_operation: "update",
+//                             database_type: "Room"
+//                         });
+//                         return original.call(this, entity);
+//                     }
+//                 );
+//             }
+
+//             const deleteRef = safeOverload(
+//                 Dao.delete,
+//                 "database:RoomDatabase.delete[Object]",
+//                 "java.lang.Object"
+//             );
+//             if (deleteRef) {
+//                 deleteRef.implementation = safeImplementation(
+//                     "database:RoomDatabase.delete[Object]",
+//                     deleteRef,
+//                     function (original, entity: any) {
+//                         createDatabaseEvent("database.room.dao", {
+//                             method: "RoomDatabase.delete(Object)",
+//                             entity: entity.toString(),
+//                             dao_operation: "delete",
+//                             database_type: "Room"
+//                         });
+//                         return original.call(this, entity);
+//                     }
+//                 );
+//             }
+//         } // End if (Dao)
+
+//         // Hook query execution (using same Dao reference as RoomDatabase)
+//         if (Dao) {
+//             const queryRef = safeOverload(
+//                 Dao.query,
+//                 "database:RoomDatabase.query[SupportSQLiteQuery]",
+//                 "androidx.sqlite.db.SupportSQLiteQuery"
+//             );
+//             if (queryRef) {
+//                 queryRef.implementation = safeImplementation(
+//                     "database:RoomDatabase.query[SupportSQLiteQuery]",
+//                     queryRef,
+//                     function (original, query: any) {
+//                         const methodVal = "RoomDatabase.query, ";
+//                         const logVal = `Query executed: ${query.toString()}`;
+//                         am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
+//                         return original.call(this, query);
+//                     }
+//                 );
+//             }
+//         } // End if (Dao)
+
+//         // Hook SupportSQLiteDatabase execSQL
+//         const SupportSQLiteDatabase = safeUse(
+//             "androidx.sqlite.db.SupportSQLiteDatabase",
+//             "database:hook_room_library"
+//         );
+//         if (SupportSQLiteDatabase) {
+//             const execSQL_String_RoomSupport = safeOverload(
+//                 SupportSQLiteDatabase.execSQL,
+//                 "database:SupportSQLiteDatabase.execSQL[String]",
+//                 "java.lang.String"
+//             );
+//             if (execSQL_String_RoomSupport) {
+//                 execSQL_String_RoomSupport.implementation = safeImplementation(
+//                     "database:SupportSQLiteDatabase.execSQL[String]",
+//                     execSQL_String_RoomSupport,
+//                     function (original, sql: string) {
+//                         const methodVal = "SupportSQLiteDatabase.execSQL, ";
+//                         const logVal = `Executing SQL: ${sql}`;
+//                         am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
+//                         return original.call(this, sql);
+//                     }
+//                 );
+//             }
+//         } // End if (SupportSQLiteDatabase)
+
+//         // Hook LiveData observe
+//         const LiveData = safeUse("androidx.lifecycle.LiveData", "database:hook_room_library");
+//         if (LiveData) {
+//             const observeRef = safeOverload(
+//                 LiveData.observe,
+//                 "database:LiveData.observe[LifecycleOwner,Observer]",
+//                 "androidx.lifecycle.LifecycleOwner",
+//                 "androidx.lifecycle.Observer"
+//             );
+//             if (observeRef) {
+//                 observeRef.implementation = safeImplementation(
+//                     "database:LiveData.observe[LifecycleOwner,Observer]",
+//                     observeRef,
+//                     function (original, owner: any, observer: any) {
+//                         const methodVal = "LiveData.observe, ";
+//                         const logVal = `LiveData observed with LifecycleOwner: ${owner.toString()}`;
+//                         am_send(PROFILE_HOOKING_TYPE, `event_type: Room.LiveData, ${methodVal}${logVal}`);
+//                         return original.call(this, owner, observer);
+//                     }
+//                 );
+//             }
+//         } // End if (LiveData)
+
+//         // Hook Flow collect
+//         const FlowCollector = safeUse(
+//             "kotlinx.coroutines.flow.FlowCollector",
+//             "database:hook_room_library"
+//         );
+//         if (FlowCollector) {
+//             const emitRef = safeOverload(
+//                 FlowCollector.emit,
+//                 "database:FlowCollector.emit[Object]",
+//                 "java.lang.Object"
+//             );
+//             if (emitRef) {
+//                 emitRef.implementation = safeImplementation(
+//                     "database:FlowCollector.emit[Object]",
+//                     emitRef,
+//                     function (original, value: any) {
+//                         const methodVal = "FlowCollector.emit, ";
+//                         const logVal = `Flow emitted value: ${value}`;
+//                         am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Flow, ${methodVal}${logVal}`);
+//                         return original.call(this, value);
+//                     }
+//                 );
+//             }
+//         } // End if (FlowCollector)
+
+//     });
+// }
+
 function hook_room_library() {
     safePerform("database:hook_room_library", () => {
-        //console.log("ROOM hooks being installed");
 
-        // Hook the Room.databaseBuilder method
-        const Room = safeUse("androidx.room.Room", "database:hook_room_library");
-        if (!Room) {
-            return;
+        const Room = safeUse(
+            "androidx.room.Room",
+            "database:hook_room_library"
+        );
+        const RoomDatabase = safeUse(
+            "androidx.room.RoomDatabase",
+            "database:hook_room_library"
+        );
+        const RoomOpenHelper = safeUse(
+            "androidx.room.RoomOpenHelper",
+            "database:hook_room_library"
+        );
+        const CoroutinesRoom = safeUse(
+            "androidx.room.CoroutinesRoom",
+            "database:hook_room_library"
+        );
+        const LiveData = safeUse(
+            "androidx.lifecycle.LiveData",
+            "database:hook_room_library"
+        );
+
+        const SupportSQLiteQuery = safeUse(
+            "androidx.sqlite.db.SupportSQLiteQuery",
+            "database:hook_room_library"
+        );
+        const SupportSQLiteProgram = safeUse(
+            "androidx.sqlite.db.SupportSQLiteProgram",
+            "database:hook_room_library"
+        );
+
+        function signatureOf(overload: any): string {
+            return overload.argumentTypes
+                .map((argument: any) => argument.className)
+                .join(", ");
         }
 
-        const databaseBuilderRef = safeOverload(
-            Room.databaseBuilder,
-            "database:Room.databaseBuilder[Context,Class,String]",
-            "android.content.Context", "java.lang.Class", "java.lang.String"
+        function getSupportDatabasePath(database: any): string | null {
+            try {
+                return database.getPath().toString();
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function getRoomDatabasePath(database: any): string | null {
+            try {
+                // SupportSQLiteOpenHelper exposes getWritableDatabase(), not
+                // getDatabase(). The Room database is already open by the
+                // time query/transaction/Flow hooks execute.
+                const supportDatabase =
+                    database.getOpenHelper().getWritableDatabase();
+
+                return getSupportDatabasePath(supportDatabase);
+            } catch (_) {
+                return null;
+            }
+        }
+
+        // Suppress internal delegation between RoomDatabase.query overloads.
+        const Thread = safeUse(
+            "java.lang.Thread",
+            "database:hook_room_library"
         );
-        if (databaseBuilderRef) {
-            databaseBuilderRef.implementation = safeImplementation(
-                "database:Room.databaseBuilder[Context,Class,String]",
-                databaseBuilderRef,
-                function (original, context: any, klass: any, dbName: string) {
-                    createDatabaseEvent("database.room.builder", {
-                        method: "Room.databaseBuilder(Context, Class, String)",
-                        database_name: dbName,
-                        database_class: klass.toString(),
-                        database_type: "Room"
-                    });
-                    return original.call(this, context, klass, dbName);
+        if (!Thread) return;
+
+        const roomQueryGuardDepths: Record<string, number> = {};
+
+        function getCurrentThreadKey(): string {
+            try {
+                return (Thread as any).currentThread().getId().toString();
+            } catch (_) {
+                return "unknown";
+            }
+        }
+
+        function isNestedRoomQuery(): boolean {
+            return (roomQueryGuardDepths[getCurrentThreadKey()] || 0) > 0;
+        }
+
+        function callWithRoomQueryGuard<T>(fn: () => T): T {
+            const threadKey = getCurrentThreadKey();
+            roomQueryGuardDepths[threadKey] =
+                (roomQueryGuardDepths[threadKey] || 0) + 1;
+
+            try {
+                return fn();
+            } finally {
+                roomQueryGuardDepths[threadKey]--;
+
+                if (roomQueryGuardDepths[threadKey] <= 0) {
+                    delete roomQueryGuardDepths[threadKey];
+                }
+            }
+        }
+
+        function serializeRoomValue(value: any): any {
+            if (value === null || value === undefined) {
+                return null;
+            }
+
+            if (
+                typeof value === "string" ||
+                typeof value === "number" ||
+                typeof value === "boolean"
+            ) {
+                return value;
+            }
+
+            try {
+                const className = value.getClass().getName().toString();
+                const typedValue = Java.cast(value, Java.use(className));
+
+                switch (className) {
+                    case "java.lang.String":
+                    case "java.lang.CharSequence":
+                    case "java.lang.Character":
+                        return typedValue.toString();
+
+                    case "java.lang.Boolean":
+                        return typedValue.booleanValue();
+
+                    case "java.lang.Byte":
+                    case "java.lang.Short":
+                    case "java.lang.Integer":
+                        return typedValue.intValue();
+
+                    case "java.lang.Long":
+                        return typedValue.toString();
+
+                    case "java.lang.Float":
+                    case "java.lang.Double":
+                        return typedValue.doubleValue();
+
+                    default:
+                        return {
+                            type: className,
+                            value: typedValue.toString()
+                        };
+                }
+            } catch (error) {
+                return `<error serializing value: ${error}>`;
+            }
+        }
+
+        function serializeRoomArray(values: any): any[] {
+            if (!values) {
+                return [];
+            }
+
+            try {
+                const result: any[] = [];
+
+                for (let index = 0; index < values.length; index++) {
+                    result.push(serializeRoomValue(values[index]));
+                }
+
+                return result;
+            } catch (_) {
+                return [];
+            }
+        }
+
+        let activeRoomBindArgs: any[] | null = null;
+        let roomBindRecorder: any | null = null;
+
+        function recordRoomBind(index: number, value: any): void {
+            if (!activeRoomBindArgs || index < 1) {
+                return;
+            }
+
+            activeRoomBindArgs[index - 1] = value;
+        }
+
+        if (SupportSQLiteProgram) {
+            try {
+                const RoomBindRecorder = (Java as any).registerClass({
+                    name: "com.dexray.intercept.RoomBindRecorder",
+                    implements: [SupportSQLiteProgram],
+                    methods: {
+                        bindNull: function (index: number): void {
+                            recordRoomBind(index, null);
+                        },
+
+                        bindLong: function (index: number, value: any): void {
+                            const decimalValue = value.toString();
+                            const numericValue = Number(decimalValue);
+
+                            // Preserve precision for values outside JavaScript's
+                            // safe-integer range; otherwise emit a JSON number.
+                            recordRoomBind(
+                                index,
+                                Number.isSafeInteger(numericValue)
+                                    ? numericValue
+                                    : decimalValue
+                            );
+                        },
+
+                        bindDouble: function (index: number, value: any): void {
+                            recordRoomBind(index, Number(value));
+                        },
+
+                        bindString: function (index: number, value: any): void {
+                            recordRoomBind(
+                                index,
+                                value !== null ? value.toString() : null
+                            );
+                        },
+
+                        bindBlob: function (index: number, value: any): void {
+                            recordRoomBind(index, serializeRoomValue(value));
+                        },
+
+                        clearBindings: function (): void {
+                            // bindTo() may call this before adding values.
+                        },
+
+                        close: function (): void {
+                            // No native resource is held by this recorder.
+                        }
+                    }
+                });
+
+                roomBindRecorder = RoomBindRecorder.$new();
+            } catch (error) {
+                devlog(
+                    `[HOOK] Failed to create Room bind recorder: ${error}`
+                );
+            }
+        }
+
+        function getSupportSQLiteQueryBindArgs(query: any): any[] {
+            if (!query || !SupportSQLiteQuery || !roomBindRecorder) {
+                return [];
+            }
+
+            const result: any[] = [];
+            const previousCollector = activeRoomBindArgs;
+            activeRoomBindArgs = result;
+
+            try {
+                // Public SupportSQLiteQuery API. Works for SimpleSQLiteQuery
+                // and custom implementations without relying on private fields.
+                const typedQuery = Java.cast(query, SupportSQLiteQuery);
+                typedQuery.bindTo(roomBindRecorder);
+                return result;
+            } catch (_) {
+                return [];
+            } finally {
+                activeRoomBindArgs = previousCollector;
+            }
+        }
+
+        function serializeTableNames(tableNames: any): string[] {
+            if (!tableNames) {
+                return [];
+            }
+
+            const result: string[] = [];
+
+            for (let index = 0; index < tableNames.length; index++) {
+                result.push(tableNames[index].toString());
+            }
+
+            return result;
+        }
+
+        // ------------------------------------------------------------
+        // Room.databaseBuilder(...)
+        // ------------------------------------------------------------
+
+        if (Room && (Room as any).databaseBuilder?.overloads) {
+            (Room as any).databaseBuilder.overloads.forEach(
+                (overload: any, index: number) => {
+                    const signature = signatureOf(overload);
+
+                    overload.implementation = safeImplementation(
+                        `database:Room.databaseBuilder[${index}]`,
+                        overload,
+                        function (original, ...args: any[]) {
+                            const databaseClass = args.length > 1 && args[1]
+                                ? args[1].toString()
+                                : null;
+                            const databaseName = args.length > 2 && args[2]
+                                ? args[2].toString()
+                                : null;
+
+                            createDatabaseEvent("database.room.builder", {
+                                method: `Room.databaseBuilder(${signature})`,
+                                database_name: databaseName,
+                                database_class: databaseClass,
+                                database_type: "Room",
+                                overload_signature: signature
+                            });
+
+                            return original.apply(this, args);
+                        }
+                    );
                 }
             );
         }
 
-        // // Hook SQLiteDatabase.openOrCreateDatabase (only if SQLCipher is present)
-        // const SQLiteDatabase = safeUse(
-        //     "net.sqlcipher.database.SQLiteDatabase",
-        //     "database:hook_room_library"
-        // );
-        // if (SQLiteDatabase) {
-        //     const openOrCreate_File_String = safeOverload(
-        //         SQLiteDatabase.openOrCreateDatabase,
-        //         "database:SQLiteDatabase.openOrCreateDatabase[File,String]_Room",
-        //         "java.io.File",
-        //         "java.lang.String"
-        //     );
-        //     if (openOrCreate_File_String) {
-        //         openOrCreate_File_String.implementation = safeImplementation(
-        //             "database:SQLiteDatabase.openOrCreateDatabase[File,String]_Room",
-        //             openOrCreate_File_String,
-        //             function (original, file: any, password: string) {
-        //                 const methodVal = "SQLiteDatabase.openOrCreateDatabase(File, String), ";
-        //                 const logVal = `Opening or creating database with file: ${file.getAbsolutePath()} and password: ${password}`;
-        //                 am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
-        //                 //console.log(logVal);
-        //                 return original.call(this, file, password);
-        //             }
-        //         );
-        //     }
+        // ------------------------------------------------------------
+        // RoomDatabase.query(...)
+        // ------------------------------------------------------------
 
-        //     const openOrCreate_String_String = safeOverload(
-        //         SQLiteDatabase.openOrCreateDatabase,
-        //         "database:SQLiteDatabase.openOrCreateDatabase[String,String]_Room",
-        //         "java.lang.String",
-        //         "java.lang.String"
-        //     );
-        //     if (openOrCreate_String_String) {
-        //         openOrCreate_String_String.implementation = safeImplementation(
-        //             "database:SQLiteDatabase.openOrCreateDatabase[String,String]_Room",
-        //             openOrCreate_String_String,
-        //             function (original, path: string, password: string) {
-        //                 const methodVal = "SQLiteDatabase.openOrCreateDatabase(String, String), ";
-        //                 const logVal = `Opening or creating database with path: ${path} and password: ${password}`;
-        //                 am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
-        //                 //console.log(logVal);
-        //                 return original.call(this, path, password);
-        //             }
-        //         );
-        //     }
+        if (RoomDatabase && (RoomDatabase as any).query?.overloads) {
+            (RoomDatabase as any).query.overloads.forEach(
+                (overload: any, index: number) => {
+                    const argumentTypes = overload.argumentTypes;
+                    const signature = signatureOf(overload);
 
-        //     // Hook PRAGMA key setting for SQLCipher
-        //     const execSQL_String_SQLCipherRoom = safeOverload(
-        //         SQLiteDatabase.execSQL,
-        //         "database:SQLiteDatabase.execSQL[String]_Room_SQLCipherPragma",
-        //         "java.lang.String"
-        //     );
-        //     if (execSQL_String_SQLCipherRoom) {
-        //         execSQL_String_SQLCipherRoom.implementation = safeImplementation(
-        //             "database:SQLiteDatabase.execSQL[String]_Room_SQLCipherPragma",
-        //             execSQL_String_SQLCipherRoom,
-        //             function (original, sql: string) {
-        //                 if (sql.toLowerCase().includes("pragma key")) {
-        //                     createDatabaseEvent("database.sqlcipher.pragma", {
-        //                         method: "SQLiteDatabase.execSQL(String)",
-        //                         sql: sql,
-        //                         pragma_type: "key",
-        //                         database_type: "SQLCipher"
-        //                     });
-        //                 }
-        //                 return original.call(this, sql);
-        //             }
-        //         );
-        //     }
-        // } // End if (SQLiteDatabase)
+                    overload.implementation = safeImplementation(
+                        `database:RoomDatabase.query[${index}]`,
+                        overload,
+                        function (original, ...args: any[]) {
+                            const firstType = argumentTypes[0]?.className;
+                            const hasCancellationSignal = argumentTypes.some(
+                                (argument: any) =>
+                                    argument.className === "android.os.CancellationSignal"
+                            );
 
-        // Hook SupportSQLiteOpenHelper.Callback onCreate / onOpen
-        const SupportSQLiteOpenHelper_Callback = safeUse(
-            "androidx.sqlite.db.SupportSQLiteOpenHelper$Callback",
-            "database:hook_room_library"
-        );
-        if (SupportSQLiteOpenHelper_Callback) {
-            const onCreateRef = SupportSQLiteOpenHelper_Callback.onCreate;
-            if (onCreateRef) {
-                onCreateRef.implementation = safeImplementation(
-                    "database:SupportSQLiteOpenHelper.Callback.onCreate",
-                    onCreateRef,
-                    function (original, db: any) {
-                        createDatabaseEvent("database.room.callback", {
-                            method: "SupportSQLiteOpenHelper.Callback.onCreate(SupportSQLiteDatabase)",
-                            database_object: db.toString(),
-                            callback_type: "onCreate",
-                            database_type: "Room"
-                        });
-                        return original.call(this, db);
-                    }
-                );
-            }
+                            if (!isNestedRoomQuery()) {
+                                let sql: string | null = null;
+                                let bindArgs: any[] = [];
 
+                                try {
+                                    if (
+                                        firstType ===
+                                        "androidx.sqlite.db.SupportSQLiteQuery"
+                                    ) {
+                                        sql = args[0]
+                                            ? args[0].getSql().toString()
+                                            : null;
 
-            const onOpenRef = SupportSQLiteOpenHelper_Callback.onOpen;
-            if (onOpenRef) {
-                onOpenRef.implementation = safeImplementation(
-                    "database:SupportSQLiteOpenHelper.Callback.onOpen",
-                    onOpenRef,
-                    function (original, db: any) {
-                        createDatabaseEvent("database.room.callback", {
-                            method: "SupportSQLiteOpenHelper.Callback.onOpen(SupportSQLiteDatabase)",
-                            database_object: db.toString(),
-                            callback_type: "onOpen",
-                            database_type: "Room"
-                        });
-                        return original.call(this, db);
-                    }
-                );
-            }
-        } // End if (SupportSQLiteOpenHelper_Callback)
+                                        bindArgs = getSupportSQLiteQueryBindArgs(
+                                            args[0]
+                                        );
+                                    } else if (firstType === "java.lang.String") {
+                                        sql = args[0] ? args[0].toString() : null;
+                                        bindArgs = serializeRoomArray(args[1]);
+                                    }
+                                } catch (error) {
+                                    sql = `<error extracting Room query: ${error}>`;
+                                }
 
+                                createDatabaseEvent("database.room.query", {
+                                    method: `RoomDatabase.query(${signature})`,
+                                    database_path: getRoomDatabasePath(this),
+                                    database_type: "Room",
+                                    sql: sql,
+                                    bind_args: bindArgs,
+                                    cancellation_signal: hasCancellationSignal &&
+                                        args[args.length - 1] !== null,
+                                    query_type: firstType ===
+                                        "androidx.sqlite.db.SupportSQLiteQuery"
+                                        ? "SupportSQLiteQuery"
+                                        : "String,Object[]",
+                                    overload_signature: signature
+                                });
+                            }
 
-            // Hook DAO methods (insert, update, delete)
-        const Dao = safeUse("androidx.room.RoomDatabase", "database:hook_room_library");
-        if (Dao) {
-            const insertRef = safeOverload(
-                Dao.insert,
-                "database:RoomDatabase.insert[Object]",
-                "java.lang.Object"
+                            return callWithRoomQueryGuard(
+                                () => original.apply(this, args)
+                            );
+                        }
+                    );
+                }
             );
-            if (insertRef) {
-                insertRef.implementation = safeImplementation(
-                    "database:RoomDatabase.insert[Object]",
-                    insertRef,
-                    function (original, entity: any) {
-                        createDatabaseEvent("database.room.dao", {
-                            method: "RoomDatabase.insert(Object)",
-                            entity: entity.toString(),
-                            dao_operation: "insert",
-                            database_type: "Room"
-                        });
-                        return original.call(this, entity);
-                    }
-                );
+        }
+
+        // ------------------------------------------------------------
+        // RoomDatabase transaction lifecycle
+        // ------------------------------------------------------------
+
+        function hookRoomTransactionMethod(
+            methodName: string,
+            transactionAction: string
+        ): void {
+            if (!RoomDatabase || !(RoomDatabase as any)[methodName]?.overloads) {
+                return;
             }
 
-            const updateRef = safeOverload(
-                Dao.update,
-                "database:RoomDatabase.update[Object]",
-                "java.lang.Object"
+            (RoomDatabase as any)[methodName].overloads.forEach(
+                (overload: any, index: number) => {
+                    const signature = signatureOf(overload);
+
+                    overload.implementation = safeImplementation(
+                        `database:RoomDatabase.${methodName}[${index}]`,
+                        overload,
+                        function (original, ...args: any[]) {
+                            createDatabaseEvent("database.room.transaction", {
+                                method: `RoomDatabase.${methodName}(${signature})`,
+                                database_path: getRoomDatabasePath(this),
+                                database_type: "Room",
+                                transaction_action: transactionAction,
+                                overload_signature: signature
+                            });
+
+                            return original.apply(this, args);
+                        }
+                    );
+                }
             );
-            if (updateRef) {
-                updateRef.implementation = safeImplementation(
-                    "database:RoomDatabase.update[Object]",
-                    updateRef,
-                    function (original, entity: any) {
-                        createDatabaseEvent("database.room.dao", {
-                            method: "RoomDatabase.update(Object)",
-                            entity: entity.toString(),
-                            dao_operation: "update",
-                            database_type: "Room"
-                        });
-                        return original.call(this, entity);
-                    }
-                );
-            }
+        }
 
-            const deleteRef = safeOverload(
-                Dao.delete,
-                "database:RoomDatabase.delete[Object]",
-                "java.lang.Object"
+        hookRoomTransactionMethod("beginTransaction", "begin");
+        hookRoomTransactionMethod("setTransactionSuccessful", "successful");
+        hookRoomTransactionMethod("endTransaction", "end");
+
+        // ------------------------------------------------------------
+        // Room Flow creation
+        // ------------------------------------------------------------
+
+        if (CoroutinesRoom && (CoroutinesRoom as any).createFlow?.overloads) {
+            (CoroutinesRoom as any).createFlow.overloads.forEach(
+                (overload: any, index: number) => {
+                    const signature = signatureOf(overload);
+
+                    overload.implementation = safeImplementation(
+                        `database:CoroutinesRoom.createFlow[${index}]`,
+                        overload,
+                        function (
+                            original,
+                            roomDatabase: any,
+                            inTransaction: boolean,
+                            tableNames: any,
+                            callable: any
+                        ) {
+                            createDatabaseEvent("database.room.flow_created", {
+                                method: `CoroutinesRoom.createFlow(${signature})`,
+                                database_path: getRoomDatabasePath(roomDatabase),
+                                database_type: "Room",
+                                table_names: serializeTableNames(tableNames),
+                                in_transaction: inTransaction,
+                                has_callable: callable !== null,
+                                overload_signature: signature
+                            });
+
+                            return original.call(
+                                this,
+                                roomDatabase,
+                                inTransaction,
+                                tableNames,
+                                callable
+                            );
+                        }
+                    );
+                }
             );
-            if (deleteRef) {
-                deleteRef.implementation = safeImplementation(
-                    "database:RoomDatabase.delete[Object]",
-                    deleteRef,
-                    function (original, entity: any) {
-                        createDatabaseEvent("database.room.dao", {
-                            method: "RoomDatabase.delete(Object)",
-                            entity: entity.toString(),
-                            dao_operation: "delete",
-                            database_type: "Room"
-                        });
-                        return original.call(this, entity);
-                    }
-                );
-            }
-        } // End if (Dao)
+        }
 
-        // Hook query execution (using same Dao reference as RoomDatabase)
-        if (Dao) {
-            const queryRef = safeOverload(
-                Dao.query,
-                "database:RoomDatabase.query[SupportSQLiteQuery]",
-                "androidx.sqlite.db.SupportSQLiteQuery"
+        // ------------------------------------------------------------
+        // LiveData observation
+        // ------------------------------------------------------------
+
+        function getRuntimeClassName(value: any): string | null {
+            if (!value) {
+                return null;
+            }
+
+            try {
+                return value.getClass().getName().toString();
+            } catch (_) {
+                try {
+                    return value.$className || null;
+                } catch (_) {
+                    return null;
+                }
+            }
+        }
+
+        if (LiveData && (LiveData as any).observe?.overloads) {
+            (LiveData as any).observe.overloads.forEach(
+                (overload: any, index: number) => {
+                    const signature = signatureOf(overload);
+
+                    overload.implementation = safeImplementation(
+                        `database:LiveData.observe[${index}]`,
+                        overload,
+                        function (original, owner: any, observer: any) {
+                            const ownerClass = getRuntimeClassName(owner);
+                            const observerClass = getRuntimeClassName(observer);
+
+                            createDatabaseEvent("database.room.observe", {
+                                method: `LiveData.observe(${signature})`,
+                                database_type: "Room",
+                                owner_class: ownerClass,
+                                observer_class: observerClass,
+                                overload_signature: signature
+                            });
+
+                            return original.call(this, owner, observer);
+                        }
+                    );
+                }
             );
-            if (queryRef) {
-                queryRef.implementation = safeImplementation(
-                    "database:RoomDatabase.query[SupportSQLiteQuery]",
-                    queryRef,
-                    function (original, query: any) {
-                        const methodVal = "RoomDatabase.query, ";
-                        const logVal = `Query executed: ${query.toString()}`;
-                        am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
-                        return original.call(this, query);
-                    }
-                );
-            }
-        } // End if (Dao)
+        }
 
-        // Hook SupportSQLiteDatabase execSQL
-        const SupportSQLiteDatabase = safeUse(
-            "androidx.sqlite.db.SupportSQLiteDatabase",
-            "database:hook_room_library"
-        );
-        if (SupportSQLiteDatabase) {
-            const execSQL_String_RoomSupport = safeOverload(
-                SupportSQLiteDatabase.execSQL,
-                "database:SupportSQLiteDatabase.execSQL[String]",
-                "java.lang.String"
+        // ------------------------------------------------------------
+        // Concrete Room lifecycle callbacks
+        // ------------------------------------------------------------
+
+        function hookRoomOpenHelperMethod(
+            methodName: string,
+            callbackType: string
+        ): void {
+            if (!RoomOpenHelper || !(RoomOpenHelper as any)[methodName]?.overloads) {
+                return;
+            }
+
+            (RoomOpenHelper as any)[methodName].overloads.forEach(
+                (overload: any, index: number) => {
+                    const signature = signatureOf(overload);
+
+                    overload.implementation = safeImplementation(
+                        `database:RoomOpenHelper.${methodName}[${index}]`,
+                        overload,
+                        function (original, ...args: any[]) {
+                            const supportDatabase = args[0];
+                            const oldVersion = methodName === "onUpgrade"
+                                ? args[1]
+                                : null;
+                            const newVersion = methodName === "onUpgrade"
+                                ? args[2]
+                                : null;
+
+                            createDatabaseEvent("database.room.callback", {
+                                method: `RoomOpenHelper.${methodName}(${signature})`,
+                                database_path: getSupportDatabasePath(supportDatabase),
+                                database_type: "Room",
+                                callback_type: callbackType,
+                                old_version: oldVersion,
+                                new_version: newVersion,
+                                overload_signature: signature
+                            });
+
+                            return original.apply(this, args);
+                        }
+                    );
+                }
             );
-            if (execSQL_String_RoomSupport) {
-                execSQL_String_RoomSupport.implementation = safeImplementation(
-                    "database:SupportSQLiteDatabase.execSQL[String]",
-                    execSQL_String_RoomSupport,
-                    function (original, sql: string) {
-                        const methodVal = "SupportSQLiteDatabase.execSQL, ";
-                        const logVal = `Executing SQL: ${sql}`;
-                        am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
-                        return original.call(this, sql);
-                    }
-                );
-            }
-        } // End if (SupportSQLiteDatabase)
+        }
 
-        // Hook LiveData observe
-        const LiveData = safeUse("androidx.lifecycle.LiveData", "database:hook_room_library");
-        if (LiveData) {
-            const observeRef = safeOverload(
-                LiveData.observe,
-                "database:LiveData.observe[LifecycleOwner,Observer]",
-                "androidx.lifecycle.LifecycleOwner",
-                "androidx.lifecycle.Observer"
-            );
-            if (observeRef) {
-                observeRef.implementation = safeImplementation(
-                    "database:LiveData.observe[LifecycleOwner,Observer]",
-                    observeRef,
-                    function (original, owner: any, observer: any) {
-                        const methodVal = "LiveData.observe, ";
-                        const logVal = `LiveData observed with LifecycleOwner: ${owner.toString()}`;
-                        am_send(PROFILE_HOOKING_TYPE, `event_type: Room.LiveData, ${methodVal}${logVal}`);
-                        return original.call(this, owner, observer);
-                    }
-                );
-            }
-        } // End if (LiveData)
-
-        // Hook Flow collect
-        const FlowCollector = safeUse(
-            "kotlinx.coroutines.flow.FlowCollector",
-            "database:hook_room_library"
-        );
-        if (FlowCollector) {
-            const emitRef = safeOverload(
-                FlowCollector.emit,
-                "database:FlowCollector.emit[Object]",
-                "java.lang.Object"
-            );
-            if (emitRef) {
-                emitRef.implementation = safeImplementation(
-                    "database:FlowCollector.emit[Object]",
-                    emitRef,
-                    function (original, value: any) {
-                        const methodVal = "FlowCollector.emit, ";
-                        const logVal = `Flow emitted value: ${value}`;
-                        am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Flow, ${methodVal}${logVal}`);
-                        return original.call(this, value);
-                    }
-                );
-            }
-        } // End if (FlowCollector)
-
+        hookRoomOpenHelperMethod("onCreate", "onCreate");
+        hookRoomOpenHelperMethod("onOpen", "onOpen");
+        hookRoomOpenHelperMethod("onUpgrade", "onUpgrade");
     });
 }
 
