@@ -2,11 +2,12 @@
 # -*- coding: utf-8 -*-
 
 from typing import Optional
+import json 
 from .base import BaseFormatter
 from ..models.events import (
     Event, FileSystemEvent, CryptoEvent, NetworkEvent, 
-    ProcessEvent, IPCEvent, ServiceEvent, DEXEvent,
-    JNIEvent
+    ProcessEvent, IPCEvent, ServiceEvent, DatabaseEvent,
+    DEXEvent, JNIEvent
 )
 from ..utils.hexdump import hexdump
 from ..utils.string_utils import truncate_string
@@ -36,6 +37,8 @@ class ConsoleFormatter(BaseFormatter):
             return self._format_ipc_event(event)
         elif isinstance(event, ServiceEvent):
             return self._format_service_event(event)
+        elif isinstance(event, DatabaseEvent):
+            return self._format_database_event(event)
         elif isinstance(event, DEXEvent):
             return self._format_dex_event(event)
         elif isinstance(event,JNIEvent):
@@ -561,6 +564,134 @@ class ConsoleFormatter(BaseFormatter):
         
         lines.append("")  # Empty line
         return '\n'.join(lines)
+    
+    def _format_database_event(self, event: DatabaseEvent) -> str:
+        """Format database events."""
+        lines = []
+
+        if event.event_type.startswith("database.sqlite."):
+            database_label = "SQLite"
+        elif event.event_type.startswith("database.sqlcipher."):
+            database_label = "SQLCipher"
+        elif event.event_type.startswith("database.room."):
+            database_label = "Room"
+        elif event.event_type.startswith("database.wcdb."):
+            database_label = "WCDB"
+        elif event.event_type.startswith("database.native."):
+            database_label = "Native SQLite"
+        else:
+            database_label = event.database_type or "Database"
+
+        lines.append(f"\n[*] [{database_label}] {event.event_type}:")
+
+        if event.method:
+            lines.append(f"[*] Method: {event.method}")
+
+        if event.database_path:
+            lines.append(f"[*] Database: {event.database_path}")
+
+        if event.table:
+            lines.append(f"[*] Table: {event.table}")
+
+        if event.sql:
+            lines.append(f"[*] SQL: {truncate_string(event.sql, 300)}")
+
+        if event.bind_args:
+            lines.append(
+                "[*] Bind Args: " +
+                truncate_string(json.dumps(event.bind_args, ensure_ascii=False), 300)
+            )
+
+        if event.content_values is not None:
+            lines.append(
+                "[*] Values: " +
+                truncate_string(json.dumps(event.content_values, ensure_ascii=False), 300)
+            )
+
+        if event.columns:
+            lines.append(f"[*] Columns: {', '.join(map(str, event.columns))}")
+
+        if event.where_clause:
+            lines.append(f"[*] Where: {event.where_clause}")
+
+        if event.where_args:
+            lines.append(
+                "[*] Where Args: " +
+                truncate_string(json.dumps(event.where_args, ensure_ascii=False), 200)
+            )
+
+        if event.group_by:
+            lines.append(f"[*] Group By: {event.group_by}")
+
+        if event.having:
+            lines.append(f"[*] Having: {event.having}")
+
+        if event.order_by:
+            lines.append(f"[*] Order By: {event.order_by}")
+
+        if event.limit:
+            lines.append(f"[*] Limit: {event.limit}")
+
+        if event.distinct is not None:
+            lines.append(f"[*] Distinct: {event.distinct}")
+
+        if event.edit_table:
+            lines.append(f"[*] Edit Table: {event.edit_table}")
+
+        if event.flags is not None:
+            flag_description = (
+                f" ({event.flags_description})"
+                if event.flags_description else ""
+            )
+            lines.append(f"[*] Flags: {event.flags}{flag_description}")
+
+        if event.create_if_necessary is not None:
+            lines.append(f"[*] Create If Necessary: {event.create_if_necessary}")
+
+        if event.has_factory is not None:
+            lines.append(f"[*] Custom Factory: {event.has_factory}")
+
+        if event.has_error_handler is not None:
+            lines.append(f"[*] Error Handler: {event.has_error_handler}")
+
+        if event.conflict_algorithm is not None:
+            lines.append(f"[*] Conflict Algorithm: {event.conflict_algorithm}")
+
+        if event.cancellation_signal is not None:
+            lines.append(f"[*] Cancellation Signal: {event.cancellation_signal}")
+
+        if event.throw_on_error is not None:
+            lines.append(f"[*] Throw On Error: {event.throw_on_error}")
+
+        if event.transaction_action:
+            lines.append(f"[*] Transaction: {event.transaction_action}")
+
+        if event.rows_affected is not None:
+            lines.append(f"[*] Rows Affected: {event.rows_affected}")
+
+        if event.result_code is not None:
+            lines.append(f"[*] Result Code: {event.result_code}")
+
+        if event.status:
+            lines.append(f"[*] Status: {event.status}")
+
+        if event.access_type:
+            lines.append(f"[*] Access Type: {event.access_type}")
+
+        if event.password:
+            lines.append(f"[*] Password: {truncate_string(event.password, 100)}")
+
+        if event.callback_type:
+            lines.append(f"[*] Callback: {event.callback_type}")
+
+        if event.database_name:
+            lines.append(f"[*] Database Name: {event.database_name}")
+
+        if event.database_class:
+            lines.append(f"[*] Database Class: {event.database_class}")
+
+        lines.append("")
+        return "\n".join(lines)
     
     def _format_dex_event(self, event: DEXEvent) -> str:
         """Format DEX events"""

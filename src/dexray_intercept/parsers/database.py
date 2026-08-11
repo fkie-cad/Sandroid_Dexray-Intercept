@@ -51,7 +51,11 @@ class DatabaseParser(BaseParser):
             'throw_on_error': 'throw_on_error',
             'null_column_hack': 'null_column_hack',
             'cancellation_signal': 'cancellation_signal',
-            'pragma_type': 'pragma_type'
+            'pragma_type': 'pragma_type',
+            'distinct': 'distinct',
+            'edit_table': 'edit_table',
+            'conflict_algorithm': 'conflict_algorithm',
+            'has_error_handler': 'has_error_handler',
         }
         
         for json_field, event_field in field_mapping.items():

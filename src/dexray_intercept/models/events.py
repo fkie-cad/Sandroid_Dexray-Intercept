@@ -491,6 +491,12 @@ class DatabaseEvent(Event):
         self.null_column_hack = None
         self.cancellation_signal = None
         self.pragma_type = None
+
+        # query / conflict / open details
+        self.distinct = None
+        self.edit_table = None
+        self.conflict_algorithm = None
+        self.has_error_handler = None
     
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
@@ -503,7 +509,8 @@ class DatabaseEvent(Event):
             'has_factory', 'transaction_action', 'dao_operation', 'entity',
             'callback_type', 'database_object', 'database_name', 'database_class',
             'result_code', 'status', 'rows_affected', 'throw_on_error',
-            'null_column_hack', 'cancellation_signal', 'pragma_type'
+            'null_column_hack', 'cancellation_signal', 'pragma_type',
+            'distinct', 'edit_table', 'conflict_algorithm', 'has_error_handler'
         ]
         
         for field in fields:
