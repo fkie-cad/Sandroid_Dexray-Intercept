@@ -5,6 +5,7 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.DefaultDatabaseErrorHandler;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteTransactionListener;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.util.Log;
@@ -15,6 +16,8 @@ import androidx.sqlite.db.SimpleSQLiteQuery;
 import androidx.sqlite.db.SupportSQLiteQuery;
 
 import java.io.File;
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class MainActivity extends Activity {
@@ -601,59 +604,388 @@ public class MainActivity extends Activity {
     // com.tencent.wcdb.database
     // ----------------------------------------------------------------
 
+    private File freshWcdbDatabaseFile(String name) {
+        deleteDatabase(name);
+        return getDatabasePath(name);
+    }
+
+    private void initializeAndCloseWcdbDatabase(
+            com.tencent.wcdb.database.SQLiteDatabase database,
+            String label
+    ) {
+        try {
+            database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS overload_probe " +
+                    "(id INTEGER PRIMARY KEY, label TEXT)"
+            );
+            Log.i(TAG, label + " OK: " + database.getPath());
+        } finally {
+            database.close();
+        }
+    }
+
+
     private void runWcdbTests() {
         Log.i(TAG, "runWcdbTests");
+
         com.tencent.wcdb.database.SQLiteDatabase db = null;
+
         try {
+            final int openFlags =
+                    com.tencent.wcdb.database.SQLiteDatabase.CREATE_IF_NECESSARY
+                            | com.tencent.wcdb.database.SQLiteDatabase.OPEN_READWRITE;
+            final byte[] encryptedPassword =
+                    "wcdb_e2e_pass".getBytes(StandardCharsets.UTF_8);
+
+            // ------------------------------------------------------------
+            // Existing WCDB CRUD / transaction coverage
+            // ------------------------------------------------------------
+
             String path = getDatabasePath(WCDB_DB_NAME).getAbsolutePath();
 
             db = com.tencent.wcdb.database.SQLiteDatabase.openDatabase(
-                    path, null,
-                    com.tencent.wcdb.database.SQLiteDatabase.CREATE_IF_NECESSARY
-                            | com.tencent.wcdb.database.SQLiteDatabase.OPEN_READWRITE);
-            Log.i(TAG, "WCDB.openDatabase OK");
+                    path,
+                    null,
+                    openFlags
+            );
+            Log.i(TAG, "WCDB.openDatabase(String,CursorFactory,int) OK");
 
             com.tencent.wcdb.database.SQLiteDatabase db2 =
-                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(path, null);
-            Log.i(TAG, "WCDB.openOrCreateDatabase OK");
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            path,
+                            null
+                    );
+            Log.i(TAG, "WCDB.openOrCreateDatabase(String,CursorFactory) OK");
             db2.close();
 
             db.execSQL("DROP TABLE IF EXISTS " + WCDB_TABLE);
-            db.execSQL("CREATE TABLE " + WCDB_TABLE
-                    + " (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER)");
+            db.execSQL(
+                    "CREATE TABLE " + WCDB_TABLE +
+                    " (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER)"
+            );
 
-            db.execSQL("INSERT INTO " + WCDB_TABLE + " (name,age) VALUES (?,?)",
-                    new Object[]{"Alice", 30});
+            db.execSQL(
+                    "INSERT INTO " + WCDB_TABLE + " (name,age) VALUES (?,?)",
+                    new Object[]{"Alice", 30}
+            );
 
             ContentValues cv = new ContentValues();
             cv.put("name", "Bob");
             cv.put("age", 40);
+
             long rowInsert = db.insert(WCDB_TABLE, null, cv);
             Log.i(TAG, "WCDB.insert rowId=" + rowInsert);
 
-            Cursor c = db.rawQuery(
+            Cursor cursor = db.rawQuery(
                     "SELECT id,name,age FROM " + WCDB_TABLE + " WHERE age>?",
-                    new String[]{"20"});
-            Log.i(TAG, "WCDB.rawQuery count=" + c.getCount());
-            c.close();
+                    new Object[]{"20"}
+            );
+            Log.i(TAG, "WCDB.rawQuery(Object[]) count=" + cursor.getCount());
+            cursor.close();
+
+            // execSQL(String, Object[], CancellationSignal)
+            com.tencent.wcdb.support.CancellationSignal execSignal =
+                    new com.tencent.wcdb.support.CancellationSignal();
+
+            db.execSQL(
+                    "INSERT INTO " + WCDB_TABLE + " (name,age) VALUES (?,?)",
+                    new Object[]{"CancelExec", 35},
+                    execSignal
+            );
+            Log.i(TAG, "WCDB.execSQL(Object[],CancellationSignal) OK");
+
+            // rawQuery(String, Object[], CancellationSignal)
+            com.tencent.wcdb.support.CancellationSignal querySignal =
+                    new com.tencent.wcdb.support.CancellationSignal();
+
+            Cursor cancellationCursor = db.rawQuery(
+                    "SELECT id,name,age FROM " + WCDB_TABLE + " WHERE age>=?",
+                    new Object[]{"30"},
+                    querySignal
+            );
+            Log.i(TAG, "WCDB.rawQuery(Object[],CancellationSignal) count="
+                    + cancellationCursor.getCount());
+            cancellationCursor.close();
 
             ContentValues upd = new ContentValues();
             upd.put("age", 31);
-            int rowsUpd = db.update(WCDB_TABLE, upd, "name=?", new String[]{"Alice"});
+
+            int rowsUpd = db.update(
+                    WCDB_TABLE,
+                    upd,
+                    "name=?",
+                    new String[]{"Alice"}
+            );
             Log.i(TAG, "WCDB.update rows=" + rowsUpd);
 
-            int rowsDel = db.delete(WCDB_TABLE, "name=?", new String[]{"Bob"});
+            int rowsDel = db.delete(
+                    WCDB_TABLE,
+                    "name=?",
+                    new String[]{"Bob"}
+            );
             Log.i(TAG, "WCDB.delete rows=" + rowsDel);
 
+            // beginTransaction() no-argument overload
             db.beginTransaction();
-            db.execSQL("INSERT INTO " + WCDB_TABLE + " (name,age) VALUES ('Charlie',25)");
+            db.execSQL(
+                    "INSERT INTO " + WCDB_TABLE + " (name,age) VALUES ('Charlie',25)"
+            );
             db.setTransactionSuccessful();
             db.endTransaction();
+            Log.i(TAG, "WCDB.beginTransaction() lifecycle OK");
+
+            // beginTransaction(SQLiteTransactionListener, boolean) is private in
+            // WCDB. Invoke it reflectively to exercise the runtime overload.
+            try {
+                SQLiteTransactionListener listener = new SQLiteTransactionListener() {
+                    @Override
+                    public void onBegin() {
+                        Log.i(TAG, "WCDB transaction listener: onBegin");
+                    }
+
+                    @Override
+                    public void onCommit() {
+                        Log.i(TAG, "WCDB transaction listener: onCommit");
+                    }
+
+                    @Override
+                    public void onRollback() {
+                        Log.i(TAG, "WCDB transaction listener: onRollback");
+                    }
+                };
+
+                Method beginTransactionWithListener =
+                        com.tencent.wcdb.database.SQLiteDatabase.class.getDeclaredMethod(
+                                "beginTransaction",
+                                SQLiteTransactionListener.class,
+                                boolean.class
+                        );
+
+                beginTransactionWithListener.setAccessible(true);
+                beginTransactionWithListener.invoke(db, listener, false);
+
+                db.execSQL(
+                        "INSERT INTO " + WCDB_TABLE +
+                        " (name,age) VALUES ('ReflectiveListener',26)"
+                );
+                db.setTransactionSuccessful();
+                db.endTransaction();
+
+                Log.i(TAG, "WCDB.beginTransaction(listener,false) reflective lifecycle OK");
+            } catch (Throwable t) {
+                Log.w(
+                        TAG,
+                        "WCDB.beginTransaction(listener,false) reflective call failed: " +
+                                t.getClass().getSimpleName() + " - " + t.getMessage()
+                );
+            }
+
+            // ------------------------------------------------------------
+            // openDatabase(...) overload matrix: 5 overloads
+            // ------------------------------------------------------------
+
+            File openPlain3 = freshWcdbDatabaseFile("wcdb_open_plain_3.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openDatabase(
+                            openPlain3.getAbsolutePath(),
+                            null,
+                            openFlags
+                    ),
+                    "WCDB.openDatabase(String,CursorFactory,int)"
+            );
+
+            File openPlain4 = freshWcdbDatabaseFile("wcdb_open_plain_4.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openDatabase(
+                            openPlain4.getAbsolutePath(),
+                            null,
+                            openFlags,
+                            null
+                    ),
+                    "WCDB.openDatabase(String,CursorFactory,int,DatabaseErrorHandler)"
+            );
+
+            File openPlain5 = freshWcdbDatabaseFile("wcdb_open_plain_5.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openDatabase(
+                            openPlain5.getAbsolutePath(),
+                            null,
+                            openFlags,
+                            null,
+                            1
+                    ),
+                    "WCDB.openDatabase(String,CursorFactory,int,DatabaseErrorHandler,int)"
+            );
+
+            File openEncrypted6 = freshWcdbDatabaseFile("wcdb_open_encrypted_6.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openDatabase(
+                            openEncrypted6.getAbsolutePath(),
+                            encryptedPassword,
+                            null,
+                            null,
+                            openFlags,
+                            null
+                    ),
+                    "WCDB.openDatabase(String,byte[],SQLiteCipherSpec,CursorFactory,int,DatabaseErrorHandler)"
+            );
+
+            File openEncrypted7 = freshWcdbDatabaseFile("wcdb_open_encrypted_7.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openDatabase(
+                            openEncrypted7.getAbsolutePath(),
+                            encryptedPassword,
+                            null,
+                            null,
+                            openFlags,
+                            null,
+                            1
+                    ),
+                    "WCDB.openDatabase(String,byte[],SQLiteCipherSpec,CursorFactory,int,DatabaseErrorHandler,int)"
+            );
+
+            // ------------------------------------------------------------
+            // openOrCreateDatabase(...) overload matrix: 12 overloads
+            // ------------------------------------------------------------
+
+            File createFile2 = freshWcdbDatabaseFile("wcdb_create_file_2.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createFile2,
+                            null
+                    ),
+                    "WCDB.openOrCreateDatabase(File,CursorFactory)"
+            );
+
+            File createFile5Cipher = freshWcdbDatabaseFile("wcdb_create_file_cipher_5.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createFile5Cipher,
+                            encryptedPassword,
+                            null,
+                            null,
+                            null
+                    ),
+                    "WCDB.openOrCreateDatabase(File,byte[],SQLiteCipherSpec,CursorFactory,DatabaseErrorHandler)"
+            );
+
+            File createFile6Cipher = freshWcdbDatabaseFile("wcdb_create_file_cipher_6.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createFile6Cipher,
+                            encryptedPassword,
+                            null,
+                            null,
+                            null,
+                            1
+                    ),
+                    "WCDB.openOrCreateDatabase(File,byte[],SQLiteCipherSpec,CursorFactory,DatabaseErrorHandler,int)"
+            );
+
+            File createFile4 = freshWcdbDatabaseFile("wcdb_create_file_4.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createFile4,
+                            encryptedPassword,
+                            null,
+                            null
+                    ),
+                    "WCDB.openOrCreateDatabase(File,byte[],CursorFactory,DatabaseErrorHandler)"
+            );
+
+            File createFile5 = freshWcdbDatabaseFile("wcdb_create_file_5.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createFile5,
+                            encryptedPassword,
+                            null,
+                            null,
+                            1
+                    ),
+                    "WCDB.openOrCreateDatabase(File,byte[],CursorFactory,DatabaseErrorHandler,int)"
+            );
+
+            File createPath2 = freshWcdbDatabaseFile("wcdb_create_path_2.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createPath2.getAbsolutePath(),
+                            null
+                    ),
+                    "WCDB.openOrCreateDatabase(String,CursorFactory)"
+            );
+
+            File createPath3Flags = freshWcdbDatabaseFile("wcdb_create_path_flags_3.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createPath3Flags.getAbsolutePath(),
+                            null,
+                            openFlags
+                    ),
+                    "WCDB.openOrCreateDatabase(String,CursorFactory,int)"
+            );
+
+            File createPath3Handler = freshWcdbDatabaseFile("wcdb_create_path_handler_3.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createPath3Handler.getAbsolutePath(),
+                            null,
+                            null
+                    ),
+                    "WCDB.openOrCreateDatabase(String,CursorFactory,DatabaseErrorHandler)"
+            );
+
+            File createPath3Boolean = freshWcdbDatabaseFile("wcdb_create_path_boolean_3.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createPath3Boolean.getAbsolutePath(),
+                            null,
+                            false
+                    ),
+                    "WCDB.openOrCreateDatabase(String,CursorFactory,boolean)"
+            );
+
+            File createPath6Cipher = freshWcdbDatabaseFile("wcdb_create_path_cipher_6.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createPath6Cipher.getAbsolutePath(),
+                            encryptedPassword,
+                            null,
+                            null,
+                            null,
+                            1
+                    ),
+                    "WCDB.openOrCreateDatabase(String,byte[],SQLiteCipherSpec,CursorFactory,DatabaseErrorHandler,int)"
+            );
+
+            File createPath4 = freshWcdbDatabaseFile("wcdb_create_path_4.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createPath4.getAbsolutePath(),
+                            encryptedPassword,
+                            null,
+                            null
+                    ),
+                    "WCDB.openOrCreateDatabase(String,byte[],CursorFactory,DatabaseErrorHandler)"
+            );
+
+            File createPath5 = freshWcdbDatabaseFile("wcdb_create_path_5.db");
+            initializeAndCloseWcdbDatabase(
+                    com.tencent.wcdb.database.SQLiteDatabase.openOrCreateDatabase(
+                            createPath5.getAbsolutePath(),
+                            encryptedPassword,
+                            null,
+                            null,
+                            1
+                    ),
+                    "WCDB.openOrCreateDatabase(String,byte[],CursorFactory,DatabaseErrorHandler,int)"
+            );
 
         } catch (Throwable t) {
             Log.e(TAG, "runWcdbTests error", t);
         } finally {
-            if (db != null) db.close();
+            if (db != null) {
+                db.close();
+            }
         }
     }
 }
