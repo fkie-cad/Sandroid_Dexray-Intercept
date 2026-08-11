@@ -12,6 +12,8 @@ import android.util.Log;
 
 import androidx.lifecycle.ProcessLifecycleOwner;
 import androidx.room.Room;
+import androidx.room.migration.Migration;
+import androidx.sqlite.db.SupportSQLiteDatabase;
 import androidx.sqlite.db.SimpleSQLiteQuery;
 import androidx.sqlite.db.SupportSQLiteQuery;
 
@@ -68,6 +70,14 @@ public class MainActivity extends Activity {
                 Log.i(TAG, "runRoomTests completed");
             } catch (Throwable t) {
                 Log.e(TAG, "runRoomTests failed", t);
+            }
+
+            // 2b) androidx.room - schema migration / RoomOpenHelper.onUpgrade
+            try {
+                runRoomUpgradeTests();
+                Log.i(TAG, "runRoomUpgradeTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "runRoomUpgradeTests failed", t);
             }
 
             // 3) net.sqlcipher.database - open, exec, transaction, pragma
@@ -366,6 +376,63 @@ public class MainActivity extends Activity {
             List<User> rawResult = dao.rawSelect(rawQuery);
             Log.i(TAG, "rawSelect count: " + rawResult.size());
 
+            // Direct RoomDatabase.query overload coverage.
+            // DAO rawSelect above may route through RoomDatabase.query internally,
+            // but these explicit calls ensure every public overload is exercised.
+
+            // 1) RoomDatabase.query(SupportSQLiteQuery)
+            SupportSQLiteQuery directSupportQuery = new SimpleSQLiteQuery(
+                    "SELECT * FROM e2e_user WHERE age >= ?",
+                    new Object[]{20}
+            );
+            Cursor supportQueryCursor = db.query(directSupportQuery);
+            try {
+                Log.i(TAG, "RoomDatabase.query(SupportSQLiteQuery) count="
+                        + supportQueryCursor.getCount());
+            } finally {
+                supportQueryCursor.close();
+            }
+
+            // 2) RoomDatabase.query(SupportSQLiteQuery, CancellationSignal)
+            SupportSQLiteQuery cancellableSupportQuery = new SimpleSQLiteQuery(
+                    "SELECT * FROM e2e_user WHERE name = ?",
+                    new Object[]{"Alice"}
+            );
+            Cursor cancellableQueryCursor = db.query(
+                    cancellableSupportQuery,
+                    new CancellationSignal()
+            );
+            try {
+                Log.i(TAG, "RoomDatabase.query(SupportSQLiteQuery,CancellationSignal) count="
+                        + cancellableQueryCursor.getCount());
+            } finally {
+                cancellableQueryCursor.close();
+            }
+
+            // 3) RoomDatabase.query(String, Object[])
+            Cursor stringQueryCursor = db.query(
+                    "SELECT * FROM e2e_user WHERE age < ?",
+                    new Object[]{50}
+            );
+            try {
+                Log.i(TAG, "RoomDatabase.query(String,Object[]) count="
+                        + stringQueryCursor.getCount());
+            } finally {
+                stringQueryCursor.close();
+            }
+
+            // Direct RoomDatabase transaction lifecycle coverage.
+            // No database mutation is needed; this explicitly exercises
+            // beginTransaction(), setTransactionSuccessful(), and endTransaction().
+            db.beginTransaction();
+            try {
+                db.setTransactionSuccessful();
+                Log.i(TAG, "RoomDatabase direct transaction marked successful");
+            } finally {
+                db.endTransaction();
+                Log.i(TAG, "RoomDatabase direct transaction ended");
+            }
+
             bob.id = (int) idBob;
             int delCnt = dao.delete(bob);
             Log.i(TAG, "Deleted Bob rows=" + delCnt);
@@ -389,6 +456,78 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ----------------------------------------------------------------
+    // androidx.room migration / RoomOpenHelper.onUpgrade
+    // ----------------------------------------------------------------
+
+    private void runRoomUpgradeTests() {
+        final String upgradeDbName = "room_upgrade_e2e.db";
+
+        Log.i(TAG, "runRoomUpgradeTests");
+
+        UpgradeDbV1 version1Database = null;
+        UpgradeDbV2 version2Database = null;
+
+        try {
+            // Start from a known schema-v1 state on every E2E execution.
+            getApplicationContext().deleteDatabase(upgradeDbName);
+
+            // 1) Create version-1 database.
+            version1Database = Room.databaseBuilder(
+                            getApplicationContext(),
+                            UpgradeDbV1.class,
+                            upgradeDbName
+                    )
+                    .allowMainThreadQueries()
+                    .build();
+
+            // Force open/create before closing it, ensuring the on-disk schema
+            // records user_version = 1 for the subsequent v2 open.
+            version1Database.getOpenHelper().getWritableDatabase();
+            version1Database.close();
+            version1Database = null;
+
+            Log.i(TAG, "Room upgrade E2E: version-1 database created");
+
+            // 2) Reopen the same path as schema version 2 with an explicit
+            // migration. This must invoke RoomOpenHelper.onUpgrade(..., 1, 2).
+            Migration migration1To2 = new Migration(1, 2) {
+                @Override
+                public void migrate(SupportSQLiteDatabase database) {
+                    database.execSQL(
+                            "ALTER TABLE room_upgrade_user " +
+                            "ADD COLUMN age INTEGER NOT NULL DEFAULT 0"
+                    );
+                    Log.i(TAG, "Room upgrade E2E migration 1->2 executed");
+                }
+            };
+
+            version2Database = Room.databaseBuilder(
+                            getApplicationContext(),
+                            UpgradeDbV2.class,
+                            upgradeDbName
+                    )
+                    .addMigrations(migration1To2)
+                    .allowMainThreadQueries()
+                    .build();
+
+            // Force the v2 database open and migration execution.
+            version2Database.getOpenHelper().getWritableDatabase();
+
+            Log.i(TAG, "Room upgrade E2E: version-2 database opened");
+
+        } catch (Throwable t) {
+            Log.e(TAG, "runRoomUpgradeTests error", t);
+        } finally {
+            if (version1Database != null) {
+                version1Database.close();
+            }
+
+            if (version2Database != null) {
+                version2Database.close();
+            }
+        }
+    }
 
     private File freshSqlCipherDatabaseFile(String name) {
         deleteDatabase(name);
