@@ -703,7 +703,30 @@ class ConsoleFormatter(BaseFormatter):
 
         if event.database_class:
             lines.append(f"[*] Database Class: {event.database_class}")
+        
+        if event.query_type:
+            lines.append(f"[*] Query Type: {event.query_type}")
 
+        if event.table_names:
+            lines.append(
+                f"[*] Tables: {', '.join(map(str, event.table_names))}"
+            )
+
+        if event.in_transaction is not None:
+            lines.append(f"[*] In Transaction: {event.in_transaction}")
+
+        if event.owner_class:
+            lines.append(f"[*] Owner: {event.owner_class}")
+
+        if event.observer_class:
+            lines.append(f"[*] Observer: {event.observer_class}")
+
+        if event.old_version is not None:
+            lines.append(f"[*] Old Version: {event.old_version}")
+
+        if event.new_version is not None:
+            lines.append(f"[*] New Version: {event.new_version}")
+            
         lines.append("")
         return "\n".join(lines)
     

@@ -60,6 +60,13 @@ class DatabaseParser(BaseParser):
             'password_type': 'password_type',
             'overload_signature': 'overload_signature',
             'has_database_hook': 'has_database_hook',
+            'query_type': 'query_type',
+            'table_names': 'table_names',
+            'in_transaction': 'in_transaction',
+            'owner_class': 'owner_class',
+            'observer_class': 'observer_class',
+            'old_version': 'old_version',
+            'new_version': 'new_version',
         }
         
         for json_field, event_field in field_mapping.items():

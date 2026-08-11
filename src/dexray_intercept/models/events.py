@@ -502,6 +502,15 @@ class DatabaseEvent(Event):
         self.password_type = None
         self.overload_signature = None
         self.has_database_hook = None
+        
+        # Room fields
+        self.query_type = None
+        self.table_names = None
+        self.in_transaction = None
+        self.owner_class = None
+        self.observer_class = None
+        self.old_version = None
+        self.new_version = None
     
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
@@ -517,6 +526,8 @@ class DatabaseEvent(Event):
             'null_column_hack', 'cancellation_signal', 'pragma_type',
             'distinct', 'edit_table', 'conflict_algorithm', 'has_error_handler',
             'password_type', 'overload_signature', 'has_database_hook',
+            'query_type', 'table_names', 'in_transaction',
+            'owner_class', 'observer_class', 'old_version', 'new_version',
         ]
         
         for field in fields:
