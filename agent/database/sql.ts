@@ -2,7 +2,7 @@ import { devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where, bytesToHex } from "../utils/misc.js"
 import { Java} from "../utils/javalib.js"
-import { safePerform, safeUse, safeDeferred, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { safePerform,safeUse,safeDeferred, safeOverload,safeImplementation, PropagateException } from "../utils/safe_java.js"
 import { safeResolveExport, safeAttach } from "../utils/safe_native.js"
 
 /**
@@ -1588,7 +1588,13 @@ function hook_SQLCipher() {
                         }
                     );
 
-                    return original.call(this, sql);
+                    try {
+                        return original.call(this, sql);
+                    } catch (error) {
+                        // Preserve the application's expected SQLiteException without
+                        // safeImplementation logging it as a hook failure or retrying it.
+                        throw new PropagateException(error);
+                    }
                 }
             );
         }
@@ -2178,461 +2184,629 @@ function hook_wcdb() {
         if (!wcdbDatabase) {
             return;
         }
+
+        const AndroidBase64 = safeUse(
+            "android.util.Base64",
+            "database:hook_wcdb"
+        );
+
+        const base64Encode = AndroidBase64
+            ? safeOverload(
+                (AndroidBase64 as any).encodeToString,
+                "database:WCDB.Base64.encodeToString[byte[],int]",
+                "[B",
+                "int"
+            )
+            : null;
+
+        const Thread = safeUse(
+            "java.lang.Thread",
+            "database:hook_wcdb"
+        );
+        if (!Thread) {
+            return;
+        }
+
         devlog("WCDB hooks being installed");
 
-        // Helper function to interpret database flags - same as in SQLite
-        function interpretDatabaseFlags(flags) {
-            const flagsMap = {
-                0x00000000: "OPEN_READONLY",
-                0x00000001: "OPEN_READWRITE",
-                0x00000002: "CREATE_IF_NECESSARY",
-                0x00000004: "NO_LOCALIZED_COLLATORS",
-                0x00000008: "ENABLE_WRITE_AHEAD_LOGGING",
-                0x00000010: "OPEN_URI",
-                0x00000020: "ENABLE_FOREIGN_KEY_CONSTRAINTS",
-                0x20000000: "OPEN_NOMUTEX",
-                0x10000000: "OPEN_FULLMUTEX"
-            };
+        // Suppress internal delegation between WCDB open overloads.
+        const openGuardDepths: Record<string, number> = {};
 
-            const flagDescriptions: string[] = [];
-            for (const flag in flagsMap) {
-                const numericFlag = parseInt(flag);
-                if ((flags & numericFlag) === numericFlag) {
-                    flagDescriptions.push(flagsMap[flag]);
+        function getCurrentThreadKey(): string {
+            try {
+                return (Thread as any).currentThread().getId().toString();
+            } catch (_) {
+                return "unknown";
+            }
+        }
+
+        function isNestedOpen(): boolean {
+            return (openGuardDepths[getCurrentThreadKey()] || 0) > 0;
+        }
+
+        function callWithOpenGuard<T>(fn: () => T): T {
+            const threadKey = getCurrentThreadKey();
+            openGuardDepths[threadKey] = (openGuardDepths[threadKey] || 0) + 1;
+
+            try {
+                return fn();
+            } finally {
+                openGuardDepths[threadKey]--;
+
+                if (openGuardDepths[threadKey] <= 0) {
+                    delete openGuardDepths[threadKey];
+                }
+            }
+        }
+
+        // Suppress internal transaction delegation, e.g.
+        // beginTransaction() -> beginTransaction(listener, exclusive).
+        const transactionGuardDepths: Record<string, number> = {};
+
+        function isNestedTransaction(): boolean {
+            return (transactionGuardDepths[getCurrentThreadKey()] || 0) > 0;
+        }
+
+        function callWithTransactionGuard<T>(fn: () => T): T {
+            const threadKey = getCurrentThreadKey();
+            transactionGuardDepths[threadKey] =
+                (transactionGuardDepths[threadKey] || 0) + 1;
+
+            try {
+                return fn();
+            } finally {
+                transactionGuardDepths[threadKey]--;
+
+                if (transactionGuardDepths[threadKey] <= 0) {
+                    delete transactionGuardDepths[threadKey];
+                }
+            }
+        }
+
+        function signatureOf(overload: any): string {
+            return overload.argumentTypes
+                .map((argument: any) => argument.className)
+                .join(", ");
+        }
+
+        function getDatabasePath(database: any): string {
+            try {
+                return database.getPath().toString();
+            } catch (error) {
+                return `<error getting path: ${error}>`;
+            }
+        }
+
+        function getPathArgument(value: any, typeName: string): string | null {
+            if (value === null || value === undefined) {
+                return null;
+            }
+
+            try {
+                if (typeName === "java.io.File") {
+                    return value.getAbsolutePath().toString();
+                }
+
+                return value.toString();
+            } catch (error) {
+                return `<error extracting path: ${error}>`;
+            }
+        }
+
+        function serializeByteArray(value: any): {
+            type: string;
+            value_hex: string | null;
+            length: number | null;
+        } {
+            if (!AndroidBase64 || !base64Encode) {
+                return {
+                    type: "byte[]",
+                    value_hex: null,
+                    length: null
+                };
+            }
+
+            try {
+                // android.util.Base64.NO_WRAP = 2
+                const base64 = base64Encode
+                    .call(AndroidBase64, value, 2)
+                    .toString();
+                const valueHex = base64ToHex(base64);
+
+                return {
+                    type: "byte[]",
+                    value_hex: valueHex,
+                    length: valueHex.length / 2
+                };
+            } catch (_) {
+                return {
+                    type: "byte[]",
+                    value_hex: null,
+                    length: null
+                };
+            }
+        }
+
+        function serializeValue(value: any): any {
+            if (value === null || value === undefined) {
+                return null;
+            }
+
+            if (
+                typeof value === "string" ||
+                typeof value === "number" ||
+                typeof value === "boolean"
+            ) {
+                return value;
+            }
+
+            try {
+                const runtimeClassName = value.getClass().getName().toString();
+
+                if (runtimeClassName === "[B") {
+                    return serializeByteArray(value);
+                }
+
+                const runtimeClass = Java.use(runtimeClassName);
+                const typedValue = Java.cast(value, runtimeClass);
+
+                switch (runtimeClassName) {
+                    case "java.lang.String":
+                    case "java.lang.CharSequence":
+                    case "java.lang.Character":
+                        return typedValue.toString();
+
+                    case "java.lang.Boolean":
+                        return typedValue.booleanValue();
+
+                    case "java.lang.Byte":
+                    case "java.lang.Short":
+                    case "java.lang.Integer":
+                        return typedValue.intValue();
+
+                    case "java.lang.Long":
+                        return typedValue.toString();
+
+                    case "java.lang.Float":
+                    case "java.lang.Double":
+                        return typedValue.doubleValue();
+
+                    default:
+                        return {
+                            type: runtimeClassName,
+                            value: typedValue.toString()
+                        };
+                }
+            } catch (error) {
+                return `<error serializing value: ${error}>`;
+            }
+        }
+
+        function serializeArray(values: any): any[] {
+            if (!values) {
+                return [];
+            }
+
+            const result: any[] = [];
+
+            for (let index = 0; index < values.length; index++) {
+                result.push(serializeValue(values[index]));
+            }
+
+            return result;
+        }
+
+        function serializeContentValues(values: any): Record<string, any> {
+            const result: Record<string, any> = {};
+
+            if (!values) {
+                return result;
+            }
+
+            const iterator = values.keySet().iterator();
+
+            while (iterator.hasNext()) {
+                const key = iterator.next().toString();
+                result[key] = serializeValue(values.get(key));
+            }
+
+            return result;
+        }
+
+        function serializeEncryptionKey(
+            value: any,
+            typeName: string
+        ): { value: string | null; type: string | null } {
+            if (value === null || value === undefined) {
+                return {
+                    value: null,
+                    type: null
+                };
+            }
+
+            if (typeName === "[B") {
+                const serialized = serializeByteArray(value);
+
+                return {
+                    value: serialized.value_hex
+                        ? `hex:${serialized.value_hex}`
+                        : null,
+                    type: "byte[]"
+                };
+            }
+
+            return {
+                value: serializeValue(value).toString(),
+                type: typeName
+            };
+        }
+
+        function decodeFlags(flags: number): string {
+            const descriptions: string[] = [];
+
+            // WCDB OPEN_READWRITE is zero, so it must be handled separately.
+            if ((flags & 0x00000001) !== 0) {
+                descriptions.push("OPEN_READONLY");
+            } else {
+                descriptions.push("OPEN_READWRITE");
+            }
+
+            if ((flags & 0x10000000) !== 0) {
+                descriptions.push("CREATE_IF_NECESSARY");
+            }
+
+            if ((flags & 0x00000010) !== 0) {
+                descriptions.push("NO_LOCALIZED_COLLATORS");
+            }
+
+            if ((flags & 0x00000100) !== 0) {
+                descriptions.push("ENABLE_IO_TRACE");
+            }
+
+            if ((flags & 0x20000000) !== 0) {
+                descriptions.push("ENABLE_WRITE_AHEAD_LOGGING");
+            }
+
+            return descriptions.join(" | ");
+        }
+
+        function findOpenFlagsArgument(
+            methodName: string,
+            overload: any,
+            args: any[]
+        ): { value: number | null; index: number | null } {
+            const argumentTypes = overload.argumentTypes;
+
+            // openDatabase(..., CursorFactory, int flags, ...)
+            if (methodName === "openDatabase") {
+                const factoryIndex = argumentTypes.findIndex(
+                    (argument: any) =>
+                        argument.className.includes("CursorFactory")
+                );
+
+                for (
+                    let index = factoryIndex + 1;
+                    index < argumentTypes.length;
+                    index++
+                ) {
+                    if (argumentTypes[index].className === "int") {
+                        return {
+                            value: Number(args[index]),
+                            index: index
+                        };
+                    }
                 }
             }
 
-            return flagDescriptions.length > 0 ? flagDescriptions.join(" | ") : "UNKNOWN_FLAG";
+            // openOrCreateDatabase(String, CursorFactory, int flags)
+            if (
+                methodName === "openOrCreateDatabase" &&
+                argumentTypes.length === 3 &&
+                argumentTypes[0].className === "java.lang.String" &&
+                argumentTypes[1].className.includes("CursorFactory") &&
+                argumentTypes[2].className === "int"
+            ) {
+                return {
+                    value: Number(args[2]),
+                    index: 2
+                };
+            }
+
+            return {
+                value: null,
+                index: null
+            };
         }
 
-        // openDatabase(String, CursorFactory, int)
-        const openDatabase_String_CursorFactory_int_WCDB = safeOverload(
-            wcdbDatabase.openDatabase,
-            "database:WCDB.SQLiteDatabase.openDatabase[String,CursorFactory,int]",
-            'java.lang.String',
-            'com.tencent.wcdb.database.SQLiteDatabase$CursorFactory',
-            'int'
-        );
-        if (openDatabase_String_CursorFactory_int_WCDB) {
-            openDatabase_String_CursorFactory_int_WCDB.implementation = safeImplementation(
-                "database:WCDB.SQLiteDatabase.openDatabase[String,CursorFactory,int]",
-                openDatabase_String_CursorFactory_int_WCDB,
-                function (original, path: string, factory: any, flags: number) {
-                    const type = "\x1b[1;36mevent_type: WCDBOpenDatabase\x1b[0m";
-                    const methodVal = "WCDB.SQLiteDatabase.openDatabase";
+        function findConnectionPoolSizeArgument(
+            overload: any,
+            args: any[],
+            flagsIndex: number | null
+        ): number | null {
+            const argumentTypes = overload.argumentTypes;
 
-                    if (shouldLogDatabasePath(path)) {
-                        const flagsDescription = interpretDatabaseFlags(flags);
-                        const logVal =
-                            "\nOpening WCDB database: " + '\x1b[36m' + path + '\x1b[0m' +
-                            "\nFlags: " + '\x1b[33m' + flags + " (" + flagsDescription + ")" + '\x1b[0m' +
-                            "\nFactory: " + (factory ? '\x1b[32m' + "Custom factory provided" + '\x1b[0m' : '\x1b[90m' + "null" + '\x1b[0m') + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
-
-                    return original.call(this, path, factory, flags);
+            for (let index = 0; index < argumentTypes.length; index++) {
+                if (
+                    argumentTypes[index].className === "int" &&
+                    index !== flagsIndex
+                ) {
+                    return Number(args[index]);
                 }
-            );
+            }
+
+            return null;
         }
 
-        // openOrCreateDatabase(String, CursorFactory)
-        const openOrCreateDatabase_String_CursorFactory_WCDB = safeOverload(
-            wcdbDatabase.openOrCreateDatabase,
-            "database:WCDB.SQLiteDatabase.openOrCreateDatabase[String,CursorFactory]",
-            'java.lang.String',
-            'com.tencent.wcdb.database.SQLiteDatabase$CursorFactory'
-        );
-        if (openOrCreateDatabase_String_CursorFactory_WCDB) {
-            openOrCreateDatabase_String_CursorFactory_WCDB.implementation = safeImplementation(
-                "database:WCDB.SQLiteDatabase.openOrCreateDatabase[String,CursorFactory]",
-                openOrCreateDatabase_String_CursorFactory_WCDB,
-                function (original, path: string, factory: any) {
-                    const type = "\x1b[1;36mevent_type: WCDBOpenDatabase\x1b[0m";
-                    const methodVal = "WCDB.SQLiteDatabase.openOrCreateDatabase";
+        function hookOpenMethod(methodName: string): void {
+            const method = (wcdbDatabase as any)[methodName];
 
-                    if (shouldLogDatabasePath(path)) {
-                        const logVal =
-                            "\nOpening or creating WCDB database: " + '\x1b[36m' + path + '\x1b[0m' +
-                            "\nFactory: " + (factory ? '\x1b[32m' + "Custom factory provided" + '\x1b[0m' : '\x1b[90m' + "null" + '\x1b[0m') + "\n";
+            if (!method || !method.overloads) {
+                return;
+            }
 
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
+            method.overloads.forEach((overload: any, index: number) => {
+                const argumentTypes = overload.argumentTypes;
+                const pathType = argumentTypes[0]?.className || "unknown";
+                const signature = signatureOf(overload);
 
-                    return original.call(this, path, factory);
-                }
-            );
-        }
+                overload.implementation = safeImplementation(
+                    `database:WCDB.SQLiteDatabase.${methodName}[${index}]`,
+                    overload,
+                    function (original, ...args: any[]) {
+                        if (!isNestedOpen()) {
+                            const keyIndex = argumentTypes.findIndex(
+                                (argument: any) => argument.className === "[B"
+                            );
+                            const key = keyIndex >= 0
+                                ? serializeEncryptionKey(
+                                    args[keyIndex],
+                                    argumentTypes[keyIndex].className
+                                )
+                                : { value: null, type: null };
 
-        // execSQL(String)
-        const execSQL_String_WCDB = safeOverload(
-            wcdbDatabase.execSQL,
-            "database:WCDB.SQLiteDatabase.execSQL[String]",
-            'java.lang.String'
-        );
-        if (execSQL_String_WCDB) {
-            execSQL_String_WCDB.implementation = safeImplementation(
-                "database:WCDB.SQLiteDatabase.execSQL[String]",
-                execSQL_String_WCDB,
-                function (original, sql: string) {
-                    const type = "\x1b[1;35mevent_type: WCDBExecSQL\x1b[0m";
-                    const methodVal = "WCDB.SQLiteDatabase.execSQL";
+                            const flags = findOpenFlagsArgument(
+                                methodName,
+                                overload,
+                                args
+                            );
+                            const connectionPoolSize =
+                                findConnectionPoolSizeArgument(
+                                    overload,
+                                    args,
+                                    flags.index
+                                );
 
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
+                            const hasFactory = argumentTypes.some(
+                                (argument: any, argumentIndex: number) =>
+                                    argument.className.includes("CursorFactory") &&
+                                    args[argumentIndex] !== null
+                            );
+                            const hasErrorHandler = argumentTypes.some(
+                                (argument: any, argumentIndex: number) =>
+                                    argument.className.includes("DatabaseErrorHandler") &&
+                                    args[argumentIndex] !== null
+                            );
+                            const hasCipherSpec = argumentTypes.some(
+                                (argument: any, argumentIndex: number) =>
+                                    argument.className.includes("SQLiteCipherSpec") &&
+                                    args[argumentIndex] !== null
+                            );
 
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nExecuting SQL: " + '\x1b[36m' + sql + '\x1b[0m' + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
-
-                    return original.call(this, sql);
-                }
-            );
-        }
-
-        // execSQL(String, Object[])
-        const execSQL_String_ObjectArray_WCDB = safeOverload(
-            wcdbDatabase.execSQL,
-            "database:WCDB.SQLiteDatabase.execSQL[String,Object[]]",
-            'java.lang.String',
-            '[Ljava.lang.Object;'
-        );
-        if (execSQL_String_ObjectArray_WCDB) {
-            execSQL_String_ObjectArray_WCDB.implementation = safeImplementation(
-                "database:WCDB.SQLiteDatabase.execSQL[String,Object[]]",
-                execSQL_String_ObjectArray_WCDB,
-                function (original, sql: string, bindArgs: any[]) {
-                    const type = "\x1b[1;35mevent_type: WCDBExecSQL\x1b[0m";
-                    const methodVal = "WCDB.SQLiteDatabase.execSQL";
-
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        let argsStr = "";
-                        if (bindArgs && bindArgs.length > 0) {
-                            for (let i = 0; i < bindArgs.length; i++) {
-                                argsStr += "\n    - [" + i + "] " + bindArgs[i];
-                            }
+                            createDatabaseEvent("database.wcdb.open", {
+                                method: `WCDB.SQLiteDatabase.${methodName}(${signature})`,
+                                database_path: getPathArgument(args[0], pathType),
+                                database_type: "WCDB",
+                                password: key.value,
+                                password_type: key.type,
+                                flags: flags.value,
+                                flags_description: flags.value !== null
+                                    ? decodeFlags(flags.value)
+                                    : null,
+                                connection_pool_size: connectionPoolSize,                                    
+                                has_factory: hasFactory,
+                                has_error_handler: hasErrorHandler,
+                                has_cipher_spec: hasCipherSpec,
+                                overload_signature: signature
+                            });
                         }
 
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nExecuting SQL: " + '\x1b[36m' + sql + '\x1b[0m' +
-                            "\nBind arguments:" + (argsStr ? '\x1b[33m' + argsStr + '\x1b[0m' : " none") + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                        return callWithOpenGuard(
+                            () => original.apply(this, args)
+                        );
                     }
-
-                    return original.call(this, sql, bindArgs);
-                }
-            );
+                );
+            });
         }
 
-        // rawQuery(String, String[])
-        const rawQuery_String_StringArray_WCDB = safeOverload(
-            wcdbDatabase.rawQuery,
-            "database:WCDB.SQLiteDatabase.rawQuery[String,String[]]",
-            'java.lang.String',
-            '[Ljava.lang.String;'
-        );
-        if (rawQuery_String_StringArray_WCDB) {
-            rawQuery_String_StringArray_WCDB.implementation = safeImplementation(
-                "database:WCDB.SQLiteDatabase.rawQuery[String,String[]]",
-                rawQuery_String_StringArray_WCDB,
-                function (original, sql: string, selectionArgs: string[]) {
-                    const type = "\x1b[1;34mevent_type: WCDBRawQuery\x1b[0m";
-                    const methodVal = "WCDB.SQLiteDatabase.rawQuery";
+        // Hook every runtime-visible WCDB open overload.
+        hookOpenMethod("openDatabase");
+        hookOpenMethod("openOrCreateDatabase");
 
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
+        function hookSqlMethod(
+            methodName: string,
+            eventType: string
+        ): void {
+            const method = (wcdbDatabase as any)[methodName];
+
+            if (!method || !method.overloads) {
+                return;
+            }
+
+            method.overloads.forEach((overload: any, index: number) => {
+                const argumentTypes = overload.argumentTypes;
+                const signature = signatureOf(overload);
+
+                overload.implementation = safeImplementation(
+                    `database:WCDB.SQLiteDatabase.${methodName}[${index}]`,
+                    overload,
+                    function (original, ...args: any[]) {
+                        const sql = args[0] ? args[0].toString() : null;
+                        const argsIndex = argumentTypes.findIndex(
+                            (argument: any) =>
+                                argument.className === "[Ljava.lang.Object;"
+                        );
+                        const cancellationIndex = argumentTypes.findIndex(
+                            (argument: any) =>
+                                argument.className.includes("CancellationSignal")
+                        );
+
+                        createDatabaseEvent(eventType, {
+                            method: `WCDB.SQLiteDatabase.${methodName}(${signature})`,
+                            database_path: getDatabasePath(this),
+                            database_type: "WCDB",
+                            sql: sql,
+                            bind_args: argsIndex >= 0
+                                ? serializeArray(args[argsIndex])
+                                : [],
+                            where_args: methodName === "rawQuery" && argsIndex >= 0
+                                ? serializeArray(args[argsIndex])
+                                : undefined,
+                            cancellation_signal: cancellationIndex >= 0 &&
+                                args[cancellationIndex] !== null,
+                            overload_signature: signature
+                        });
+
+                        return original.apply(this, args);
                     }
+                );
+            });
+        }
 
-                    if (shouldLogDatabasePath(dbPath)) {
-                        let argsStr = "";
-                        if (selectionArgs && selectionArgs.length > 0) {
-                            for (let i = 0; i < selectionArgs.length; i++) {
-                                argsStr += "\n    - [" + i + "] " + selectionArgs[i];
-                            }
+        hookSqlMethod("execSQL", "database.wcdb.exec");
+        hookSqlMethod("rawQuery", "database.wcdb.query");
+
+        function hookCrudMethod(
+            methodName: string,
+            eventType: string
+        ): void {
+            const method = (wcdbDatabase as any)[methodName];
+
+            if (!method || !method.overloads) {
+                return;
+            }
+
+            method.overloads.forEach((overload: any, index: number) => {
+                const signature = signatureOf(overload);
+
+                overload.implementation = safeImplementation(
+                    `database:WCDB.SQLiteDatabase.${methodName}[${index}]`,
+                    overload,
+                    function (original, ...args: any[]) {
+                        const table = args[0] ? args[0].toString() : null;
+                        const databasePath = getDatabasePath(this);
+
+                        if (methodName === "insert") {
+                            createDatabaseEvent(eventType, {
+                                method: `WCDB.SQLiteDatabase.insert(${signature})`,
+                                database_path: databasePath,
+                                database_type: "WCDB",
+                                table: table,
+                                null_column_hack: args[1]
+                                    ? args[1].toString()
+                                    : null,
+                                content_values: serializeContentValues(args[2])
+                            });
+                        } else if (methodName === "update") {
+                            createDatabaseEvent(eventType, {
+                                method: `WCDB.SQLiteDatabase.update(${signature})`,
+                                database_path: databasePath,
+                                database_type: "WCDB",
+                                table: table,
+                                content_values: serializeContentValues(args[1]),
+                                where_clause: args[2]
+                                    ? args[2].toString()
+                                    : null,
+                                where_args: serializeArray(args[3])
+                            });
+                        } else if (methodName === "delete") {
+                            createDatabaseEvent(eventType, {
+                                method: `WCDB.SQLiteDatabase.delete(${signature})`,
+                                database_path: databasePath,
+                                database_type: "WCDB",
+                                table: table,
+                                where_clause: args[1]
+                                    ? args[1].toString()
+                                    : null,
+                                where_args: serializeArray(args[2])
+                            });
                         }
 
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nSQL Query: " + '\x1b[36m' + sql + '\x1b[0m' +
-                            "\nSelection args:" + (argsStr ? '\x1b[33m' + argsStr + '\x1b[0m' : " none") + "\n";
+                        const result = original.apply(this, args);
 
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
-
-                    return original.call(this, sql, selectionArgs);
-                }
-            );
-        }
-
-        // insert(String, String, ContentValues)
-        const insert_String_String_ContentValues_WCDB = safeOverload(
-            wcdbDatabase.insert,
-            "database:WCDB.SQLiteDatabase.insert[String,String,ContentValues]",
-            'java.lang.String',
-            'java.lang.String',
-            'android.content.ContentValues'
-        );
-        if (insert_String_String_ContentValues_WCDB) {
-            insert_String_String_ContentValues_WCDB.implementation = safeImplementation(
-                "database:WCDB.SQLiteDatabase.insert[String,String,ContentValues]",
-                insert_String_String_ContentValues_WCDB,
-                function (original, table: string, nullColumnHack: string, values: any) {
-                    const type = "\x1b[1;33mevent_type: WCDBInsert\x1b[0m";
-                    const methodVal = "WCDB.SQLiteDatabase.insert";
-
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        let valuesStr = "";
-                        if (values) {
-                            const keyset = values.keySet();
-                            const iter = keyset.iterator();
-                            while (iter.hasNext()) {
-                                const key = iter.next();
-                                const value = values.get(key);
-                                valuesStr += "\n    - " + key + " = " + value;
-                            }
+                        if (methodName === "delete") {
+                            createDatabaseEvent("database.wcdb.delete_result", {
+                                method: `WCDB.SQLiteDatabase.delete(${signature})`,
+                                database_path: databasePath,
+                                database_type: "WCDB",
+                                table: table,
+                                rows_affected: result
+                            });
                         }
 
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nInsert into table: " + '\x1b[36m' + table + '\x1b[0m' +
-                            "\nNull column hack: " + '\x1b[35m' + (nullColumnHack ? nullColumnHack : "null") + '\x1b[0m' +
-                            "\nValues to insert:" + (valuesStr ? '\x1b[32m' + valuesStr + '\x1b[0m' : " none") + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                        return result;
                     }
-
-                    return original.call(this, table, nullColumnHack, values);
-                }
-            );
+                );
+            });
         }
 
-        // update(String, ContentValues, String, String[])
-        const update_String_ContentValues_String_StringArray_WCDB = safeOverload(
-            wcdbDatabase.update,
-            "database:WCDB.SQLiteDatabase.update[String,ContentValues,String,String[]]",
-            'java.lang.String',
-            'android.content.ContentValues',
-            'java.lang.String',
-            '[Ljava.lang.String;'
-        );
-        if (update_String_ContentValues_String_StringArray_WCDB) {
-            update_String_ContentValues_String_StringArray_WCDB.implementation = safeImplementation(
-                "database:WCDB.SQLiteDatabase.update[String,ContentValues,String,String[]]",
-                update_String_ContentValues_String_StringArray_WCDB,
-                function (original, table: string, values: any, whereClause: string, whereArgs: string[]) {
-                    const type = "\x1b[1;32mevent_type: WCDBUpdate\x1b[0m";
-                    const methodVal = "WCDB.SQLiteDatabase.update";
+        hookCrudMethod("insert", "database.wcdb.insert");
+        hookCrudMethod("update", "database.wcdb.update");
+        hookCrudMethod("delete", "database.wcdb.delete");
 
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
+        function hookTransactionMethod(
+            methodName: string,
+            transactionAction: string
+        ): void {
+            const method = (wcdbDatabase as any)[methodName];
 
-                    if (shouldLogDatabasePath(dbPath)) {
-                        let valuesStr = "";
-                        if (values) {
-                            const keyset = values.keySet();
-                            const iter = keyset.iterator();
-                            while (iter.hasNext()) {
-                                const key = iter.next();
-                                const value = values.get(key);
-                                valuesStr += "\n    - " + key + " = " + value;
-                            }
+            if (!method || !method.overloads) {
+                return;
+            }
+
+            method.overloads.forEach((overload: any, index: number) => {
+                const argumentTypes = overload.argumentTypes;
+                const signature = signatureOf(overload);
+
+                overload.implementation = safeImplementation(
+                    `database:WCDB.SQLiteDatabase.${methodName}[${index}]`,
+                    overload,
+                    function (original, ...args: any[]) {
+                        if (!isNestedTransaction()) {
+                            const listenerIndex = argumentTypes.findIndex(
+                                (argument: any) =>
+                                    argument.className.includes("SQLiteTransactionListener")
+                            );
+                            const exclusiveIndex = argumentTypes.findIndex(
+                                (argument: any) => argument.className === "boolean"
+                            );
+
+                            createDatabaseEvent("database.wcdb.transaction", {
+                                method: `WCDB.SQLiteDatabase.${methodName}(${signature})`,
+                                database_path: getDatabasePath(this),
+                                database_type: "WCDB",
+                                transaction_action: transactionAction,
+                                has_listener: listenerIndex >= 0 &&
+                                    args[listenerIndex] !== null,
+                                exclusive: exclusiveIndex >= 0
+                                    ? args[exclusiveIndex]
+                                    : null,
+                                overload_signature: signature
+                            });
                         }
 
-                        let whereArgsStr = "";
-                        if (whereArgs && whereArgs.length > 0) {
-                            for (let i = 0; i < whereArgs.length; i++) {
-                                whereArgsStr += "\n    - [" + i + "] " + whereArgs[i];
-                            }
-                        }
-
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nUpdate table: " + '\x1b[36m' + table + '\x1b[0m' +
-                            "\nWhere clause: " + '\x1b[35m' + whereClause + '\x1b[0m' +
-                            "\nWhere args:" + (whereArgsStr ? '\x1b[33m' + whereArgsStr + '\x1b[0m' : " none") +
-                            "\nValues to update:" + (valuesStr ? '\x1b[32m' + valuesStr + '\x1b[0m' : " none") + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                        return callWithTransactionGuard(
+                            () => original.apply(this, args)
+                        );
                     }
-
-                    return original.call(this, table, values, whereClause, whereArgs);
-                }
-            );
+                );
+            });
         }
 
-        // delete(String, String, String[])
-        const delete_String_String_StringArray_WCDB = safeOverload(
-            wcdbDatabase.delete,
-            "database:WCDB.SQLiteDatabase.delete[String,String,String[]]",
-            'java.lang.String',
-            'java.lang.String',
-            '[Ljava.lang.String;'
-        );
-        if (delete_String_String_StringArray_WCDB) {
-            delete_String_String_StringArray_WCDB.implementation = safeImplementation(
-                "database:WCDB.SQLiteDatabase.delete[String,String,String[]]",
-                delete_String_String_StringArray_WCDB,
-                function (original, table: string, whereClause: string, whereArgs: string[]) {
-                    const type = "\x1b[1;31mevent_type: WCDBDelete\x1b[0m";
-                    const methodVal = "WCDB.SQLiteDatabase.delete";
-
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        let whereArgsStr = "";
-                        if (whereArgs && whereArgs.length > 0) {
-                            for (let i = 0; i < whereArgs.length; i++) {
-                                whereArgsStr += "\n    - [" + i + "] " + whereArgs[i];
-                            }
-                        }
-
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nDelete from table: " + '\x1b[36m' + table + '\x1b[0m' +
-                            "\nWhere clause: " + '\x1b[35m' + (whereClause ? whereClause : "null (delete all rows)") + '\x1b[0m' +
-                            "\nWhere args:" + (whereArgsStr ? '\x1b[33m' + whereArgsStr + '\x1b[0m' : " none") + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
-
-                    const deleteRes = original.call(this, table, whereClause, whereArgs);
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const rowCountMsg = "Rows affected: " + '\x1b[32m' + deleteRes + '\x1b[0m';
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + " " + rowCountMsg);
-                    }
-
-                    return deleteRes;
-                }
-            );
-        }
-
-        // Transaction hooks
-        const beginTransactionRef_WCDB = wcdbDatabase.beginTransaction;
-        if (beginTransactionRef_WCDB) {
-            beginTransactionRef_WCDB.implementation = safeImplementation(
-                "database:WCDB.SQLiteDatabase.beginTransaction",
-                beginTransactionRef_WCDB,
-                function (original) {
-                    const type = "\x1b[1;90mevent_type: WCDBTransaction\x1b[0m";
-                    const methodVal = "WCDB.SQLiteDatabase.beginTransaction";
-
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nBeginning transaction" + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
-
-                    return original.call(this);
-                }
-            );
-        }
-
-        const endTransactionRef_WCDB = wcdbDatabase.endTransaction;
-        if (endTransactionRef_WCDB) {
-            endTransactionRef_WCDB.implementation = safeImplementation(
-                "database:WCDB.SQLiteDatabase.endTransaction",
-                endTransactionRef_WCDB,
-                function (original) {
-                    const type = "\x1b[1;90mevent_type: WCDBTransaction\x1b[0m";
-                    const methodVal = "WCDB.SQLiteDatabase.endTransaction";
-
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nEnding transaction" + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
-
-                    return original.call(this);
-                }
-            );
-        }
-
-        const setTransactionSuccessfulRef_WCDB = wcdbDatabase.setTransactionSuccessful;
-        if (setTransactionSuccessfulRef_WCDB) {
-            setTransactionSuccessfulRef_WCDB.implementation = safeImplementation(
-                "database:WCDB.SQLiteDatabase.setTransactionSuccessful",
-                setTransactionSuccessfulRef_WCDB,
-                function (original) {
-                    const type = "\x1b[1;90mevent_type: WCDBTransaction\x1b[0m";
-                    const methodVal = "WCDB.SQLiteDatabase.setTransactionSuccessful";
-
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nMarking transaction as successful" + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
-
-                    return original.call(this);
-                }
-            );
-        }
+        hookTransactionMethod("beginTransaction", "begin");
+        hookTransactionMethod("setTransactionSuccessful", "successful");
+        hookTransactionMethod("endTransaction", "end");
     });
 }
-
 
 
 export function install_database_hooks(){
