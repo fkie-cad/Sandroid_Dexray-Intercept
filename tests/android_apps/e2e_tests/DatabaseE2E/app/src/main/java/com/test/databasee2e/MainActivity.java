@@ -386,6 +386,27 @@ public class MainActivity extends Activity {
         }
     }
 
+
+    private File freshSqlCipherDatabaseFile(String name) {
+        deleteDatabase(name);
+        return getDatabasePath(name);
+    }
+
+    private void initializeAndCloseSqlCipherDatabase(
+            net.sqlcipher.database.SQLiteDatabase database,
+            String label
+    ) {
+        try {
+            database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS overload_probe " +
+                    "(id INTEGER PRIMARY KEY, label TEXT)"
+            );
+            Log.i(TAG, label + " OK: " + database.getPath());
+        } finally {
+            database.close();
+        }
+    }
+
     // ----------------------------------------------------------------
     // net.sqlcipher.database
     // ----------------------------------------------------------------
@@ -414,32 +435,138 @@ public class MainActivity extends Activity {
             Log.i(TAG, "getReadableDatabase OK: " + dbRead.getPath());
             dbRead.close();
 
-            File dbFile = getDatabasePath("sqlcipher_e2e_direct.db");
-            if (dbFile.exists()) {
-                //noinspection ResultOfMethodCallIgnored
-                dbFile.delete();
-            }
+            // SQLiteOpenHelper password overload coverage:
+            // getWritableDatabase / getReadableDatabase with byte[] and char[].
+            byte[] passwordBytes = net.sqlcipher.database.SQLiteDatabase.getBytes(
+                    SQLCIPHER_PASSWORD.toCharArray()
+            );
+            char[] passwordChars = SQLCIPHER_PASSWORD.toCharArray();
 
-            // openOrCreateDatabase(File, String)
-            net.sqlcipher.database.SQLiteDatabase dbFile1 =
-                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
-                            dbFile, SQLCIPHER_PASSWORD, null);
-            Log.i(TAG, "openOrCreateDatabase(File,String) OK");
-            dbFile1.execSQL("CREATE TABLE IF NOT EXISTS direct_table "
-                    + "(id INTEGER PRIMARY KEY, value TEXT)");
-            dbFile1.execSQL("INSERT INTO direct_table (id,value) VALUES (1,'direct')");
-            dbFile1.close();
+            SqlCipherHelper helperWritableBytes = new SqlCipherHelper(this);
+            net.sqlcipher.database.SQLiteDatabase dbWritableBytes =
+                    helperWritableBytes.getWritableDatabase(passwordBytes);
+            Log.i(TAG, "getWritableDatabase(byte[]) OK: " + dbWritableBytes.getPath());
+            dbWritableBytes.close();
 
-            // openOrCreateDatabase(String, char[], CursorFactory, DatabaseErrorHandler)
-            net.sqlcipher.database.SQLiteDatabase dbPath =
+            SqlCipherHelper helperWritableChars = new SqlCipherHelper(this);
+            net.sqlcipher.database.SQLiteDatabase dbWritableChars =
+                    helperWritableChars.getWritableDatabase(passwordChars);
+            Log.i(TAG, "getWritableDatabase(char[]) OK: " + dbWritableChars.getPath());
+            dbWritableChars.close();
+
+            SqlCipherHelper helperReadableBytes = new SqlCipherHelper(this);
+            net.sqlcipher.database.SQLiteDatabase dbReadableBytes =
+                    helperReadableBytes.getReadableDatabase(passwordBytes);
+            Log.i(TAG, "getReadableDatabase(byte[]) OK: " + dbReadableBytes.getPath());
+            dbReadableBytes.close();
+
+            SqlCipherHelper helperReadableChars = new SqlCipherHelper(this);
+            net.sqlcipher.database.SQLiteDatabase dbReadableChars =
+                    helperReadableChars.getReadableDatabase(passwordChars);
+            Log.i(TAG, "getReadableDatabase(char[]) OK: " + dbReadableChars.getPath());
+            dbReadableChars.close();
+
+            // File + String + CursorFactory
+            File fileString3 = freshSqlCipherDatabaseFile("sqlcipher_file_string_3.db");
+            initializeAndCloseSqlCipherDatabase(
                     net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
-                            dbFile.getAbsolutePath(),
-                            SQLCIPHER_PASSWORD.toCharArray(),
-                            null,
-                            null);
-            Log.i(TAG, "openOrCreateDatabase(String,char[]) OK");
-            dbPath.execSQL("INSERT INTO direct_table (id,value) VALUES (2,'path_char')");
-            dbPath.close();
+                            fileString3, SQLCIPHER_PASSWORD, null
+                    ),
+                    "openOrCreateDatabase(File,String,CursorFactory)"
+            );
+
+            // File + String + CursorFactory + SQLiteDatabaseHook
+            File fileString4 = freshSqlCipherDatabaseFile("sqlcipher_file_string_4.db");
+            initializeAndCloseSqlCipherDatabase(
+                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
+                            fileString4, SQLCIPHER_PASSWORD, null, null
+                    ),
+                    "openOrCreateDatabase(File,String,CursorFactory,SQLiteDatabaseHook)"
+            );
+
+            // File + String + CursorFactory + SQLiteDatabaseHook + DatabaseErrorHandler
+            File fileString5 = freshSqlCipherDatabaseFile("sqlcipher_file_string_5.db");
+            initializeAndCloseSqlCipherDatabase(
+                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
+                            fileString5, SQLCIPHER_PASSWORD, null, null, null
+                    ),
+                    "openOrCreateDatabase(File,String,CursorFactory,SQLiteDatabaseHook,DatabaseErrorHandler)"
+            );
+
+            // String + String password variants
+            File pathString3File = freshSqlCipherDatabaseFile("sqlcipher_path_string_3.db");
+            initializeAndCloseSqlCipherDatabase(
+                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
+                            pathString3File.getAbsolutePath(), SQLCIPHER_PASSWORD, null
+                    ),
+                    "openOrCreateDatabase(String,String,CursorFactory)"
+            );
+
+            File pathString4File = freshSqlCipherDatabaseFile("sqlcipher_path_string_4.db");
+            initializeAndCloseSqlCipherDatabase(
+                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
+                            pathString4File.getAbsolutePath(), SQLCIPHER_PASSWORD, null, null
+                    ),
+                    "openOrCreateDatabase(String,String,CursorFactory,SQLiteDatabaseHook)"
+            );
+
+            File pathString5File = freshSqlCipherDatabaseFile("sqlcipher_path_string_5.db");
+            initializeAndCloseSqlCipherDatabase(
+                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
+                            pathString5File.getAbsolutePath(), SQLCIPHER_PASSWORD, null, null, null
+                    ),
+                    "openOrCreateDatabase(String,String,CursorFactory,SQLiteDatabaseHook,DatabaseErrorHandler)"
+            );
+
+            // String + byte[] password variants
+            File pathBytes3File = freshSqlCipherDatabaseFile("sqlcipher_path_bytes_3.db");
+            initializeAndCloseSqlCipherDatabase(
+                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
+                            pathBytes3File.getAbsolutePath(), passwordBytes, null
+                    ),
+                    "openOrCreateDatabase(String,byte[],CursorFactory)"
+            );
+
+            File pathBytes4File = freshSqlCipherDatabaseFile("sqlcipher_path_bytes_4.db");
+            initializeAndCloseSqlCipherDatabase(
+                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
+                            pathBytes4File.getAbsolutePath(), passwordBytes, null, null
+                    ),
+                    "openOrCreateDatabase(String,byte[],CursorFactory,SQLiteDatabaseHook)"
+            );
+
+            File pathBytes5File = freshSqlCipherDatabaseFile("sqlcipher_path_bytes_5.db");
+            initializeAndCloseSqlCipherDatabase(
+                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
+                            pathBytes5File.getAbsolutePath(), passwordBytes, null, null, null
+                    ),
+                    "openOrCreateDatabase(String,byte[],CursorFactory,SQLiteDatabaseHook,DatabaseErrorHandler)"
+            );
+
+            // String + char[] password variants
+            File pathChars3File = freshSqlCipherDatabaseFile("sqlcipher_path_chars_3.db");
+            initializeAndCloseSqlCipherDatabase(
+                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
+                            pathChars3File.getAbsolutePath(), passwordChars, null
+                    ),
+                    "openOrCreateDatabase(String,char[],CursorFactory)"
+            );
+
+            File pathChars4File = freshSqlCipherDatabaseFile("sqlcipher_path_chars_4.db");
+            initializeAndCloseSqlCipherDatabase(
+                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
+                            pathChars4File.getAbsolutePath(), passwordChars, null, null
+                    ),
+                    "openOrCreateDatabase(String,char[],CursorFactory,SQLiteDatabaseHook)"
+            );
+
+            File pathChars5File = freshSqlCipherDatabaseFile("sqlcipher_path_chars_5.db");
+            initializeAndCloseSqlCipherDatabase(
+                    net.sqlcipher.database.SQLiteDatabase.openOrCreateDatabase(
+                            pathChars5File.getAbsolutePath(), passwordChars, null, null, null
+                    ),
+                    "openOrCreateDatabase(String,char[],CursorFactory,SQLiteDatabaseHook,DatabaseErrorHandler)"
+            );
 
             // rawExecSQL
             net.sqlcipher.database.SQLiteDatabase dbPragma =
