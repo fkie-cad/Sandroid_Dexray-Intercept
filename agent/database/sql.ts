@@ -38,6 +38,36 @@ function createDatabaseEvent(eventType: string, data: any): void {
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
 }
 
+function base64ToHex(base64: string): string {
+    const alphabet =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let buffer = 0;
+    let bitCount = 0;
+    let hex = "";
+
+    for (const character of base64) {
+        if (character === "=") {
+            break;
+        }
+
+        const value = alphabet.indexOf(character);
+        if (value < 0) {
+            continue;
+        }
+
+        buffer = (buffer << 6) | value;
+        bitCount += 6;
+
+        while (bitCount >= 8) {
+            bitCount -= 8;
+            const byte = (buffer >> bitCount) & 0xff;
+            hex += byte.toString(16).padStart(2, "0");
+        }
+    }
+
+    return hex;
+}
+
 // New variables for filtering:
 let PATH_FILTERS: string[] = [];
 let PATH_FILTER_ENABLED: boolean = false;
@@ -81,12 +111,12 @@ recv("path_filters", (message) => {
     }
 });
 
- function set_airplane_mode(){
-    //TODO
- }
+function set_airplane_mode(){
+//TODO
+}
  
+export { set_airplane_mode };
 
- export { set_airplane_mode };
 
 
 function hook_java_sql() {
@@ -173,36 +203,6 @@ function hook_java_sql() {
             } catch (error) {
                 return `Error getting path: ${error}`;
             }
-        }
-
-        function base64ToHex(base64: string): string {
-            const alphabet =
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-            let buffer = 0;
-            let bitCount = 0;
-            let hex = "";
-
-            for (const character of base64) {
-                if (character === "=") {
-                    break;
-                }
-
-                const value = alphabet.indexOf(character);
-                if (value < 0) {
-                    continue;
-                }
-
-                buffer = (buffer << 6) | value;
-                bitCount += 6;
-
-                while (bitCount >= 8) {
-                    bitCount -= 8;
-                    const byte = (buffer >> bitCount) & 0xff;
-                    hex += byte.toString(16).padStart(2, "0");
-                }
-            }
-
-            return hex;
         }
 
         function serializeJavaValue(value: any): any {
@@ -1290,255 +1290,401 @@ function hook_java_sql() {
 function hook_SQLCipher() {
     safePerform("database:hook_SQLCipher", () => {
         const SQLiteOpenHelper = safeUse(
-            'net.sqlcipher.database.SQLiteOpenHelper',
+            "net.sqlcipher.database.SQLiteOpenHelper",
             "database:hook_SQLCipher"
         );
-        if (SQLiteOpenHelper) {
-            const getWritableDatabaseRef = safeOverload(
-                SQLiteOpenHelper.getWritableDatabase,
-                "database:SQLiteOpenHelper.getWritableDatabase[String]",
-                'java.lang.String'
-            );
-            if (getWritableDatabaseRef) {
-                getWritableDatabaseRef.implementation = safeImplementation(
-                    "database:SQLiteOpenHelper.getWritableDatabase[String]",
-                    getWritableDatabaseRef,
-                    function (original, password: string) {
-                        createDatabaseEvent("database.sqlcipher.open", {
-                            method: "SQLiteOpenHelper.getWritableDatabase(String)",
-                            password: password,
-                            database_type: "SQLCipher",
-                            access_type: "writable"
-                        });
-                        return original.call(this, password);
-                    }
-                );
-            }
-        }
-
         const SQLiteDatabase = safeUse(
             "net.sqlcipher.database.SQLiteDatabase",
             "database:hook_SQLCipher"
         );
+        const AndroidBase64 = safeUse(
+            "android.util.Base64",
+            "database:hook_SQLCipher"
+        );
+
+        const JavaReflectArray = safeUse(
+            "java.lang.reflect.Array",
+            "database:hook_SQLCipher"
+        );
+
+        const base64Encode = AndroidBase64
+            ? safeOverload(
+                (AndroidBase64 as any).encodeToString,
+                "database:Base64.encodeToString[byte[],int]",
+                "[B",
+                "int"
+            )
+            : null;
+
+        // Suppress internal SQLCipher open delegation. For example, a
+        // File/String/CursorFactory overload may delegate to a wider overload.
+        const Thread = safeUse(
+            "java.lang.Thread",
+            "database:hook_SQLCipher"
+        );
+        if (!Thread) return;
+
+        const openGuardDepths: Record<string, number> = {};
+
+        function getCurrentThreadKey(): string {
+            try {
+                return (Thread as any).currentThread().getId().toString();
+            } catch (_) {
+                return "unknown";
+            }
+        }
+
+        function isNestedSqlCipherOpen(): boolean {
+            return (openGuardDepths[getCurrentThreadKey()] || 0) > 0;
+        }
+
+        function callWithSqlCipherOpenGuard<T>(fn: () => T): T {
+            const threadKey = getCurrentThreadKey();
+            openGuardDepths[threadKey] = (openGuardDepths[threadKey] || 0) + 1;
+
+            try {
+                return fn();
+            } finally {
+                openGuardDepths[threadKey]--;
+
+                if (openGuardDepths[threadKey] <= 0) {
+                    delete openGuardDepths[threadKey];
+                }
+            }
+        }
+
+        function signatureOf(overload: any): string {
+            return overload.argumentTypes
+                .map((arg: any) => arg.className)
+                .join(", ");
+        }
+
+        function serializePassword(value: any, typeName: string): {
+            value: string | null;
+            type: string;
+        } {
+            if (value === null || value === undefined) {
+                return {
+                    value: null,
+                    type: typeName
+                };
+            }
+
+            try {
+                if (typeName === "java.lang.String") {
+                    return {
+                        value: value.toString(),
+                        type: "String"
+                    };
+                }
+
+                if (typeName === "[C") {
+                    if (!JavaReflectArray) {
+                        return {
+                            value: null,
+                            type: "char[] (reflection unavailable)"
+                        };
+                    }
+
+                    const length = JavaReflectArray.getLength(value);
+                    let password = "";
+
+                    for (let index = 0; index < length; index++) {
+                        password += JavaReflectArray.getChar(value, index);
+                    }
+
+                    return {
+                        value: password,
+                        type: "char[]"
+                    };
+                }
+
+                if (typeName === "[B") {
+                    if (!AndroidBase64 || !base64Encode) {
+                        return {
+                            value: null,
+                            type: "byte[] (Base64 unavailable)"
+                        };
+                    }
+
+                    // android.util.Base64.NO_WRAP = 2
+                    const base64 = base64Encode
+                        .call(AndroidBase64, value, 2)
+                        .toString();
+
+                    return {
+                        value: `hex:${base64ToHex(base64)}`,
+                        type: "byte[]"
+                    };
+                }
+
+                return {
+                    value: value.toString(),
+                    type: typeName
+                };
+            } catch (error) {
+                return {
+                    value: `<error serializing password: ${error}>`,
+                    type: typeName
+                };
+            }
+        }
+
+        function getPath(pathArgument: any, pathType: string): string | null {
+            if (pathArgument === null || pathArgument === undefined) {
+                return null;
+            }
+
+            try {
+                if (pathType === "java.io.File") {
+                    return pathArgument.getAbsolutePath().toString();
+                }
+
+                return pathArgument.toString();
+            } catch (error) {
+                return `<error extracting path: ${error}>`;
+            }
+        }
+
+        // ------------------------------------------------------------
+        // SQLiteOpenHelper password-based opens
+        // ------------------------------------------------------------
+
+        function hookOpenHelperMethod(methodName: string, accessType: string): void {
+            if (!SQLiteOpenHelper || !(SQLiteOpenHelper as any)[methodName]) {
+                return;
+            }
+
+            const method = (SQLiteOpenHelper as any)[methodName];
+
+            method.overloads.forEach((overload: any, index: number) => {
+                const passwordType = overload.argumentTypes[0]?.className || "unknown";
+                const signature = signatureOf(overload);
+                const context =
+                    `database:SQLiteOpenHelper.${methodName}[${index}]`;
+
+                overload.implementation = safeImplementation(
+                    context,
+                    overload,
+                    function (original, ...args: any[]) {
+                        if (!isNestedSqlCipherOpen()) {
+                            const password = serializePassword(args[0], passwordType);
+
+                            createDatabaseEvent("database.sqlcipher.open", {
+                                method: `SQLiteOpenHelper.${methodName}(${signature})`,
+                                password: password.value,
+                                password_type: password.type,
+                                database_type: "SQLCipher",
+                                access_type: accessType,
+                                overload_signature: signature
+                            });
+                        }
+
+                        return callWithSqlCipherOpenGuard(
+                            () => original.apply(this, args)
+                        );
+                    }
+                );
+            });
+        }
+
+        hookOpenHelperMethod("getWritableDatabase", "writable");
+        hookOpenHelperMethod("getReadableDatabase", "readable");
+
         if (!SQLiteDatabase) {
             return;
         }
 
-        // First openOrCreateDatabase(File, String) – creates event
-        const openOrCreate_File_String_event = safeOverload(
-            SQLiteDatabase.openOrCreateDatabase,
-            "database:SQLiteDatabase.openOrCreateDatabase[File,String]",
-            "java.io.File",
-            "java.lang.String"
-        );
-        if (openOrCreate_File_String_event) {
-            openOrCreate_File_String_event.implementation = safeImplementation(
-                "database:SQLiteDatabase.openOrCreateDatabase[File,String]",
-                openOrCreate_File_String_event,
-                function (original, file: any, password: string) {
-                    createDatabaseEvent("database.sqlcipher.open", {
-                        method: "SQLiteDatabase.openOrCreateDatabase(File, String)",
-                        database_path: file.getAbsolutePath(),
-                        password: password,
-                        database_type: "SQLCipher",
-                        create_if_necessary: true
-                    });
-                    return original.call(this, file, password);
-                }
-            );
-        }
+        // ------------------------------------------------------------
+        // SQLiteDatabase.openOrCreateDatabase(...)
+        //
+        // SQLCipher overloads vary by library version. Hook every runtime-
+        // visible overload rather than hardcoding a subset.
+        // ------------------------------------------------------------
 
-        // Utility function to log and send events
-        const sendLog = (eventType, methodName, logMessage) => {
-            const log = `event_type: ${eventType}, method: ${methodName}, ${logMessage}`;
-            am_send(PROFILE_HOOKING_TYPE, log);
-        };
+        if ((SQLiteDatabase as any).openOrCreateDatabase?.overloads) {
+            (SQLiteDatabase as any).openOrCreateDatabase.overloads.forEach(
+                (overload: any, index: number) => {
+                    const pathType = overload.argumentTypes[0]?.className || "unknown";
+                    const passwordType = overload.argumentTypes[1]?.className || "unknown";
+                    const signature = signatureOf(overload);
+                    const context =
+                        `database:SQLiteDatabase.openOrCreateDatabase[${index}]`;
 
-        // Second openOrCreateDatabase(File, String) – console log
-        const openOrCreate_File_String_log = safeOverload(
-            SQLiteDatabase.openOrCreateDatabase,
-            "database:SQLiteDatabase.openOrCreateDatabase[File,String]_log",
-            "java.io.File",
-            "java.lang.String"
-        );
-        if (openOrCreate_File_String_log) {
-            openOrCreate_File_String_log.implementation = safeImplementation(
-                "database:SQLiteDatabase.openOrCreateDatabase[File,String]_log",
-                openOrCreate_File_String_log,
-                function (original, file: any, password: string) {
-                    const method = "openOrCreateDatabase(File, String)";
-                    sendLog(
-                        "SQLCipher.database.SQLiteDatabase",
-                        method,
-                        `Accessing SQLCipher database at ${file.getAbsolutePath()} with password: ${password}`
+                    overload.implementation = safeImplementation(
+                        context,
+                        overload,
+                        function (original, ...args: any[]) {
+                            if (!isNestedSqlCipherOpen()) {
+                                const password = serializePassword(args[1], passwordType);
+
+                                const hasFactory = args.length >= 3 && args[2] !== null;
+                                const hasDatabaseHook = overload.argumentTypes.some(
+                                    (arg: any, argIndex: number) =>
+                                        argIndex >= 3 &&
+                                        arg.className.includes("SQLiteDatabaseHook") &&
+                                        args[argIndex] !== null
+                                );
+                                const hasErrorHandler = overload.argumentTypes.some(
+                                    (arg: any, argIndex: number) =>
+                                        arg.className.includes("DatabaseErrorHandler") &&
+                                        args[argIndex] !== null
+                                );
+
+                                createDatabaseEvent("database.sqlcipher.open", {
+                                    method: `SQLiteDatabase.openOrCreateDatabase(${signature})`,
+                                    database_path: getPath(args[0], pathType),
+                                    password: password.value,
+                                    password_type: password.type,
+                                    database_type: "SQLCipher",
+                                    create_if_necessary: true,
+                                    has_factory: hasFactory,
+                                    has_database_hook: hasDatabaseHook,
+                                    has_error_handler: hasErrorHandler,
+                                    overload_signature: signature
+                                });
+                            }
+
+                            return callWithSqlCipherOpenGuard(
+                                () => original.apply(this, args)
+                            );
+                        }
                     );
-                    return original.call(this, file, password);
                 }
             );
         }
 
-        // Hook SQLiteDatabase.openOrCreateDatabase(String, char[])
-        const openOrCreate_String_charArray = safeOverload(
-            SQLiteDatabase.openOrCreateDatabase,
-            "database:SQLiteDatabase.openOrCreateDatabase[String,char[]]",
-            "java.lang.String",
-            "[C"
-        );
-        if (openOrCreate_String_charArray) {
-            openOrCreate_String_charArray.implementation = safeImplementation(
-                "database:SQLiteDatabase.openOrCreateDatabase[String,char[]]",
-                openOrCreate_String_charArray,
-                function (original, path: string, password: any) {
-                    const method = "openOrCreateDatabase(String, char[])";
-                    const passwordStr = password ? Java.array("char", password).join("") : "null";
-                    sendLog(
-                        "SQLCipher.database.SQLiteDatabase",
-                        method,
-                        `Accessing SQLCipher database at ${path} with password: ${passwordStr}`
-                    );
-                    return original.call(this, path, password);
-                }
-            );
-        }
+        // ------------------------------------------------------------
+        // SQL execution
+        //
+        // Keep PRAGMA key detection in this hook. Do not install another
+        // implementation from hook_room_library(), otherwise it overwrites
+        // this general execSQL hook.
+        // ------------------------------------------------------------
 
-        // Hook SQLiteDatabase.rawExecSQL(String)
-        const rawExecSQL_String = safeOverload(
-            SQLiteDatabase.rawExecSQL,
-            "database:SQLiteDatabase.rawExecSQL[String]",
-            "java.lang.String"
-        );
-        if (rawExecSQL_String) {
-            rawExecSQL_String.implementation = safeImplementation(
-                "database:SQLiteDatabase.rawExecSQL[String]",
-                rawExecSQL_String,
-                function (original, sql: string) {
-                    const method = "rawExecSQL(String)";
-                    sendLog(
-                        "SQLCipher.database.SQLiteDatabase",
-                        method,
-                        `Executing raw SQL: ${sql}`
-                    );
-                    return original.call(this, sql);
-                }
-            );
-        }
-
-        // Hook SQLiteDatabase.execSQL(String)
-        const execSQL_String_SQLCipher = safeOverload(
-            SQLiteDatabase.execSQL,
+        const execSQL = safeOverload(
+            (SQLiteDatabase as any).execSQL,
             "database:SQLiteDatabase.execSQL[String]_SQLCipher",
             "java.lang.String"
         );
-        if (execSQL_String_SQLCipher) {
-            execSQL_String_SQLCipher.implementation = safeImplementation(
+        if (execSQL) {
+            execSQL.implementation = safeImplementation(
                 "database:SQLiteDatabase.execSQL[String]_SQLCipher",
-                execSQL_String_SQLCipher,
+                execSQL,
                 function (original, sql: string) {
-                    createDatabaseEvent("database.sqlcipher.exec", {
-                        method: "SQLiteDatabase.execSQL(String)",
-                        sql: sql,
-                        database_type: "SQLCipher"
-                    });
+                    const isPragmaKey =
+                        sql !== null &&
+                        sql.toLowerCase().includes("pragma key");
+
+                    createDatabaseEvent(
+                        isPragmaKey
+                            ? "database.sqlcipher.pragma"
+                            : "database.sqlcipher.exec",
+                        {
+                            method: "SQLiteDatabase.execSQL(String)",
+                            sql: sql,
+                            pragma_type: isPragmaKey ? "key" : null,
+                            database_type: "SQLCipher"
+                        }
+                    );
+
                     return original.call(this, sql);
                 }
             );
         }
 
-        // Hook SQLiteDatabase.getWritableDatabase(String)
-        const getWritableDatabase_String = safeOverload(
-            SQLiteDatabase.getWritableDatabase,
-            "database:SQLiteDatabase.getWritableDatabase[String]",
+        const rawExecSQL = safeOverload(
+            (SQLiteDatabase as any).rawExecSQL,
+            "database:SQLiteDatabase.rawExecSQL[String]",
             "java.lang.String"
         );
-        if (getWritableDatabase_String) {
-            getWritableDatabase_String.implementation = safeImplementation(
-                "database:SQLiteDatabase.getWritableDatabase[String]",
-                getWritableDatabase_String,
-                function (original, password: string) {
-                    createDatabaseEvent("database.sqlcipher.open", {
-                        method: "SQLiteDatabase.getWritableDatabase(String)",
-                        password: password,
-                        database_type: "SQLCipher",
-                        access_type: "writable"
+        if (rawExecSQL) {
+            rawExecSQL.implementation = safeImplementation(
+                "database:SQLiteDatabase.rawExecSQL[String]",
+                rawExecSQL,
+                function (original, sql: string) {
+                    createDatabaseEvent("database.sqlcipher.exec", {
+                        method: "SQLiteDatabase.rawExecSQL(String)",
+                        sql: sql,
+                        database_type: "SQLCipher"
                     });
-                    return original.call(this, password);
+
+                    return original.call(this, sql);
                 }
             );
         }
 
-        // Hook SQLiteDatabase.getReadableDatabase(String)
-        const getReadableDatabase_String = safeOverload(
-            SQLiteDatabase.getReadableDatabase,
-            "database:SQLiteDatabase.getReadableDatabase[String]",
-            "java.lang.String"
-        );
-        if (getReadableDatabase_String) {
-            getReadableDatabase_String.implementation = safeImplementation(
-                "database:SQLiteDatabase.getReadableDatabase[String]",
-                getReadableDatabase_String,
-                function (original, password: string) {
-                    createDatabaseEvent("database.sqlcipher.open", {
-                        method: "SQLiteDatabase.getReadableDatabase(String)",
-                        password: password,
-                        database_type: "SQLCipher",
-                        access_type: "readable"
-                    });
-                    return original.call(this, password);
-                }
-            );
-        }
+        // ------------------------------------------------------------
+        // Lifecycle and transaction methods
+        // ------------------------------------------------------------
 
-        // Hook SQLiteDatabase.close()
-        const closeRef = SQLiteDatabase.close;
-        if (closeRef) {
-            closeRef.implementation = safeImplementation(
+        const close = safeOverload(
+            (SQLiteDatabase as any).close,
+            "database:SQLiteDatabase.close"
+        );
+        if (close) {
+            close.implementation = safeImplementation(
                 "database:SQLiteDatabase.close",
-                closeRef,
+                close,
                 function (original) {
-                    const method = "close()";
-                    sendLog(
-                        "SQLCipher.database.SQLiteDatabase",
-                        method,
-                        "Closing SQLCipher database"
-                    );
+                    let databasePath: string | null = null;
+
+                    try {
+                        databasePath = this.getPath().toString();
+                    } catch (_) {
+                        // Path is optional for close events.
+                    }
+
+                    createDatabaseEvent("database.sqlcipher.close", {
+                        method: "SQLiteDatabase.close()",
+                        database_path: databasePath,
+                        database_type: "SQLCipher"
+                    });
+
                     return original.call(this);
                 }
             );
         }
 
-        // Hook SQLiteDatabase.beginTransaction()
-        const beginTransactionRef = SQLiteDatabase.beginTransaction;
-        if (beginTransactionRef) {
-            beginTransactionRef.implementation = safeImplementation(
-                "database:SQLiteDatabase.beginTransaction",
-                beginTransactionRef,
+        function hookTransactionMethod(
+            methodName: string,
+            transactionAction: string
+        ): void {
+            const method = safeOverload(
+                (SQLiteDatabase as any)[methodName],
+                `database:SQLiteDatabase.${methodName}`
+            );
+            if (!method) {
+                return;
+            }
+
+            method.implementation = safeImplementation(
+                `database:SQLiteDatabase.${methodName}`,
+                method,
                 function (original) {
+                    let databasePath: string | null = null;
+
+                    try {
+                        databasePath = this.getPath().toString();
+                    } catch (_) {
+                        // Path is optional for transaction events.
+                    }
+
                     createDatabaseEvent("database.sqlcipher.transaction", {
-                        method: "SQLiteDatabase.beginTransaction()",
+                        method: `SQLiteDatabase.${methodName}()`,
+                        database_path: databasePath,
                         database_type: "SQLCipher",
-                        transaction_action: "begin"
+                        transaction_action: transactionAction
                     });
+
                     return original.call(this);
                 }
             );
         }
 
-        // Hook SQLiteDatabase.endTransaction()
-        const endTransactionRef = SQLiteDatabase.endTransaction;
-        if (endTransactionRef) {
-            endTransactionRef.implementation = safeImplementation(
-                "database:SQLiteDatabase.endTransaction",
-                endTransactionRef,
-                function (original) {
-                    createDatabaseEvent("database.sqlcipher.transaction", {
-                        method: "SQLiteDatabase.endTransaction()",
-                        database_type: "SQLCipher",
-                        transaction_action: "end"
-                    });
-                    return original.call(this);
-                }
-            );
-        }
+        hookTransactionMethod("beginTransaction", "begin");
+        hookTransactionMethod("setTransactionSuccessful", "successful");
+        hookTransactionMethod("endTransaction", "end");
     });
 }
 
@@ -1579,76 +1725,76 @@ function hook_room_library() {
             );
         }
 
-        // Hook SQLiteDatabase.openOrCreateDatabase (only if SQLCipher is present)
-        const SQLiteDatabase = safeUse(
-            "net.sqlcipher.database.SQLiteDatabase",
-            "database:hook_room_library"
-        );
-        if (SQLiteDatabase) {
-            const openOrCreate_File_String = safeOverload(
-                SQLiteDatabase.openOrCreateDatabase,
-                "database:SQLiteDatabase.openOrCreateDatabase[File,String]_Room",
-                "java.io.File",
-                "java.lang.String"
-            );
-            if (openOrCreate_File_String) {
-                openOrCreate_File_String.implementation = safeImplementation(
-                    "database:SQLiteDatabase.openOrCreateDatabase[File,String]_Room",
-                    openOrCreate_File_String,
-                    function (original, file: any, password: string) {
-                        const methodVal = "SQLiteDatabase.openOrCreateDatabase(File, String), ";
-                        const logVal = `Opening or creating database with file: ${file.getAbsolutePath()} and password: ${password}`;
-                        am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
-                        //console.log(logVal);
-                        return original.call(this, file, password);
-                    }
-                );
-            }
+        // // Hook SQLiteDatabase.openOrCreateDatabase (only if SQLCipher is present)
+        // const SQLiteDatabase = safeUse(
+        //     "net.sqlcipher.database.SQLiteDatabase",
+        //     "database:hook_room_library"
+        // );
+        // if (SQLiteDatabase) {
+        //     const openOrCreate_File_String = safeOverload(
+        //         SQLiteDatabase.openOrCreateDatabase,
+        //         "database:SQLiteDatabase.openOrCreateDatabase[File,String]_Room",
+        //         "java.io.File",
+        //         "java.lang.String"
+        //     );
+        //     if (openOrCreate_File_String) {
+        //         openOrCreate_File_String.implementation = safeImplementation(
+        //             "database:SQLiteDatabase.openOrCreateDatabase[File,String]_Room",
+        //             openOrCreate_File_String,
+        //             function (original, file: any, password: string) {
+        //                 const methodVal = "SQLiteDatabase.openOrCreateDatabase(File, String), ";
+        //                 const logVal = `Opening or creating database with file: ${file.getAbsolutePath()} and password: ${password}`;
+        //                 am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
+        //                 //console.log(logVal);
+        //                 return original.call(this, file, password);
+        //             }
+        //         );
+        //     }
 
-            const openOrCreate_String_String = safeOverload(
-                SQLiteDatabase.openOrCreateDatabase,
-                "database:SQLiteDatabase.openOrCreateDatabase[String,String]_Room",
-                "java.lang.String",
-                "java.lang.String"
-            );
-            if (openOrCreate_String_String) {
-                openOrCreate_String_String.implementation = safeImplementation(
-                    "database:SQLiteDatabase.openOrCreateDatabase[String,String]_Room",
-                    openOrCreate_String_String,
-                    function (original, path: string, password: string) {
-                        const methodVal = "SQLiteDatabase.openOrCreateDatabase(String, String), ";
-                        const logVal = `Opening or creating database with path: ${path} and password: ${password}`;
-                        am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
-                        //console.log(logVal);
-                        return original.call(this, path, password);
-                    }
-                );
-            }
+        //     const openOrCreate_String_String = safeOverload(
+        //         SQLiteDatabase.openOrCreateDatabase,
+        //         "database:SQLiteDatabase.openOrCreateDatabase[String,String]_Room",
+        //         "java.lang.String",
+        //         "java.lang.String"
+        //     );
+        //     if (openOrCreate_String_String) {
+        //         openOrCreate_String_String.implementation = safeImplementation(
+        //             "database:SQLiteDatabase.openOrCreateDatabase[String,String]_Room",
+        //             openOrCreate_String_String,
+        //             function (original, path: string, password: string) {
+        //                 const methodVal = "SQLiteDatabase.openOrCreateDatabase(String, String), ";
+        //                 const logVal = `Opening or creating database with path: ${path} and password: ${password}`;
+        //                 am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
+        //                 //console.log(logVal);
+        //                 return original.call(this, path, password);
+        //             }
+        //         );
+        //     }
 
-            // Hook PRAGMA key setting for SQLCipher
-            const execSQL_String_SQLCipherRoom = safeOverload(
-                SQLiteDatabase.execSQL,
-                "database:SQLiteDatabase.execSQL[String]_Room_SQLCipherPragma",
-                "java.lang.String"
-            );
-            if (execSQL_String_SQLCipherRoom) {
-                execSQL_String_SQLCipherRoom.implementation = safeImplementation(
-                    "database:SQLiteDatabase.execSQL[String]_Room_SQLCipherPragma",
-                    execSQL_String_SQLCipherRoom,
-                    function (original, sql: string) {
-                        if (sql.toLowerCase().includes("pragma key")) {
-                            createDatabaseEvent("database.sqlcipher.pragma", {
-                                method: "SQLiteDatabase.execSQL(String)",
-                                sql: sql,
-                                pragma_type: "key",
-                                database_type: "SQLCipher"
-                            });
-                        }
-                        return original.call(this, sql);
-                    }
-                );
-            }
-        } // End if (SQLiteDatabase)
+        //     // Hook PRAGMA key setting for SQLCipher
+        //     const execSQL_String_SQLCipherRoom = safeOverload(
+        //         SQLiteDatabase.execSQL,
+        //         "database:SQLiteDatabase.execSQL[String]_Room_SQLCipherPragma",
+        //         "java.lang.String"
+        //     );
+        //     if (execSQL_String_SQLCipherRoom) {
+        //         execSQL_String_SQLCipherRoom.implementation = safeImplementation(
+        //             "database:SQLiteDatabase.execSQL[String]_Room_SQLCipherPragma",
+        //             execSQL_String_SQLCipherRoom,
+        //             function (original, sql: string) {
+        //                 if (sql.toLowerCase().includes("pragma key")) {
+        //                     createDatabaseEvent("database.sqlcipher.pragma", {
+        //                         method: "SQLiteDatabase.execSQL(String)",
+        //                         sql: sql,
+        //                         pragma_type: "key",
+        //                         database_type: "SQLCipher"
+        //                     });
+        //                 }
+        //                 return original.call(this, sql);
+        //             }
+        //         );
+        //     }
+        // } // End if (SQLiteDatabase)
 
         // Hook SupportSQLiteOpenHelper.Callback onCreate / onOpen
         const SupportSQLiteOpenHelper_Callback = safeUse(
