@@ -1,6 +1,6 @@
-import { log, devlog, am_send } from "../utils/logging.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
-import { Where } from "../utils/misc.js"
+import { Where, bytesToHex } from "../utils/misc.js"
 import { Java} from "../utils/javalib.js"
 import { safePerform, safeUse, safeDeferred, safeOverload, safeImplementation } from "../utils/safe_java.js"
 import { safeResolveExport, safeAttach } from "../utils/safe_native.js"
@@ -86,8 +86,6 @@ recv("path_filters", (message) => {
  }
  
 
-
-
  export { set_airplane_mode };
 
 
@@ -99,132 +97,406 @@ function hook_java_sql() {
         );
         if (!sqliteDatabase) return;
 
-        // execSQL(String sql)
+        // Per-thread operation-depth guard prevents duplicate events when public
+        // SQLiteDatabase wrapper methods delegate internally to other hooked methods.
+        const Thread = safeUse(
+            "java.lang.Thread",
+            "database:hook_java_sql"
+        );
+        if (!Thread) return;
+
+        const operationGuardDepths: Record<string, Record<string, number>> = {};
+
+        function getCurrentThreadKey(): string {
+            try {
+                return (Thread as any).currentThread().getId().toString();
+            } catch (_) {
+                // Fallback should only be used if thread lookup unexpectedly fails.
+                return "unknown";
+            }
+        }
+
+        function getOperationDepth(operation: string): number {
+            const threadGuards = operationGuardDepths[getCurrentThreadKey()];
+            return threadGuards ? (threadGuards[operation] || 0) : 0;
+        }
+
+        function isNestedOperation(operation: string): boolean {
+            return getOperationDepth(operation) > 0;
+        }
+
+        function isNestedQueryOperation(): boolean {
+            return isNestedOperation("sqlite.query");
+        }
+
+        function callWithOperationGuard<T>(operation: string, fn: () => T): T {
+            const threadKey = getCurrentThreadKey();
+
+            if (!operationGuardDepths[threadKey]) {
+                operationGuardDepths[threadKey] = {};
+            }
+
+            const threadGuards = operationGuardDepths[threadKey];
+            threadGuards[operation] = (threadGuards[operation] || 0) + 1;
+
+            try {
+                return fn();
+            } finally {
+                threadGuards[operation]--;
+
+                if (threadGuards[operation] <= 0) {
+                    delete threadGuards[operation];
+                }
+
+                if (Object.keys(threadGuards).length === 0) {
+                    delete operationGuardDepths[threadKey];
+                }
+            }
+        }
+
+        const AndroidBase64 = safeUse(
+            "android.util.Base64",
+            "database:hook_java_sql"
+        );
+        const base64Encode = AndroidBase64
+            ? safeOverload(
+                (AndroidBase64 as any).encodeToString,
+                "database:Base64.encodeToString[byte[],int]",
+                "[B",
+                "int"
+            )
+            : null;
+
+        function getDatabasePath(database: any): string {
+            try {
+                return database.getPath();
+            } catch (error) {
+                return `Error getting path: ${error}`;
+            }
+        }
+
+        function base64ToHex(base64: string): string {
+            const alphabet =
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+            let buffer = 0;
+            let bitCount = 0;
+            let hex = "";
+
+            for (const character of base64) {
+                if (character === "=") {
+                    break;
+                }
+
+                const value = alphabet.indexOf(character);
+                if (value < 0) {
+                    continue;
+                }
+
+                buffer = (buffer << 6) | value;
+                bitCount += 6;
+
+                while (bitCount >= 8) {
+                    bitCount -= 8;
+                    const byte = (buffer >> bitCount) & 0xff;
+                    hex += byte.toString(16).padStart(2, "0");
+                }
+            }
+
+            return hex;
+        }
+
+        function serializeJavaValue(value: any): any {
+            if (value === null || value === undefined) {
+                return null;
+            }
+
+            if (
+                typeof value === "string" ||
+                typeof value === "number" ||
+                typeof value === "boolean"
+            ) {
+                return value;
+            }
+
+            try {
+                // ContentValues.get() has declared return type Object. Frida therefore
+                // exposes returned boxed primitives as java.lang.Object wrappers even
+                // when their runtime type is Integer, Double, byte[], etc.
+                const runtimeClassName = value.getClass().getName().toString();
+                const runtimeClass = Java.use(runtimeClassName);
+                const typedValue = Java.cast(value, runtimeClass);
+
+                switch (runtimeClassName) {
+                    case "java.lang.String":
+                    case "java.lang.CharSequence":
+                    case "java.lang.Character":
+                        return typedValue.toString();
+
+                    case "java.lang.Boolean":
+                        return typedValue.booleanValue();
+
+                    case "java.lang.Byte":
+                    case "java.lang.Short":
+                    case "java.lang.Integer":
+                        return typedValue.intValue();
+
+                    case "java.lang.Long":
+                        // Preserve 64-bit precision rather than coercing to JS Number.
+                        return typedValue.toString();
+
+                    case "java.lang.Float":
+                    case "java.lang.Double":
+                        return typedValue.doubleValue();
+
+                    case "[B": {
+                        if (!AndroidBase64 || !base64Encode) {
+                            return {
+                                type: "byte[]",
+                                value_hex: null,
+                                length: null,
+                                error: "android.util.Base64 unavailable"
+                            };
+                        }
+
+                        // NO_WRAP = 2. Let Android encode the real Java byte[]
+                        // instead of relying on Frida JS array indexing semantics.
+                        const base64 = base64Encode
+                            .call(AndroidBase64, typedValue, 2)
+                            .toString();
+
+                        const valueHex = base64ToHex(base64);
+
+                        return {
+                            type: "byte[]",
+                            value_hex: valueHex,
+                            length: valueHex.length / 2
+                        };
+                    }
+
+                    default:
+                        return {
+                            type: runtimeClassName,
+                            value: typedValue.toString()
+                        };
+                }
+            } catch (error) {
+                return `<error serializing value: ${error}>`;
+            }
+        }
+
+        function serializeJavaArray(values: any): any[] {
+            if (!values) return [];
+
+            const result: any[] = [];
+            for (let index = 0; index < values.length; index++) {
+                result.push(serializeJavaValue(values[index]));
+            }
+
+            return result;
+        }
+
+        function serializeContentValues(values: any): Record<string, any> {
+            const contentValues: Record<string, any> = {};
+
+            if (!values) return contentValues;
+
+            const iterator = values.keySet().iterator();
+            while (iterator.hasNext()) {
+                const key = iterator.next().toString();
+                contentValues[key] = serializeJavaValue(values.get(key));
+            }
+
+            return contentValues;
+        }
+
+        function emitSqliteDatabaseEvent(
+            database: any,
+            eventType: string,
+            data: Record<string, any>
+        ): void {
+            const databasePath = getDatabasePath(database);
+
+            if (!shouldLogDatabasePath(databasePath)) {
+                return;
+            }
+
+            createDatabaseEvent(eventType, {
+                database_path: databasePath,
+                ...data
+            });
+        }
+
+        function interpretDatabaseFlags(flags: number): string {
+            const descriptions: string[] = [];
+
+            // Android SQLiteDatabase: OPEN_READWRITE is zero.
+            if ((flags & 0x00000001) !== 0) {
+                descriptions.push("OPEN_READONLY");
+            } else {
+                descriptions.push("OPEN_READWRITE");
+            }
+
+            if ((flags & 0x10000000) !== 0) {
+                descriptions.push("CREATE_IF_NECESSARY");
+            }
+
+            if ((flags & 0x00000010) !== 0) {
+                descriptions.push("NO_LOCALIZED_COLLATORS");
+            }
+
+            if ((flags & 0x20000000) !== 0) {
+                descriptions.push("ENABLE_WRITE_AHEAD_LOGGING");
+            }
+
+            return descriptions.join(" | ");
+        }
+
+        // ------------------------------------------------------------
+        // execSQL
+        // ------------------------------------------------------------
+
         const execSQL_String = safeOverload(
             sqliteDatabase.execSQL,
             "database:SQLiteDatabase.execSQL[String]",
-            'java.lang.String'
+            "java.lang.String"
         );
         if (execSQL_String) {
             execSQL_String.implementation = safeImplementation(
                 "database:SQLiteDatabase.execSQL[String]",
                 execSQL_String,
                 function (original, sql: string) {
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        createDatabaseEvent("database.sqlite.exec", {
-                            method: "SQLiteDatabase.execSQL(String)",
-                            database_path: dbPath,
-                            sql: sql
-                        });
-                    }
+                    emitSqliteDatabaseEvent(this, "database.sqlite.exec", {
+                        method: "SQLiteDatabase.execSQL(String)",
+                        sql: sql
+                    });
 
                     return original.call(this, sql);
                 }
             );
         }
 
-        // execSQL(String sql, Object[] bindArgs)
         const execSQL_String_ObjectArray = safeOverload(
             sqliteDatabase.execSQL,
             "database:SQLiteDatabase.execSQL[String,Object[]]",
-            'java.lang.String', '[Ljava.lang.Object;'
+            "java.lang.String",
+            "[Ljava.lang.Object;"
         );
         if (execSQL_String_ObjectArray) {
             execSQL_String_ObjectArray.implementation = safeImplementation(
                 "database:SQLiteDatabase.execSQL[String,Object[]]",
                 execSQL_String_ObjectArray,
-                function (original, sql: string, bindArgsArray: any[]) {
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const bindArgs: any[] = [];
-                        if (bindArgsArray && bindArgsArray.length > 0) {
-                            for (let i = 0; i < bindArgsArray.length; i++) {
-                                bindArgs.push(bindArgsArray[i]);
-                            }
-                        }
-
-                        createDatabaseEvent("database.sqlite.exec", {
-                            method: "SQLiteDatabase.execSQL(String, Object[])",
-                            database_path: dbPath,
-                            sql: sql,
-                            bind_args: bindArgs
-                        });
-                    }
+                function (original, sql: string, bindArgsArray: any) {
+                    emitSqliteDatabaseEvent(this, "database.sqlite.exec", {
+                        method: "SQLiteDatabase.execSQL(String, Object[])",
+                        sql: sql,
+                        bind_args: serializeJavaArray(bindArgsArray)
+                    });
 
                     return original.call(this, sql, bindArgsArray);
                 }
             );
         }
 
-        // query(boolean distinct, String table, String[] columns, String selection,
-        //       String[] selectionArgs, String groupBy, String having, String orderBy, String limit)
+        // ------------------------------------------------------------
+        // query
+        // ------------------------------------------------------------
+
         const query_distinct_full = safeOverload(
             sqliteDatabase.query,
             "database:SQLiteDatabase.query[boolean,String,String[],String,String[],String,String,String,String]",
-            'boolean', 'java.lang.String', '[Ljava.lang.String;', 'java.lang.String',
-            '[Ljava.lang.String;', 'java.lang.String', 'java.lang.String',
-            'java.lang.String', 'java.lang.String'
+            "boolean",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String"
         );
         if (query_distinct_full) {
             query_distinct_full.implementation = safeImplementation(
                 "database:SQLiteDatabase.query[boolean,String,String[],String,String[],String,String,String,String]",
                 query_distinct_full,
-                function (original, distinct: boolean, table: string, columns: any, selection: string, selectionArgs: any,
-                            groupBy: string, having: string, orderBy: string, limit: string) {
-                    const methodVal = "SQLiteDatabase.query called.";
-                    const logVal = "Table: " + table + ", selection value: " + selection +
-                                    ", selectionArgs: " + selectionArgs + " distinct: " + distinct;
-                    am_send(PROFILE_HOOKING_TYPE, methodVal + " " + logVal + "\n");
-                    return original.call(this, distinct, table, columns, selection, selectionArgs, groupBy, having, orderBy, limit);
+                function (
+                    original,
+                    distinct: boolean,
+                    table: string,
+                    columns: any,
+                    selection: string,
+                    selectionArgs: any,
+                    groupBy: string,
+                    having: string,
+                    orderBy: string,
+                    limit: string
+                ) {
+                    if (!isNestedQueryOperation()) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.query", {
+                            method: "SQLiteDatabase.query(boolean, String, String[], String, String[], String, String, String, String)",
+                            table: table,
+                            columns: serializeJavaArray(columns),
+                            where_clause: selection,
+                            where_args: serializeJavaArray(selectionArgs),
+                            group_by: groupBy,
+                            having: having,
+                            order_by: orderBy,
+                            limit: limit,
+                            distinct: distinct
+                        });
+                    }
+                    return callWithOperationGuard(
+                        "sqlite.query",
+                        () => original.call(
+                            this,
+                            distinct,
+                            table,
+                            columns,
+                            selection,
+                            selectionArgs,
+                            groupBy,
+                            having,
+                            orderBy,
+                            limit
+                        )
+                    );
                 }
             );
         }
 
-        // query(String table, String[] columns, String selection, String[] selectionArgs,
-        //       String groupBy, String having, String orderBy, String limit)
         const query_full = safeOverload(
             sqliteDatabase.query,
             "database:SQLiteDatabase.query[String,String[],String,String[],String,String,String,String]",
-            'java.lang.String', '[Ljava.lang.String;', 'java.lang.String', '[Ljava.lang.String;',
-            'java.lang.String', 'java.lang.String', 'java.lang.String', 'java.lang.String'
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String"
         );
         if (query_full) {
             query_full.implementation = safeImplementation(
                 "database:SQLiteDatabase.query[String,String[],String,String[],String,String,String,String]",
                 query_full,
-                function (original, table: string, columnsArray: any, selection: string, selectionArgsArray: any,
-                            groupBy: string, having: string, orderBy: string, limit: string) {
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const columns = columnsArray ? Array.prototype.slice.call(columnsArray) : [];
-                        const selectionArgs = selectionArgsArray ? Array.prototype.slice.call(selectionArgsArray) : [];
-
-                        createDatabaseEvent("database.sqlite.query", {
+                function (
+                    original,
+                    table: string,
+                    columns: any,
+                    selection: string,
+                    selectionArgs: any,
+                    groupBy: string,
+                    having: string,
+                    orderBy: string,
+                    limit: string
+                ) {
+                    if (!isNestedQueryOperation()) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.query", {
                             method: "SQLiteDatabase.query(String, String[], String, String[], String, String, String, String)",
-                            database_path: dbPath,
                             table: table,
-                            columns: columns,
+                            columns: serializeJavaArray(columns),
                             where_clause: selection,
-                            where_args: selectionArgs,
+                            where_args: serializeJavaArray(selectionArgs),
                             group_by: groupBy,
                             having: having,
                             order_by: orderBy,
@@ -232,450 +504,546 @@ function hook_java_sql() {
                         });
                     }
 
-                    return original.call(this, table, columnsArray, selection, selectionArgsArray, groupBy, having, orderBy, limit);
+                    return callWithOperationGuard(
+                        "sqlite.query",
+                        () => original.call(
+                            this,
+                            table,
+                            columns,
+                            selection,
+                            selectionArgs,
+                            groupBy,
+                            having,
+                            orderBy,
+                            limit
+                        )
+                    );
                 }
             );
         }
 
-        // query(boolean distinct, String table, String[] columns, String selection, String[] selectionArgs,
-        //       String groupBy, String having, String orderBy, String limit, CancellationSignal cancellationSignal)
         const query_distinct_full_cancel = safeOverload(
             sqliteDatabase.query,
             "database:SQLiteDatabase.query[boolean,String,String[],String,String[],String,String,String,String,CancellationSignal]",
-            'boolean', 'java.lang.String', '[Ljava.lang.String;', 'java.lang.String',
-            '[Ljava.lang.String;', 'java.lang.String', 'java.lang.String',
-            'java.lang.String', 'java.lang.String', 'android.os.CancellationSignal'
+            "boolean",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "android.os.CancellationSignal"
         );
         if (query_distinct_full_cancel) {
             query_distinct_full_cancel.implementation = safeImplementation(
                 "database:SQLiteDatabase.query[boolean,String,String[],String,String[],String,String,String,String,CancellationSignal]",
                 query_distinct_full_cancel,
-                function (original, distinct: boolean, table: string, columns: any, selection: string,
-                            selectionArgs: any, groupBy: string, having: string,
-                            orderBy: string, limit: string, cancellationSignal: any) {
-                    const methodVal = "SQLiteDatabase.query called.";
-                    const logVal = "Table: " + table + ", selection value: " + selection +
-                                    ", selectionArgs: " + selectionArgs;
-                    am_send(PROFILE_HOOKING_TYPE, methodVal + " " + logVal + "\n");
-                    return original.call(this, distinct, table, columns, selection, selectionArgs,
-                                            groupBy, having, orderBy, limit, cancellationSignal);
+                function (
+                    original,
+                    distinct: boolean,
+                    table: string,
+                    columns: any,
+                    selection: string,
+                    selectionArgs: any,
+                    groupBy: string,
+                    having: string,
+                    orderBy: string,
+                    limit: string,
+                    cancellationSignal: any
+                ) {
+                    if (!isNestedQueryOperation()) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.query", {
+                            method: "SQLiteDatabase.query(boolean, String, String[], String, String[], String, String, String, String, CancellationSignal)",
+                            table: table,
+                            columns: serializeJavaArray(columns),
+                            where_clause: selection,
+                            where_args: serializeJavaArray(selectionArgs),
+                            group_by: groupBy,
+                            having: having,
+                            order_by: orderBy,
+                            limit: limit,
+                            distinct: distinct,
+                            cancellation_signal: cancellationSignal !== null
+                        });
+                    }
+
+                    return callWithOperationGuard(
+                        "sqlite.query",
+                        () => original.call(
+                            this,
+                            distinct,
+                            table,
+                            columns,
+                            selection,
+                            selectionArgs,
+                            groupBy,
+                            having,
+                            orderBy,
+                            limit,
+                            cancellationSignal
+                        )
+                    );
                 }
             );
         }
 
-        // query(String table, String[] columns, String selection, String[] selectionArgs,
-        //       String groupBy, String having, String orderBy)
         const query_short = safeOverload(
             sqliteDatabase.query,
             "database:SQLiteDatabase.query[String,String[],String,String[],String,String,String]",
-            'java.lang.String', '[Ljava.lang.String;', 'java.lang.String', '[Ljava.lang.String;',
-            'java.lang.String', 'java.lang.String', 'java.lang.String'
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String"
         );
         if (query_short) {
             query_short.implementation = safeImplementation(
                 "database:SQLiteDatabase.query[String,String[],String,String[],String,String,String]",
                 query_short,
-                function (original, table: string, columns: any, selection: string,
-                            selectionArgs: any, groupBy: string, having: string, orderBy: string) {
-                    const methodVal = "SQLiteDatabase.query called.";
-                    const logVal = "Table: " + table + ", selection value: " + selection +
-                                    ", selectionArgs: " + selectionArgs;
-                    am_send(PROFILE_HOOKING_TYPE, methodVal + " " + logVal + "\n");
-                    return original.call(this, table, columns, selection, selectionArgs, groupBy, having, orderBy);
+                function (
+                    original,
+                    table: string,
+                    columns: any,
+                    selection: string,
+                    selectionArgs: any,
+                    groupBy: string,
+                    having: string,
+                    orderBy: string
+                ) {
+                    if (!isNestedQueryOperation()) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.query", {
+                            method: "SQLiteDatabase.query(String, String[], String, String[], String, String, String)",
+                            table: table,
+                            columns: serializeJavaArray(columns),
+                            where_clause: selection,
+                            where_args: serializeJavaArray(selectionArgs),
+                            group_by: groupBy,
+                            having: having,
+                            order_by: orderBy
+                        });
+                    }
+
+                    return callWithOperationGuard(
+                        "sqlite.query",
+                        () => original.call(
+                            this,
+                            table,
+                            columns,
+                            selection,
+                            selectionArgs,
+                            groupBy,
+                            having,
+                            orderBy
+                        )
+                    );
                 }
             );
         }
 
-        // queryWithFactory(SQLiteDatabase.CursorFactory cursorFactory, boolean distinct, String table, String[] columns,
-        //                  String selection, String[] selectionArgs, String groupBy, String having, String orderBy, String limit)
+        // ------------------------------------------------------------
+        // queryWithFactory / rawQueryWithFactory
+        // ------------------------------------------------------------
+
         const queryWithFactory_full = safeOverload(
             sqliteDatabase.queryWithFactory,
             "database:SQLiteDatabase.queryWithFactory[CursorFactory,boolean,String,String[],String,String[],String,String,String,String]",
-            'android.database.sqlite.SQLiteDatabase$CursorFactory', 'boolean', 'java.lang.String',
-            '[Ljava.lang.String;', 'java.lang.String', '[Ljava.lang.String;',
-            'java.lang.String', 'java.lang.String', 'java.lang.String', 'java.lang.String'
+            "android.database.sqlite.SQLiteDatabase$CursorFactory",
+            "boolean",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String"
         );
         if (queryWithFactory_full) {
             queryWithFactory_full.implementation = safeImplementation(
                 "database:SQLiteDatabase.queryWithFactory[CursorFactory,boolean,String,String[],String,String[],String,String,String,String]",
                 queryWithFactory_full,
-                function (original, factory: any, distinct: boolean, table: string, columns: any,
-                            selection: string, selectionArgs: any, groupBy: string, having: string,
-                            orderBy: string, limit: string) {
-                    const methodVal = "SQLiteDatabase.queryWithFactory called.";
-                    const logVal = "Table: " + table + ", selection value: " + selection +
-                                    ", selectionArgs: " + selectionArgs + " distinct: " + distinct;
-                    am_send(PROFILE_HOOKING_TYPE, methodVal + " " + logVal + "\n");
-                    return original.call(this, factory, distinct, table, columns,
-                                            selection, selectionArgs, groupBy, having, orderBy, limit);
+                function (
+                    original,
+                    factory: any,
+                    distinct: boolean,
+                    table: string,
+                    columns: any,
+                    selection: string,
+                    selectionArgs: any,
+                    groupBy: string,
+                    having: string,
+                    orderBy: string,
+                    limit: string
+                ) {
+                    if (!isNestedQueryOperation()) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.query", {
+                            method: "SQLiteDatabase.queryWithFactory(CursorFactory, boolean, String, String[], String, String[], String, String, String, String)",
+                            table: table,
+                            columns: serializeJavaArray(columns),
+                            where_clause: selection,
+                            where_args: serializeJavaArray(selectionArgs),
+                            group_by: groupBy,
+                            having: having,
+                            order_by: orderBy,
+                            limit: limit,
+                            distinct: distinct,
+                            has_factory: factory !== null
+                        });
+                    }
+
+                    return callWithOperationGuard(
+                        "sqlite.query",
+                        () => original.call(
+                            this,
+                            factory,
+                            distinct,
+                            table,
+                            columns,
+                            selection,
+                            selectionArgs,
+                            groupBy,
+                            having,
+                            orderBy,
+                            limit
+                        )
+                    );
                 }
             );
         }
 
-        // queryWithFactory(SQLiteDatabase.CursorFactory cursorFactory, boolean distinct, String table, String[] columns,
-        //                  String selection, String[] selectionArgs, String groupBy, String having, String orderBy, String limit, CancellationSignal cancellationSignal)
         const queryWithFactory_full_cancel = safeOverload(
             sqliteDatabase.queryWithFactory,
             "database:SQLiteDatabase.queryWithFactory[CursorFactory,boolean,String,String[],String,String[],String,String,String,String,CancellationSignal]",
-            'android.database.sqlite.SQLiteDatabase$CursorFactory', 'boolean', 'java.lang.String',
-            '[Ljava.lang.String;', 'java.lang.String', '[Ljava.lang.String;',
-            'java.lang.String', 'java.lang.String', 'java.lang.String', 'java.lang.String',
-            'android.os.CancellationSignal'
+            "android.database.sqlite.SQLiteDatabase$CursorFactory",
+            "boolean",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "android.os.CancellationSignal"
         );
         if (queryWithFactory_full_cancel) {
             queryWithFactory_full_cancel.implementation = safeImplementation(
                 "database:SQLiteDatabase.queryWithFactory[CursorFactory,boolean,String,String[],String,String[],String,String,String,String,CancellationSignal]",
                 queryWithFactory_full_cancel,
-                function (original, factory: any, distinct: boolean, table: string, columns: any,
-                            selection: string, selectionArgs: any, groupBy: string, having: string,
-                            orderBy: string, limit: string, cancellationSignal: any) {
-                    const methodVal = "SQLiteDatabase.queryWithFactory called.";
-                    const logVal = "Table: " + table + ", selection value: " + selection +
-                                    ", selectionArgs: " + selectionArgs + " distinct: " + distinct;
-                    am_send(PROFILE_HOOKING_TYPE, methodVal + " " + logVal + "\n");
-                    return original.call(this, factory, distinct, table, columns,
-                                            selection, selectionArgs, groupBy, having, orderBy, limit, cancellationSignal);
-                }
-            );
-        }
-
-        // rawQuery(String sql, String[] selectionArgs)
-        const rawQuery_String_StringArray = safeOverload(
-            sqliteDatabase.rawQuery,
-            "database:SQLiteDatabase.rawQuery[String,String[]]",
-            'java.lang.String', '[Ljava.lang.String;'
-        );
-        if (rawQuery_String_StringArray) {
-            rawQuery_String_StringArray.implementation = safeImplementation(
-                "database:SQLiteDatabase.rawQuery[String,String[]]",
-                rawQuery_String_StringArray,
-                function (original, sql: string, selectionArgsArray: string[]) {
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const selectionArgs: string[] = [];
-                        if (selectionArgsArray && selectionArgsArray.length > 0) {
-                            for (let i = 0; i < selectionArgsArray.length; i++) {
-                                selectionArgs.push(selectionArgsArray[i]);
-                            }
-                        }
-
-                        createDatabaseEvent("database.sqlite.query", {
-                            method: "SQLiteDatabase.rawQuery(String, String[])",
-                            database_path: dbPath,
-                            sql: sql,
-                            where_args: selectionArgs
+                function (
+                    original,
+                    factory: any,
+                    distinct: boolean,
+                    table: string,
+                    columns: any,
+                    selection: string,
+                    selectionArgs: any,
+                    groupBy: string,
+                    having: string,
+                    orderBy: string,
+                    limit: string,
+                    cancellationSignal: any
+                ) {
+                    if (!isNestedQueryOperation()) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.query", {
+                            method: "SQLiteDatabase.queryWithFactory(CursorFactory, boolean, String, String[], String, String[], String, String, String, String, CancellationSignal)",
+                            table: table,
+                            columns: serializeJavaArray(columns),
+                            where_clause: selection,
+                            where_args: serializeJavaArray(selectionArgs),
+                            group_by: groupBy,
+                            having: having,
+                            order_by: orderBy,
+                            limit: limit,
+                            distinct: distinct,
+                            has_factory: factory !== null,
+                            cancellation_signal: cancellationSignal !== null
                         });
                     }
 
-                    return original.call(this, sql, selectionArgsArray);
+                    return callWithOperationGuard(
+                        "sqlite.query",
+                        () => original.call(
+                            this,
+                            factory,
+                            distinct,
+                            table,
+                            columns,
+                            selection,
+                            selectionArgs,
+                            groupBy,
+                            having,
+                            orderBy,
+                            limit,
+                            cancellationSignal
+                        )
+                    );
                 }
             );
         }
 
-        // rawQuery(String sql, String[] selectionArgs, CancellationSignal cancellationSignal)
-        const rawQuery_String_StringArray_Cancellation = safeOverload(
-            sqliteDatabase.rawQuery,
-            "database:SQLiteDatabase.rawQuery[String,String[],CancellationSignal]",
-            'java.lang.String', '[Ljava.lang.String;', 'android.os.CancellationSignal'
-        );
-        if (rawQuery_String_StringArray_Cancellation) {
-            rawQuery_String_StringArray_Cancellation.implementation = safeImplementation(
-                "database:SQLiteDatabase.rawQuery[String,String[],CancellationSignal]",
-                rawQuery_String_StringArray_Cancellation,
-                function (original, sql: string, selectionArgsArray: string[], cancellationSignal: any) {
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const selectionArgs: string[] = [];
-                        if (selectionArgsArray && selectionArgsArray.length > 0) {
-                            for (let i = 0; i < selectionArgsArray.length; i++) {
-                                selectionArgs.push(selectionArgsArray[i]);
-                            }
-                        }
-
-                        createDatabaseEvent("database.sqlite.query", {
-                            method: "SQLiteDatabase.rawQuery(String, String[], CancellationSignal)",
-                            database_path: dbPath,
-                            sql: sql,
-                            where_args: selectionArgs,
-                            cancellation_signal: true
-                        });
-                    }
-
-                    return original.call(this, sql, selectionArgsArray, cancellationSignal);
-                }
-            );
-        }
-
-        // rawQueryWithFactory(SQLiteDatabase.CursorFactory cursorFactory, String sql, String[] selectionArgs, String editTable, CancellationSignal cancellationSignal)
         const rawQueryWithFactory_full_cancel = safeOverload(
             sqliteDatabase.rawQueryWithFactory,
             "database:SQLiteDatabase.rawQueryWithFactory[CursorFactory,String,String[],String,CancellationSignal]",
-            'android.database.sqlite.SQLiteDatabase$CursorFactory', 'java.lang.String',
-            '[Ljava.lang.String;', 'java.lang.String', 'android.os.CancellationSignal'
+            "android.database.sqlite.SQLiteDatabase$CursorFactory",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String",
+            "android.os.CancellationSignal"
         );
         if (rawQueryWithFactory_full_cancel) {
             rawQueryWithFactory_full_cancel.implementation = safeImplementation(
                 "database:SQLiteDatabase.rawQueryWithFactory[CursorFactory,String,String[],String,CancellationSignal]",
                 rawQueryWithFactory_full_cancel,
-                function (original, factory: any, sql: string, selectionArgsArray: any, editTable: string, cancellationSignal: any) {
-                    const type = "\x1b[1;34mevent_type: SQLiteRawQuery\x1b[0m";
-                    const methodVal = "SQLiteDatabase.rawQueryWithFactory";
-
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
+                function (
+                    original,
+                    factory: any,
+                    sql: string,
+                    selectionArgs: any,
+                    editTable: string,
+                    cancellationSignal: any
+                ) {
+                    if (!isNestedQueryOperation()) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.query", {
+                            method: "SQLiteDatabase.rawQueryWithFactory(CursorFactory, String, String[], String, CancellationSignal)",
+                            sql: sql,
+                            where_args: serializeJavaArray(selectionArgs),
+                            edit_table: editTable,
+                            has_factory: factory !== null,
+                            cancellation_signal: cancellationSignal !== null
+                        });
                     }
 
-                    if (shouldLogDatabasePath(dbPath)) {
-                        let argsStr = "";
-                        if (selectionArgsArray && selectionArgsArray.length > 0) {
-                            for (let i = 0; i < selectionArgsArray.length; i++) {
-                                argsStr += "\n    - [" + i + "] " + selectionArgsArray[i];
-                            }
-                        }
-
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nSQL Query: " + '\x1b[36m' + sql + '\x1b[0m' +
-                            "\nEdit table: " + '\x1b[35m' + (editTable ? editTable : "null") + '\x1b[0m' +
-                            "\nSelection args:" + (argsStr ? '\x1b[33m' + argsStr + '\x1b[0m' : " none") +
-                            "\nWith factory: " + '\x1b[32m' + (factory ? "Custom factory" : "null") + '\x1b[0m' +
-                            "\nWith cancellation signal: " + '\x1b[90m' + "true" + '\x1b[0m' + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
-
-                    return original.call(this, factory, sql, selectionArgsArray, editTable, cancellationSignal);
+                    return callWithOperationGuard(
+                        "sqlite.query",
+                        () => original.call(
+                            this,
+                            factory,
+                            sql,
+                            selectionArgs,
+                            editTable,
+                            cancellationSignal
+                        )
+                    );
                 }
             );
         }
 
-        // rawQueryWithFactory(SQLiteDatabase.CursorFactory cursorFactory, String sql, String[] selectionArgs, String editTable)
         const rawQueryWithFactory_full = safeOverload(
             sqliteDatabase.rawQueryWithFactory,
             "database:SQLiteDatabase.rawQueryWithFactory[CursorFactory,String,String[],String]",
-            'android.database.sqlite.SQLiteDatabase$CursorFactory', 'java.lang.String',
-            '[Ljava.lang.String;', 'java.lang.String'
+            "android.database.sqlite.SQLiteDatabase$CursorFactory",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "java.lang.String"
         );
         if (rawQueryWithFactory_full) {
             rawQueryWithFactory_full.implementation = safeImplementation(
                 "database:SQLiteDatabase.rawQueryWithFactory[CursorFactory,String,String[],String]",
                 rawQueryWithFactory_full,
-                function (original, factory: any, sql: string, selectionArgsArray: any, editTable: string) {
-                    const type = "\x1b[1;34mevent_type: SQLiteRawQuery\x1b[0m";
-                    const methodVal = "SQLiteDatabase.rawQueryWithFactory";
-
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
+                function (
+                    original,
+                    factory: any,
+                    sql: string,
+                    selectionArgs: any,
+                    editTable: string
+                ) {
+                    if (!isNestedQueryOperation()) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.query", {
+                            method: "SQLiteDatabase.rawQueryWithFactory(CursorFactory, String, String[], String)",
+                            sql: sql,
+                            where_args: serializeJavaArray(selectionArgs),
+                            edit_table: editTable,
+                            has_factory: factory !== null
+                        });
                     }
 
-                    if (shouldLogDatabasePath(dbPath)) {
-                        let argsStr = "";
-                        if (selectionArgsArray && selectionArgsArray.length > 0) {
-                            for (let i = 0; i < selectionArgsArray.length; i++) {
-                                argsStr += "\n    - [" + i + "] " + selectionArgsArray[i];
-                            }
-                        }
-
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nSQL Query: " + '\x1b[36m' + sql + '\x1b[0m' +
-                            "\nEdit table: " + '\x1b[35m' + (editTable ? editTable : "null") + '\x1b[0m' +
-                            "\nSelection args:" + (argsStr ? '\x1b[33m' + argsStr + '\x1b[0m' : " none") +
-                            "\nWith factory: " + '\x1b[32m' + (factory ? "Custom factory" : "null") + '\x1b[0m' + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
-
-                    return original.call(this, factory, sql, selectionArgsArray, editTable);
+                    return callWithOperationGuard(
+                        "sqlite.query",
+                        () => original.call(this, factory, sql, selectionArgs, editTable)
+                    );
                 }
             );
         }
 
-        // insert(String table, String nullColumnHack, ContentValues values)
+        // ------------------------------------------------------------
+        // rawQuery
+        // ------------------------------------------------------------
+
+        const rawQuery_String_StringArray = safeOverload(
+            sqliteDatabase.rawQuery,
+            "database:SQLiteDatabase.rawQuery[String,String[]]",
+            "java.lang.String",
+            "[Ljava.lang.String;"
+        );
+        if (rawQuery_String_StringArray) {
+            rawQuery_String_StringArray.implementation = safeImplementation(
+                "database:SQLiteDatabase.rawQuery[String,String[]]",
+                rawQuery_String_StringArray,
+                function (original, sql: string, selectionArgs: any) {
+                    if (!isNestedQueryOperation()) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.query", {
+                            method: "SQLiteDatabase.rawQuery(String, String[])",
+                            sql: sql,
+                            where_args: serializeJavaArray(selectionArgs)
+                        });
+                    }
+
+                    return callWithOperationGuard(
+                        "sqlite.query",
+                        () => original.call(this, sql, selectionArgs)
+                    );
+                }
+            );
+        }
+
+        const rawQuery_String_StringArray_Cancellation = safeOverload(
+            sqliteDatabase.rawQuery,
+            "database:SQLiteDatabase.rawQuery[String,String[],CancellationSignal]",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "android.os.CancellationSignal"
+        );
+        if (rawQuery_String_StringArray_Cancellation) {
+            rawQuery_String_StringArray_Cancellation.implementation = safeImplementation(
+                "database:SQLiteDatabase.rawQuery[String,String[],CancellationSignal]",
+                rawQuery_String_StringArray_Cancellation,
+                function (
+                    original,
+                    sql: string,
+                    selectionArgs: any,
+                    cancellationSignal: any
+                ) {
+                    if (!isNestedQueryOperation()) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.query", {
+                            method: "SQLiteDatabase.rawQuery(String, String[], CancellationSignal)",
+                            sql: sql,
+                            where_args: serializeJavaArray(selectionArgs),
+                            cancellation_signal: cancellationSignal !== null
+                        });
+                    }
+
+                    return callWithOperationGuard(
+                        "sqlite.query",
+                        () => original.call(this, sql, selectionArgs, cancellationSignal)
+                    );
+                }
+            );
+        }
+
+        // ------------------------------------------------------------
+        // insert
+        // ------------------------------------------------------------
+
         const insert_String_String_ContentValues = safeOverload(
             sqliteDatabase.insert,
             "database:SQLiteDatabase.insert[String,String,ContentValues]",
-            'java.lang.String', 'java.lang.String', 'android.content.ContentValues'
+            "java.lang.String",
+            "java.lang.String",
+            "android.content.ContentValues"
         );
         if (insert_String_String_ContentValues) {
             insert_String_String_ContentValues.implementation = safeImplementation(
                 "database:SQLiteDatabase.insert[String,String,ContentValues]",
                 insert_String_String_ContentValues,
                 function (original, table: string, nullColumnHack: string, values: any) {
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
+                    emitSqliteDatabaseEvent(this, "database.sqlite.insert", {
+                        method: "SQLiteDatabase.insert(String, String, ContentValues)",
+                        table: table,
+                        null_column_hack: nullColumnHack,
+                        content_values: serializeContentValues(values)
+                    });
 
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const contentValues: any = {};
-                        if (values) {
-                            const keyset = values.keySet();
-                            const iter = keyset.iterator();
-                            while (iter.hasNext()) {
-                                const key = iter.next();
-                                const value = values.get(key);
-                                contentValues[key] = value;
-                            }
-                        }
-
-                        createDatabaseEvent("database.sqlite.insert", {
-                            method: "SQLiteDatabase.insert(String, String, ContentValues)",
-                            database_path: dbPath,
-                            table: table,
-                            null_column_hack: nullColumnHack,
-                            content_values: contentValues
-                        });
-                    }
-
-                    return original.call(this, table, nullColumnHack, values);
+                    return callWithOperationGuard(
+                        "sqlite.insert",
+                        () => original.call(this, table, nullColumnHack, values)
+                    );
                 }
             );
         }
 
-        // insertOrThrow(String table, String nullColumnHack, ContentValues values)
         const insertOrThrow_String_String_ContentValues = safeOverload(
             sqliteDatabase.insertOrThrow,
             "database:SQLiteDatabase.insertOrThrow[String,String,ContentValues]",
-            'java.lang.String', 'java.lang.String', 'android.content.ContentValues'
+            "java.lang.String",
+            "java.lang.String",
+            "android.content.ContentValues"
         );
         if (insertOrThrow_String_String_ContentValues) {
             insertOrThrow_String_String_ContentValues.implementation = safeImplementation(
                 "database:SQLiteDatabase.insertOrThrow[String,String,ContentValues]",
                 insertOrThrow_String_String_ContentValues,
                 function (original, table: string, nullColumnHack: string, values: any) {
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
+                    emitSqliteDatabaseEvent(this, "database.sqlite.insert", {
+                        method: "SQLiteDatabase.insertOrThrow(String, String, ContentValues)",
+                        table: table,
+                        null_column_hack: nullColumnHack,
+                        content_values: serializeContentValues(values),
+                        throw_on_error: true
+                    });
 
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const contentValues: any = {};
-                        if (values) {
-                            const keyset = values.keySet();
-                            const iter = keyset.iterator();
-                            while (iter.hasNext()) {
-                                const key = iter.next();
-                                const value = values.get(key);
-                                contentValues[key] = value;
-                            }
-                        }
-
-                        createDatabaseEvent("database.sqlite.insert", {
-                            method: "SQLiteDatabase.insertOrThrow(String, String, ContentValues)",
-                            database_path: dbPath,
-                            table: table,
-                            null_column_hack: nullColumnHack,
-                            content_values: contentValues,
-                            throw_on_error: true
-                        });
-                    }
-
-                    return original.call(this, table, nullColumnHack, values);
+                    return callWithOperationGuard(
+                        "sqlite.insert",
+                        () => original.call(this, table, nullColumnHack, values)
+                    );
                 }
             );
         }
 
-        // insertWithOnConflict(String table, String nullColumnHack, ContentValues initialValues, int conflictAlgorithm)
         const insertWithOnConflict = safeOverload(
             sqliteDatabase.insertWithOnConflict,
             "database:SQLiteDatabase.insertWithOnConflict[String,String,ContentValues,int]",
-            'java.lang.String', 'java.lang.String', 'android.content.ContentValues', 'int'
+            "java.lang.String",
+            "java.lang.String",
+            "android.content.ContentValues",
+            "int"
         );
         if (insertWithOnConflict) {
             insertWithOnConflict.implementation = safeImplementation(
                 "database:SQLiteDatabase.insertWithOnConflict[String,String,ContentValues,int]",
                 insertWithOnConflict,
-                function (original, table: string, nullColumnHack: string, values: any, conflictAlgorithm: number) {
-                    const type = "\x1b[1;33mevent_type: SQLiteInsert\x1b[0m";
-                    const methodVal = "SQLiteDatabase.insertWithOnConflict";
-
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
+                function (
+                    original,
+                    table: string,
+                    nullColumnHack: string,
+                    values: any,
+                    conflictAlgorithm: number
+                ) {
+                    if (!isNestedOperation("sqlite.insert")) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.insert", {
+                            method: "SQLiteDatabase.insertWithOnConflict(String, String, ContentValues, int)",
+                            table: table,
+                            null_column_hack: nullColumnHack,
+                            content_values: serializeContentValues(values),
+                            conflict_algorithm: conflictAlgorithm
+                        });
                     }
 
-                    if (shouldLogDatabasePath(dbPath)) {
-                        let valuesStr = "";
-                        if (values) {
-                            const keyset = values.keySet();
-                            const iter = keyset.iterator();
-                            while (iter.hasNext()) {
-                                const key = iter.next();
-                                const value = values.get(key);
-                                valuesStr += "\n    - " + key + " = " + value;
-                            }
-                        }
-
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nInsert (with conflict handling) into table: " + '\x1b[36m' + table + '\x1b[0m' +
-                            "\nNull column hack: " + '\x1b[35m' + (nullColumnHack ? nullColumnHack : "null") + '\x1b[0m' +
-                            "\nValues to insert:" + (valuesStr ? '\x1b[32m' + valuesStr + '\x1b[0m' : " none") +
-                            "\nConflict algorithm: " + '\x1b[34m' + conflictAlgorithm + '\x1b[0m' + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
-
-                    return original.call(this, table, nullColumnHack, values, conflictAlgorithm);
+                    return original.call(
+                        this,
+                        table,
+                        nullColumnHack,
+                        values,
+                        conflictAlgorithm
+                    );
                 }
             );
         }
 
-        // Helper function to interpret database flags
-        function interpretDatabaseFlags(flags) {
-            const flagsMap = {
-                0x00000000: "OPEN_READONLY",
-                0x00000001: "OPEN_READWRITE",
-                0x00000002: "CREATE_IF_NECESSARY",
-                0x00000004: "NO_LOCALIZED_COLLATORS",
-                0x00000008: "ENABLE_WRITE_AHEAD_LOGGING",
-                0x00000010: "OPEN_URI",
-                0x00000020: "ENABLE_FOREIGN_KEY_CONSTRAINTS",
-                0x20000000: "OPEN_NOMUTEX",
-                0x10000000: "OPEN_FULLMUTEX"
-            };
+        // ------------------------------------------------------------
+        // database open
+        // ------------------------------------------------------------
 
-            const flagDescriptions: string[] = [];
-            for (const flag in flagsMap) {
-                const numericFlag = parseInt(flag);
-                if ((flags & numericFlag) === numericFlag) {
-                    flagDescriptions.push(flagsMap[flag]);
-                }
-            }
-
-            return flagDescriptions.length > 0 ? flagDescriptions.join(" | ") : "UNKNOWN_FLAG";
-        }
-
-        // openDatabase(String path, SQLiteDatabase.CursorFactory factory, int flags)
         const openDatabase_String_CursorFactory_int = safeOverload(
             sqliteDatabase.openDatabase,
             "database:SQLiteDatabase.openDatabase[String,CursorFactory,int]",
-            'java.lang.String', 'android.database.sqlite.SQLiteDatabase$CursorFactory', 'int'
+            "java.lang.String",
+            "android.database.sqlite.SQLiteDatabase$CursorFactory",
+            "int"
         );
         if (openDatabase_String_CursorFactory_int) {
             openDatabase_String_CursorFactory_int.implementation = safeImplementation(
@@ -683,12 +1051,11 @@ function hook_java_sql() {
                 openDatabase_String_CursorFactory_int,
                 function (original, path: string, factory: any, flags: number) {
                     if (shouldLogDatabasePath(path)) {
-                        const flagsDescription = interpretDatabaseFlags(flags);
                         createDatabaseEvent("database.sqlite.open", {
                             method: "SQLiteDatabase.openDatabase(String, CursorFactory, int)",
                             database_path: path,
                             flags: flags,
-                            flags_description: flagsDescription,
+                            flags_description: interpretDatabaseFlags(flags),
                             has_factory: factory !== null
                         });
                     }
@@ -698,29 +1065,34 @@ function hook_java_sql() {
             );
         }
 
-        // openDatabase(String path, SQLiteDatabase.CursorFactory factory, int flags, DatabaseErrorHandler errorHandler)
         const openDatabase_String_CursorFactory_int_ErrorHandler = safeOverload(
             sqliteDatabase.openDatabase,
             "database:SQLiteDatabase.openDatabase[String,CursorFactory,int,DatabaseErrorHandler]",
-            'java.lang.String', 'android.database.sqlite.SQLiteDatabase$CursorFactory', 'int', 'android.database.DatabaseErrorHandler'
+            "java.lang.String",
+            "android.database.sqlite.SQLiteDatabase$CursorFactory",
+            "int",
+            "android.database.DatabaseErrorHandler"
         );
         if (openDatabase_String_CursorFactory_int_ErrorHandler) {
             openDatabase_String_CursorFactory_int_ErrorHandler.implementation = safeImplementation(
                 "database:SQLiteDatabase.openDatabase[String,CursorFactory,int,DatabaseErrorHandler]",
                 openDatabase_String_CursorFactory_int_ErrorHandler,
-                function (original, path: string, factory: any, flags: number, errorHandler: any) {
-                    const type = "\x1b[1;36mevent_type: SQLiteOpenDatabase\x1b[0m";
-                    const methodVal = "SQLiteDatabase.openDatabase";
-
+                function (
+                    original,
+                    path: string,
+                    factory: any,
+                    flags: number,
+                    errorHandler: any
+                ) {
                     if (shouldLogDatabasePath(path)) {
-                        const flagsDescription = interpretDatabaseFlags(flags);
-                        const logVal =
-                            "\nOpening database: " + '\x1b[36m' + path + '\x1b[0m' +
-                            "\nFlags: " + '\x1b[33m' + flags + " (" + flagsDescription + ")" + '\x1b[0m' +
-                            "\nFactory: " + (factory ? '\x1b[32m' + "Custom factory provided" + '\x1b[0m' : '\x1b[90m' + "null" + '\x1b[0m') +
-                            "\nError handler: " + (errorHandler ? '\x1b[35m' + "Custom error handler provided" + '\x1b[0m' : '\x1b[90m' + "null" + '\x1b[0m') + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                        createDatabaseEvent("database.sqlite.open", {
+                            method: "SQLiteDatabase.openDatabase(String, CursorFactory, int, DatabaseErrorHandler)",
+                            database_path: path,
+                            flags: flags,
+                            flags_description: interpretDatabaseFlags(flags),
+                            has_factory: factory !== null,
+                            has_error_handler: errorHandler !== null
+                        });
                     }
 
                     return original.call(this, path, factory, flags, errorHandler);
@@ -728,11 +1100,11 @@ function hook_java_sql() {
             );
         }
 
-        // openOrCreateDatabase(String path, CursorFactory factory)
         const openOrCreateDatabase_String_CursorFactory = safeOverload(
             sqliteDatabase.openOrCreateDatabase,
             "database:SQLiteDatabase.openOrCreateDatabase[String,CursorFactory]",
-            'java.lang.String', 'android.database.sqlite.SQLiteDatabase$CursorFactory'
+            "java.lang.String",
+            "android.database.sqlite.SQLiteDatabase$CursorFactory"
         );
         if (openOrCreateDatabase_String_CursorFactory) {
             openOrCreateDatabase_String_CursorFactory.implementation = safeImplementation(
@@ -753,27 +1125,26 @@ function hook_java_sql() {
             );
         }
 
-        // openOrCreateDatabase(String path, CursorFactory factory, DatabaseErrorHandler errorHandler)
         const openOrCreateDatabase_String_CursorFactory_ErrorHandler = safeOverload(
             sqliteDatabase.openOrCreateDatabase,
             "database:SQLiteDatabase.openOrCreateDatabase[String,CursorFactory,DatabaseErrorHandler]",
-            'java.lang.String', 'android.database.sqlite.SQLiteDatabase$CursorFactory', 'android.database.DatabaseErrorHandler'
+            "java.lang.String",
+            "android.database.sqlite.SQLiteDatabase$CursorFactory",
+            "android.database.DatabaseErrorHandler"
         );
         if (openOrCreateDatabase_String_CursorFactory_ErrorHandler) {
             openOrCreateDatabase_String_CursorFactory_ErrorHandler.implementation = safeImplementation(
                 "database:SQLiteDatabase.openOrCreateDatabase[String,CursorFactory,DatabaseErrorHandler]",
                 openOrCreateDatabase_String_CursorFactory_ErrorHandler,
                 function (original, path: string, factory: any, errorHandler: any) {
-                    const type = "\x1b[1;36mevent_type: SQLiteOpenDatabase\x1b[0m";
-                    const methodVal = "SQLiteDatabase.openOrCreateDatabase";
-
                     if (shouldLogDatabasePath(path)) {
-                        const logVal =
-                            "\nOpening or creating database: " + '\x1b[36m' + path + '\x1b[0m' +
-                            "\nFactory: " + (factory ? '\x1b[32m' + "Custom factory provided" + '\x1b[0m' : '\x1b[90m' + "null" + '\x1b[0m') +
-                            "\nError handler: " + (errorHandler ? '\x1b[35m' + "Custom error handler provided" + '\x1b[0m' : '\x1b[90m' + "null" + '\x1b[0m') + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
+                        createDatabaseEvent("database.sqlite.open", {
+                            method: "SQLiteDatabase.openOrCreateDatabase(String, CursorFactory, DatabaseErrorHandler)",
+                            database_path: path,
+                            has_factory: factory !== null,
+                            has_error_handler: errorHandler !== null,
+                            create_if_necessary: true
+                        });
                     }
 
                     return original.call(this, path, factory, errorHandler);
@@ -781,167 +1152,138 @@ function hook_java_sql() {
             );
         }
 
-        // update(String table, ContentValues values, String whereClause, String[] whereArgs)
+        // ------------------------------------------------------------
+        // update / delete
+        // ------------------------------------------------------------
+
         const update_String_ContentValues_String_StringArray = safeOverload(
             sqliteDatabase.update,
             "database:SQLiteDatabase.update[String,ContentValues,String,String[]]",
-            'java.lang.String', 'android.content.ContentValues', 'java.lang.String', '[Ljava.lang.String;'
+            "java.lang.String",
+            "android.content.ContentValues",
+            "java.lang.String",
+            "[Ljava.lang.String;"
         );
         if (update_String_ContentValues_String_StringArray) {
             update_String_ContentValues_String_StringArray.implementation = safeImplementation(
                 "database:SQLiteDatabase.update[String,ContentValues,String,String[]]",
                 update_String_ContentValues_String_StringArray,
-                function (original, table: string, values: any, whereClause: string, whereArgsArray: any) {
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
+                function (
+                    original,
+                    table: string,
+                    values: any,
+                    whereClause: string,
+                    whereArgs: any
+                ) {
+                    emitSqliteDatabaseEvent(this, "database.sqlite.update", {
+                        method: "SQLiteDatabase.update(String, ContentValues, String, String[])",
+                        table: table,
+                        content_values: serializeContentValues(values),
+                        where_clause: whereClause,
+                        where_args: serializeJavaArray(whereArgs)
+                    });
 
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const contentValues: any = {};
-                        if (values) {
-                            const keyset = values.keySet();
-                            const iter = keyset.iterator();
-                            while (iter.hasNext()) {
-                                const key = iter.next();
-                                const value = values.get(key);
-                                contentValues[key] = value;
-                            }
-                        }
-
-                        const whereArgs: string[] = [];
-                        if (whereArgsArray && whereArgsArray.length > 0) {
-                            for (let i = 0; i < whereArgsArray.length; i++) {
-                                whereArgs.push(whereArgsArray[i]);
-                            }
-                        }
-
-                        createDatabaseEvent("database.sqlite.update", {
-                            method: "SQLiteDatabase.update(String, ContentValues, String, String[])",
-                            database_path: dbPath,
-                            table: table,
-                            content_values: contentValues,
-                            where_clause: whereClause,
-                            where_args: whereArgs
-                        });
-                    }
-
-                    return original.call(this, table, values, whereClause, whereArgsArray);
+                    return callWithOperationGuard(
+                        "sqlite.update",
+                        () => original.call(this, table, values, whereClause, whereArgs)
+                    );
                 }
             );
         }
 
-        // updateWithOnConflict(String table, ContentValues values, String whereClause, String[] whereArgs, int conflictAlgorithm)
         const updateWithOnConflict = safeOverload(
             sqliteDatabase.updateWithOnConflict,
             "database:SQLiteDatabase.updateWithOnConflict[String,ContentValues,String,String[],int]",
-            'java.lang.String', 'android.content.ContentValues', 'java.lang.String', '[Ljava.lang.String;', 'int'
+            "java.lang.String",
+            "android.content.ContentValues",
+            "java.lang.String",
+            "[Ljava.lang.String;",
+            "int"
         );
         if (updateWithOnConflict) {
             updateWithOnConflict.implementation = safeImplementation(
                 "database:SQLiteDatabase.updateWithOnConflict[String,ContentValues,String,String[],int]",
                 updateWithOnConflict,
-                function (original, table: string, values: any, whereClause: string, whereArgsArray: any, conflictAlgorithm: number) {
-                    const type = "\x1b[1;32mevent_type: SQLiteUpdate\x1b[0m";
-                    const methodVal = "SQLiteDatabase.updateWithOnConflict";
-
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
+                function (
+                    original,
+                    table: string,
+                    values: any,
+                    whereClause: string,
+                    whereArgs: any,
+                    conflictAlgorithm: number
+                ) {
+                    if (!isNestedOperation("sqlite.update")) {
+                        emitSqliteDatabaseEvent(this, "database.sqlite.update", {
+                            method: "SQLiteDatabase.updateWithOnConflict(String, ContentValues, String, String[], int)",
+                            table: table,
+                            content_values: serializeContentValues(values),
+                            where_clause: whereClause,
+                            where_args: serializeJavaArray(whereArgs),
+                            conflict_algorithm: conflictAlgorithm
+                        });
                     }
 
-                    if (shouldLogDatabasePath(dbPath)) {
-                        let valuesStr = "";
-                        if (values) {
-                            const keyset = values.keySet();
-                            const iter = keyset.iterator();
-                            while (iter.hasNext()) {
-                                const key = iter.next();
-                                const value = values.get(key);
-                                valuesStr += "\n    - " + key + " = " + value;
-                            }
-                        }
-
-                        let whereArgsStr = "";
-                        if (whereArgsArray && whereArgsArray.length > 0) {
-                            for (let i = 0; i < whereArgsArray.length; i++) {
-                                whereArgsStr += "\n    - [" + i + "] " + whereArgsArray[i];
-                            }
-                        }
-
-                        const logVal =
-                            "\nDatabase: " + '\x1b[31m' + dbPath + '\x1b[0m' +
-                            "\nUpdate table: " + '\x1b[36m' + table + '\x1b[0m' +
-                            "\nWhere clause: " + '\x1b[35m' + whereClause + '\x1b[0m' +
-                            "\nWhere args:" + (whereArgsStr ? '\x1b[33m' + whereArgsStr + '\x1b[0m' : " none") +
-                            "\nValues to update:" + (valuesStr ? '\x1b[32m' + valuesStr + '\x1b[0m' : " none") +
-                            "\nConflict algorithm: " + '\x1b[34m' + conflictAlgorithm + '\x1b[0m' + "\n";
-
-                        am_send(PROFILE_HOOKING_TYPE, type + " " + methodVal + logVal);
-                    }
-
-                    return original.call(this, table, values, whereClause, whereArgsArray, conflictAlgorithm);
+                    return original.call(
+                        this,
+                        table,
+                        values,
+                        whereClause,
+                        whereArgs,
+                        conflictAlgorithm
+                    );
                 }
             );
         }
 
-        // delete(String table, String whereClause, String[] whereArgs)
         const delete_String_String_StringArray = safeOverload(
             sqliteDatabase.delete,
             "database:SQLiteDatabase.delete[String,String,String[]]",
-            'java.lang.String', 'java.lang.String', '[Ljava.lang.String;'
+            "java.lang.String",
+            "java.lang.String",
+            "[Ljava.lang.String;"
         );
         if (delete_String_String_StringArray) {
             delete_String_String_StringArray.implementation = safeImplementation(
                 "database:SQLiteDatabase.delete[String,String,String[]]",
                 delete_String_String_StringArray,
-                function (original, table: string, whereClause: string, whereArgsArray: any) {
-                    let dbPath = "unknown";
-                    try {
-                        dbPath = this.getPath();
-                    } catch (e) {
-                        dbPath = "Error getting path: " + e;
-                    }
+                function (
+                    original,
+                    table: string,
+                    whereClause: string,
+                    whereArgs: any
+                ) {
+                    const databasePath = getDatabasePath(this);
 
-                    let deleteRes: number = 0;
-
-                    if (shouldLogDatabasePath(dbPath)) {
-                        const whereArgs: string[] = [];
-                        if (whereArgsArray && whereArgsArray.length > 0) {
-                            for (let i = 0; i < whereArgsArray.length; i++) {
-                                whereArgs.push(whereArgsArray[i]);
-                            }
-                        }
-
+                    if (shouldLogDatabasePath(databasePath)) {
                         createDatabaseEvent("database.sqlite.delete", {
                             method: "SQLiteDatabase.delete(String, String, String[])",
-                            database_path: dbPath,
+                            database_path: databasePath,
                             table: table,
                             where_clause: whereClause,
-                            where_args: whereArgs
+                            where_args: serializeJavaArray(whereArgs)
                         });
-
-                        deleteRes = original.call(this, table, whereClause, whereArgsArray);
-
-                        createDatabaseEvent("database.sqlite.delete_result", {
-                            method: "SQLiteDatabase.delete(String, String, String[])",
-                            database_path: dbPath,
-                            table: table,
-                            rows_affected: deleteRes
-                        });
-                    } else {
-                        deleteRes = original.call(this, table, whereClause, whereArgsArray);
                     }
 
-                    return deleteRes;
+                    const rowsAffected = original.call(
+                        this,
+                        table,
+                        whereClause,
+                        whereArgs
+                    );
+
+                    if (shouldLogDatabasePath(databasePath)) {
+                        createDatabaseEvent("database.sqlite.delete_result", {
+                            method: "SQLiteDatabase.delete(String, String, String[])",
+                            database_path: databasePath,
+                            table: table,
+                            rows_affected: rowsAffected
+                        });
+                    }
+
+                    return rowsAffected;
                 }
             );
         }
-
     });
 }
 
