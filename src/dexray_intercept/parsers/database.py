@@ -34,6 +34,7 @@ class DatabaseParser(BaseParser):
             'limit': 'limit',
             'flags': 'flags',
             'flags_description': 'flags_description',
+            'connection_pool_size': 'connection_pool_size',
             'password': 'password',
             'access_type': 'access_type',
             'create_if_necessary': 'create_if_necessary',

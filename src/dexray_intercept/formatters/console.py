@@ -645,6 +645,11 @@ class ConsoleFormatter(BaseFormatter):
             )
             lines.append(f"[*] Flags: {event.flags}{flag_description}")
 
+        if event.connection_pool_size is not None:
+            lines.append(
+                f"[*] Connection Pool Size: {event.connection_pool_size}"
+            )
+        
         if event.create_if_necessary is not None:
             lines.append(f"[*] Create If Necessary: {event.create_if_necessary}")
 

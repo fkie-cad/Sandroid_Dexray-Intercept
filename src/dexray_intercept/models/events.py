@@ -473,6 +473,7 @@ class DatabaseEvent(Event):
         self.limit = None
         self.flags = None
         self.flags_description = None
+        self.connection_pool_size = None
         self.password = None
         self.access_type = None  # readable, writable
         self.create_if_necessary = None
@@ -509,7 +510,7 @@ class DatabaseEvent(Event):
             'database_path', 'database_type', 'method', 'table', 'sql',
             'bind_args', 'content_values', 'where_clause', 'where_args',
             'columns', 'group_by', 'having', 'order_by', 'limit', 'flags',
-            'flags_description', 'password', 'access_type', 'create_if_necessary',
+            'flags_description', 'connection_pool_size', 'password', 'access_type', 'create_if_necessary',
             'has_factory', 'transaction_action', 'dao_operation', 'entity',
             'callback_type', 'database_object', 'database_name', 'database_class',
             'result_code', 'status', 'rows_affected', 'throw_on_error',
