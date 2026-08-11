@@ -680,6 +680,15 @@ class ConsoleFormatter(BaseFormatter):
 
         if event.password:
             lines.append(f"[*] Password: {truncate_string(event.password, 100)}")
+        
+        if event.password_type:
+            lines.append(f"[*] Password Type: {event.password_type}")
+
+        if event.overload_signature:
+            lines.append(f"[*] Overload: {event.overload_signature}")
+
+        if event.has_database_hook is not None:
+            lines.append(f"[*] Database Hook: {event.has_database_hook}")
 
         if event.callback_type:
             lines.append(f"[*] Callback: {event.callback_type}")

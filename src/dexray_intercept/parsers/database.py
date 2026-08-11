@@ -56,6 +56,9 @@ class DatabaseParser(BaseParser):
             'edit_table': 'edit_table',
             'conflict_algorithm': 'conflict_algorithm',
             'has_error_handler': 'has_error_handler',
+            'password_type': 'password_type',
+            'overload_signature': 'overload_signature',
+            'has_database_hook': 'has_database_hook',
         }
         
         for json_field, event_field in field_mapping.items():
