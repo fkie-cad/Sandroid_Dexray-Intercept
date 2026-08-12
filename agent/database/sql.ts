@@ -2658,14 +2658,29 @@ function hook_native_sqlite() {
         hookFunction("sqlite3_exec", (address) => {
             safeAttach(address, `database:${module.name}:sqlite3_exec`, {
                 onEnter(args) {
+                    this.databaseHandle = args[0].toString();
+                    this.databasePath = getDatabasePath(
+                        module,
+                        this.databaseHandle
+                    );
+                    this.sql = readUtf8(args[1]);
+                },
+
+                onLeave(retval) {
+                    const resultCode = retval.toInt32();
+
                     createDatabaseEvent("database.native.exec", {
                         method: "sqlite3_exec",
                         native_function: "sqlite3_exec",
                         module_name: module.name,
                         architecture: Process.arch,
-                        database_handle: args[0].toString(),
-                        database_path: getDatabasePath(module, args[0].toString()),
-                        sql: readUtf8(args[1]),
+                        database_handle: this.databaseHandle,
+                        database_path: this.databasePath,
+                        sql: this.sql || null,
+                        result_code: resultCode,
+                        status: resultCode === 0
+                            ? "success"
+                            : `error code ${resultCode}`,
                         database_type: "Native SQLite"
                     });
                 }
