@@ -2471,6 +2471,34 @@ function hook_native_sqlite() {
         }
     }
 
+    function serializeTypedInt64(value: any): {
+        value: string | null;
+        value_available: boolean;
+    } {
+        try {
+            // Frida marshals an "int64" NativeCallback argument as an Int64-like
+            // value. Its string representation preserves signed decimal precision.
+            const decimalValue = value.toString();
+
+            if (!/^-?\d+$/.test(decimalValue)) {
+                return {
+                    value: null,
+                    value_available: false
+                };
+            }
+
+            return {
+                value: decimalValue,
+                value_available: true
+            };
+        } catch (_) {
+            return {
+                value: null,
+                value_available: false
+            };
+        }
+    }
+
     function installSQLiteModuleHooks(
         module: any,
         sqliteExportNames: Set<string>
@@ -2939,10 +2967,59 @@ function hook_native_sqlite() {
         });
 
         hookFunction("sqlite3_bind_int64", (address) => {
+            // sqlite3_int64 may be split across general-purpose registers and
+            // stack slots on 32-bit ABIs. A typed NativeCallback lets Frida
+            // marshal the ABI-correct signed int64 value on every architecture.
+            const installed = safeReplace(
+                address,
+                `database:${module.name}:sqlite3_bind_int64`,
+                "int",
+                ["pointer", "int", "int64"],
+                function (
+                    original,
+                    statementPointer: NativePointer,
+                    bindIndex: number,
+                    bindValue: any
+                ) {
+                    if (!original) {
+                        // SQLITE_MISUSE. This is unreachable after a successful
+                        // safeReplace() installation, but preserves safe failure.
+                        return 21;
+                    }
+
+                    const typedValue = serializeTypedInt64(bindValue);
+
+                    emitBindEventForStatement(
+                        "sqlite3_bind_int64",
+                        statementPointer.toString(),
+                        bindIndex,
+                        {
+                            bind_type: "int64",
+                            bind_value: typedValue.value,
+                            value_available: typedValue.value_available
+                        }
+                    );
+
+                    return original(
+                        statementPointer,
+                        bindIndex,
+                        bindValue
+                    );
+                }
+            );
+
+            if (installed) {
+                return;
+            }
+
+            // Preserve the previous non-replacement behavior if replacement
+            // installation is unavailable on a particular module/runtime.
+            devlog(
+                `Falling back to raw native int64 recovery: ${module.name}`
+            );
+
             safeAttach(address, `database:${module.name}:sqlite3_bind_int64`, {
                 onEnter(args) {
-                    // NativePointer string retains all 64 argument bits without
-                    // truncating through JavaScript's Number representation.
                     const bindValue = readSignedInt64Argument(args[2]);
 
                     emitBindEvent("sqlite3_bind_int64", args, {

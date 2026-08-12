@@ -210,6 +210,48 @@ static void test_sqlite3_bind_int(JNIEnv *env, jstring dbDir) {
 
         sqlite3_finalize(stmt);
     }
+
+    /*
+     * Direct sqlite3_bind_int64 coverage. These values exercise the high 32
+     * bits and signed two's-complement representation, so a JS Number-based
+     * conversion or incomplete 32-bit ABI recovery would be detected.
+     */
+    const sqlite3_int64 positiveInt64 =
+            ((sqlite3_int64) 1 << 40) + 123;
+    const sqlite3_int64 negativeInt64 =
+            -(((sqlite3_int64) 1 << 32) + 1);
+
+    stmt = NULL;
+    rc = sqlite3_prepare_v2(
+            db,
+            "SELECT ? AS positive_int64, ? AS negative_int64",
+            -1,
+            &stmt,
+            NULL
+    );
+    TEST_ASSERT(rc == SQLITE_OK, "sqlite3_prepare_v2 for direct int64 binds");
+
+    if (rc == SQLITE_OK && stmt) {
+        rc = sqlite3_bind_int64(stmt, 1, positiveInt64);
+        TEST_ASSERT(
+                rc == SQLITE_OK,
+                "sqlite3_bind_int64 positive high-word value"
+        );
+
+        rc = sqlite3_bind_int64(stmt, 2, negativeInt64);
+        TEST_ASSERT(
+                rc == SQLITE_OK,
+                "sqlite3_bind_int64 negative high-word value"
+        );
+
+        rc = sqlite3_step(stmt);
+        TEST_ASSERT(
+                rc == SQLITE_ROW,
+                "sqlite3_step after direct int64 binds returns SQLITE_ROW"
+        );
+
+        sqlite3_finalize(stmt);
+    }
     
     sqlite3_close(db);
 }
