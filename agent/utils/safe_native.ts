@@ -324,6 +324,33 @@ export function safeReplaceExport(
   return safeReplace(address, `${context}:${exportName}`, retType, argTypes, replaceLogic);
 }
 
+
+/**
+ * Safely enumerate a module's exports.
+ *
+ * Returns an empty array if the module was unloaded before inspection or if
+ * export enumeration fails. This is suitable for deferred module-observer work.
+ */
+export function safeEnumerateModuleExports(
+  moduleName: string,
+  context: string
+): any[] {
+  try {
+    const module = Process.findModuleByName(moduleName);
+
+    // A module may disappear between onAdded() and deferred inspection.
+    if (!module) {
+      return [];
+    }
+
+    return module.enumerateExports();
+  } catch (error) {
+    hookError(`${context}:enumerateExports`, error);
+    return [];
+  }
+}
+
+
 /**
  * Safe alternative to Module.enumerateExports() + manual substring matching.
  *
