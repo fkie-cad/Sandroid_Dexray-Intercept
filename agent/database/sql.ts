@@ -78,12 +78,12 @@ function shouldLogDatabasePath(dbPath: string): boolean {
     if (!PATH_FILTER_ENABLED) {
         return true;
     }
-    
+
     // If path is unknown, log it
     if (!dbPath || dbPath === "unknown") {
         return true;
     }
-    
+
     for (const filter of PATH_FILTERS) {
         // If filter contains wildcard "*", use includes method
         if (filter.includes("*")) {
@@ -91,13 +91,13 @@ function shouldLogDatabasePath(dbPath: string): boolean {
             if (dbPath.includes(filterPattern)) {
                 return true;
             }
-        } 
+        }
         // Otherwise check for exact match
         else if (dbPath === filter) {
             return true;
         }
     }
-    
+
     return false;
 }
 
@@ -114,7 +114,7 @@ recv("path_filters", (message) => {
 function set_airplane_mode(){
 //TODO
 }
- 
+
 export { set_airplane_mode };
 
 
@@ -1699,316 +1699,6 @@ function hook_sql_related_stuff(){
 
 }
 
-// the room library is a famous SQL library on Android
-// function hook_room_library() {
-//     safePerform("database:hook_room_library", () => {
-//         //console.log("ROOM hooks being installed");
-
-//         // Hook the Room.databaseBuilder method
-//         const Room = safeUse("androidx.room.Room", "database:hook_room_library");
-//         if (!Room) {
-//             return;
-//         }
-
-//         const databaseBuilderRef = safeOverload(
-//             Room.databaseBuilder,
-//             "database:Room.databaseBuilder[Context,Class,String]",
-//             "android.content.Context", "java.lang.Class", "java.lang.String"
-//         );
-//         if (databaseBuilderRef) {
-//             databaseBuilderRef.implementation = safeImplementation(
-//                 "database:Room.databaseBuilder[Context,Class,String]",
-//                 databaseBuilderRef,
-//                 function (original, context: any, klass: any, dbName: string) {
-//                     createDatabaseEvent("database.room.builder", {
-//                         method: "Room.databaseBuilder(Context, Class, String)",
-//                         database_name: dbName,
-//                         database_class: klass.toString(),
-//                         database_type: "Room"
-//                     });
-//                     return original.call(this, context, klass, dbName);
-//                 }
-//             );
-//         }
-
-//         // // Hook SQLiteDatabase.openOrCreateDatabase (only if SQLCipher is present)
-//         // const SQLiteDatabase = safeUse(
-//         //     "net.sqlcipher.database.SQLiteDatabase",
-//         //     "database:hook_room_library"
-//         // );
-//         // if (SQLiteDatabase) {
-//         //     const openOrCreate_File_String = safeOverload(
-//         //         SQLiteDatabase.openOrCreateDatabase,
-//         //         "database:SQLiteDatabase.openOrCreateDatabase[File,String]_Room",
-//         //         "java.io.File",
-//         //         "java.lang.String"
-//         //     );
-//         //     if (openOrCreate_File_String) {
-//         //         openOrCreate_File_String.implementation = safeImplementation(
-//         //             "database:SQLiteDatabase.openOrCreateDatabase[File,String]_Room",
-//         //             openOrCreate_File_String,
-//         //             function (original, file: any, password: string) {
-//         //                 const methodVal = "SQLiteDatabase.openOrCreateDatabase(File, String), ";
-//         //                 const logVal = `Opening or creating database with file: ${file.getAbsolutePath()} and password: ${password}`;
-//         //                 am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
-//         //                 //console.log(logVal);
-//         //                 return original.call(this, file, password);
-//         //             }
-//         //         );
-//         //     }
-
-//         //     const openOrCreate_String_String = safeOverload(
-//         //         SQLiteDatabase.openOrCreateDatabase,
-//         //         "database:SQLiteDatabase.openOrCreateDatabase[String,String]_Room",
-//         //         "java.lang.String",
-//         //         "java.lang.String"
-//         //     );
-//         //     if (openOrCreate_String_String) {
-//         //         openOrCreate_String_String.implementation = safeImplementation(
-//         //             "database:SQLiteDatabase.openOrCreateDatabase[String,String]_Room",
-//         //             openOrCreate_String_String,
-//         //             function (original, path: string, password: string) {
-//         //                 const methodVal = "SQLiteDatabase.openOrCreateDatabase(String, String), ";
-//         //                 const logVal = `Opening or creating database with path: ${path} and password: ${password}`;
-//         //                 am_send(PROFILE_HOOKING_TYPE, `event_type: SQLCipher.database.SQLiteDatabase, ${methodVal}${logVal}`);
-//         //                 //console.log(logVal);
-//         //                 return original.call(this, path, password);
-//         //             }
-//         //         );
-//         //     }
-
-//         //     // Hook PRAGMA key setting for SQLCipher
-//         //     const execSQL_String_SQLCipherRoom = safeOverload(
-//         //         SQLiteDatabase.execSQL,
-//         //         "database:SQLiteDatabase.execSQL[String]_Room_SQLCipherPragma",
-//         //         "java.lang.String"
-//         //     );
-//         //     if (execSQL_String_SQLCipherRoom) {
-//         //         execSQL_String_SQLCipherRoom.implementation = safeImplementation(
-//         //             "database:SQLiteDatabase.execSQL[String]_Room_SQLCipherPragma",
-//         //             execSQL_String_SQLCipherRoom,
-//         //             function (original, sql: string) {
-//         //                 if (sql.toLowerCase().includes("pragma key")) {
-//         //                     createDatabaseEvent("database.sqlcipher.pragma", {
-//         //                         method: "SQLiteDatabase.execSQL(String)",
-//         //                         sql: sql,
-//         //                         pragma_type: "key",
-//         //                         database_type: "SQLCipher"
-//         //                     });
-//         //                 }
-//         //                 return original.call(this, sql);
-//         //             }
-//         //         );
-//         //     }
-//         // } // End if (SQLiteDatabase)
-
-//         // Hook SupportSQLiteOpenHelper.Callback onCreate / onOpen
-//         const SupportSQLiteOpenHelper_Callback = safeUse(
-//             "androidx.sqlite.db.SupportSQLiteOpenHelper$Callback",
-//             "database:hook_room_library"
-//         );
-//         if (SupportSQLiteOpenHelper_Callback) {
-//             const onCreateRef = SupportSQLiteOpenHelper_Callback.onCreate;
-//             if (onCreateRef) {
-//                 onCreateRef.implementation = safeImplementation(
-//                     "database:SupportSQLiteOpenHelper.Callback.onCreate",
-//                     onCreateRef,
-//                     function (original, db: any) {
-//                         createDatabaseEvent("database.room.callback", {
-//                             method: "SupportSQLiteOpenHelper.Callback.onCreate(SupportSQLiteDatabase)",
-//                             database_object: db.toString(),
-//                             callback_type: "onCreate",
-//                             database_type: "Room"
-//                         });
-//                         return original.call(this, db);
-//                     }
-//                 );
-//             }
-
-
-//             const onOpenRef = SupportSQLiteOpenHelper_Callback.onOpen;
-//             if (onOpenRef) {
-//                 onOpenRef.implementation = safeImplementation(
-//                     "database:SupportSQLiteOpenHelper.Callback.onOpen",
-//                     onOpenRef,
-//                     function (original, db: any) {
-//                         createDatabaseEvent("database.room.callback", {
-//                             method: "SupportSQLiteOpenHelper.Callback.onOpen(SupportSQLiteDatabase)",
-//                             database_object: db.toString(),
-//                             callback_type: "onOpen",
-//                             database_type: "Room"
-//                         });
-//                         return original.call(this, db);
-//                     }
-//                 );
-//             }
-//         } // End if (SupportSQLiteOpenHelper_Callback)
-
-
-//             // Hook DAO methods (insert, update, delete)
-//         const Dao = safeUse("androidx.room.RoomDatabase", "database:hook_room_library");
-//         if (Dao) {
-//             const insertRef = safeOverload(
-//                 Dao.insert,
-//                 "database:RoomDatabase.insert[Object]",
-//                 "java.lang.Object"
-//             );
-//             if (insertRef) {
-//                 insertRef.implementation = safeImplementation(
-//                     "database:RoomDatabase.insert[Object]",
-//                     insertRef,
-//                     function (original, entity: any) {
-//                         createDatabaseEvent("database.room.dao", {
-//                             method: "RoomDatabase.insert(Object)",
-//                             entity: entity.toString(),
-//                             dao_operation: "insert",
-//                             database_type: "Room"
-//                         });
-//                         return original.call(this, entity);
-//                     }
-//                 );
-//             }
-
-//             const updateRef = safeOverload(
-//                 Dao.update,
-//                 "database:RoomDatabase.update[Object]",
-//                 "java.lang.Object"
-//             );
-//             if (updateRef) {
-//                 updateRef.implementation = safeImplementation(
-//                     "database:RoomDatabase.update[Object]",
-//                     updateRef,
-//                     function (original, entity: any) {
-//                         createDatabaseEvent("database.room.dao", {
-//                             method: "RoomDatabase.update(Object)",
-//                             entity: entity.toString(),
-//                             dao_operation: "update",
-//                             database_type: "Room"
-//                         });
-//                         return original.call(this, entity);
-//                     }
-//                 );
-//             }
-
-//             const deleteRef = safeOverload(
-//                 Dao.delete,
-//                 "database:RoomDatabase.delete[Object]",
-//                 "java.lang.Object"
-//             );
-//             if (deleteRef) {
-//                 deleteRef.implementation = safeImplementation(
-//                     "database:RoomDatabase.delete[Object]",
-//                     deleteRef,
-//                     function (original, entity: any) {
-//                         createDatabaseEvent("database.room.dao", {
-//                             method: "RoomDatabase.delete(Object)",
-//                             entity: entity.toString(),
-//                             dao_operation: "delete",
-//                             database_type: "Room"
-//                         });
-//                         return original.call(this, entity);
-//                     }
-//                 );
-//             }
-//         } // End if (Dao)
-
-//         // Hook query execution (using same Dao reference as RoomDatabase)
-//         if (Dao) {
-//             const queryRef = safeOverload(
-//                 Dao.query,
-//                 "database:RoomDatabase.query[SupportSQLiteQuery]",
-//                 "androidx.sqlite.db.SupportSQLiteQuery"
-//             );
-//             if (queryRef) {
-//                 queryRef.implementation = safeImplementation(
-//                     "database:RoomDatabase.query[SupportSQLiteQuery]",
-//                     queryRef,
-//                     function (original, query: any) {
-//                         const methodVal = "RoomDatabase.query, ";
-//                         const logVal = `Query executed: ${query.toString()}`;
-//                         am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
-//                         return original.call(this, query);
-//                     }
-//                 );
-//             }
-//         } // End if (Dao)
-
-//         // Hook SupportSQLiteDatabase execSQL
-//         const SupportSQLiteDatabase = safeUse(
-//             "androidx.sqlite.db.SupportSQLiteDatabase",
-//             "database:hook_room_library"
-//         );
-//         if (SupportSQLiteDatabase) {
-//             const execSQL_String_RoomSupport = safeOverload(
-//                 SupportSQLiteDatabase.execSQL,
-//                 "database:SupportSQLiteDatabase.execSQL[String]",
-//                 "java.lang.String"
-//             );
-//             if (execSQL_String_RoomSupport) {
-//                 execSQL_String_RoomSupport.implementation = safeImplementation(
-//                     "database:SupportSQLiteDatabase.execSQL[String]",
-//                     execSQL_String_RoomSupport,
-//                     function (original, sql: string) {
-//                         const methodVal = "SupportSQLiteDatabase.execSQL, ";
-//                         const logVal = `Executing SQL: ${sql}`;
-//                         am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Database, ${methodVal}${logVal}`);
-//                         return original.call(this, sql);
-//                     }
-//                 );
-//             }
-//         } // End if (SupportSQLiteDatabase)
-
-//         // Hook LiveData observe
-//         const LiveData = safeUse("androidx.lifecycle.LiveData", "database:hook_room_library");
-//         if (LiveData) {
-//             const observeRef = safeOverload(
-//                 LiveData.observe,
-//                 "database:LiveData.observe[LifecycleOwner,Observer]",
-//                 "androidx.lifecycle.LifecycleOwner",
-//                 "androidx.lifecycle.Observer"
-//             );
-//             if (observeRef) {
-//                 observeRef.implementation = safeImplementation(
-//                     "database:LiveData.observe[LifecycleOwner,Observer]",
-//                     observeRef,
-//                     function (original, owner: any, observer: any) {
-//                         const methodVal = "LiveData.observe, ";
-//                         const logVal = `LiveData observed with LifecycleOwner: ${owner.toString()}`;
-//                         am_send(PROFILE_HOOKING_TYPE, `event_type: Room.LiveData, ${methodVal}${logVal}`);
-//                         return original.call(this, owner, observer);
-//                     }
-//                 );
-//             }
-//         } // End if (LiveData)
-
-//         // Hook Flow collect
-//         const FlowCollector = safeUse(
-//             "kotlinx.coroutines.flow.FlowCollector",
-//             "database:hook_room_library"
-//         );
-//         if (FlowCollector) {
-//             const emitRef = safeOverload(
-//                 FlowCollector.emit,
-//                 "database:FlowCollector.emit[Object]",
-//                 "java.lang.Object"
-//             );
-//             if (emitRef) {
-//                 emitRef.implementation = safeImplementation(
-//                     "database:FlowCollector.emit[Object]",
-//                     emitRef,
-//                     function (original, value: any) {
-//                         const methodVal = "FlowCollector.emit, ";
-//                         const logVal = `Flow emitted value: ${value}`;
-//                         am_send(PROFILE_HOOKING_TYPE, `event_type: Room.Flow, ${methodVal}${logVal}`);
-//                         return original.call(this, value);
-//                     }
-//                 );
-//             }
-//         } // End if (FlowCollector)
-
-//     });
-// }
-
 function hook_room_library() {
     safePerform("database:hook_room_library", () => {
 
@@ -2561,169 +2251,514 @@ function hook_room_library() {
     });
 }
 
+const hookedNativeSQLiteModules = new Set<string>();
+let nativeSQLiteModuleObserverInstalled = false;
+
 function hook_native_sqlite() {
     devlog("Installing native SQLite hooks");
-    
-    // Only proceed with native hooking if we can find the SQLite library
-    const sqlite_modules = Process.enumerateModules()
-        .filter(m => m.name.toLowerCase().includes("sqlite") || m.name.toLowerCase().includes("libsqlite"));
-    
-    if (sqlite_modules.length === 0) {
-        devlog("No SQLite native libraries found to hook");
-        return;
+
+    const MAX_NATIVE_BLOB_PREVIEW_BYTES = 4096;
+
+    function isSQLiteModule(module: any): boolean {
+        const name = module.name.toLowerCase();
+        return name.includes("sqlite");
     }
-    
-    devlog(`Found ${sqlite_modules.length} SQLite related modules: ${sqlite_modules.map(m => m.name).join(", ")}`);
-    
-    // Hook core SQLite functions in each module
-    sqlite_modules.forEach(module => {
-        devlog(`Hooking SQLite functions in ${module.name}`);
-        
-        // Helper function to safely hook a native function. safeResolveExport
-        // handles the null/throw cases and logs them via hookError; we keep the
-        // module-scoped success/miss devlog for readability.
-        function hookFunction(name, successCallback) {
-            const address = safeResolveExport(module.name, name, `database:${name}`);
-            if (address) {
-                successCallback(address);
-                devlog(`✅ Successfully hooked ${name} in ${module.name}`);
-            } else {
-                devlog(`⚠️ Could not find export for ${name} in ${module.name}`);
-            }
+
+    function readUtf8(pointer: NativePointer, length?: number): string | null {
+        if (!pointer || pointer.isNull()) {
+            return null;
         }
-        
-        // Hook sqlite3_open and variants
-        ["sqlite3_open", "sqlite3_open_v2", "sqlite3_open16"].forEach(funcName => {
-            hookFunction(funcName, address => {
-                safeAttach(address, `database:${funcName}`, {
-                    onEnter: function(args) {
-                        this.dbPath = args[0].readUtf8String();
-                        this.dbHandle = args[1]; // Store for later use in onLeave
+
+        if (length !== undefined && length >= 0) {
+            return pointer.readUtf8String(length);
+        }
+
+        return pointer.readUtf8String();
+    }
+
+    function readUtf16(pointer: NativePointer, byteLength?: number): string | null {
+        if (!pointer || pointer.isNull()) {
+            return null;
+        }
+
+        if (byteLength !== undefined && byteLength >= 0) {
+            // Frida expects UTF-16 character count, SQLite reports byte count.
+            return pointer.readUtf16String(Math.floor(byteLength / 2));
+        }
+
+        return pointer.readUtf16String();
+    }
+
+    function readBlob(pointer: NativePointer, originalLength: number): {
+        value_hex: string | null;
+        preview_length: number;
+        truncated: boolean;
+    } {
+        if (!pointer || pointer.isNull() || originalLength <= 0) {
+            return {
+                value_hex: "",
+                preview_length: 0,
+                truncated: false
+            };
+        }
+
+        const previewLength = Math.min(
+            originalLength,
+            MAX_NATIVE_BLOB_PREVIEW_BYTES
+        );
+
+        const bytes = pointer.readByteArray(previewLength) as ArrayBuffer | null;
+        const valueHex = bytes
+            ? bytesToHex(new Uint8Array(bytes))
+            : null;
+
+        return {
+            value_hex: valueHex,
+            preview_length: previewLength,
+            truncated: originalLength > previewLength
+        };
+    }
+
+    function readSignedInt64Argument(value: NativePointer): {
+        value: string | null;
+        value_available: boolean;
+    } {
+        // On 32-bit ABIs sqlite3_int64 may be split across registers/stack.
+        // The generic Frida args[] representation is not sufficient to recover
+        // it safely without ABI-specific handling.
+        if (Process.pointerSize !== 8 || typeof BigInt !== "function") {
+            return {
+                value: null,
+                value_available: false
+            };
+        }
+
+        try {
+            // NativePointer.toString() provides the raw 64-bit argument bits as
+            // hexadecimal, e.g. 0xffffffffffffffff for -1.
+            const rawBits = BigInt(value.toString());
+
+            // Interpret the raw argument bits as a signed two's-complement int64.
+            return {
+                value: BigInt.asIntN(64, rawBits).toString(),
+                value_available: true
+            };
+        } catch (_) {
+            return {
+                value: null,
+                value_available: false
+            };
+        }
+    }
+
+    function installSQLiteModuleHooks(module: any): void {
+        const moduleKey = `${module.name}@${module.base}`;
+
+        if (hookedNativeSQLiteModules.has(moduleKey)) {
+            return;
+        }
+
+        hookedNativeSQLiteModules.add(moduleKey);
+        devlog(`Hooking SQLite functions in ${module.name}`);
+
+        function hookFunction(
+            functionName: string,
+            callback: (address: NativePointer) => void
+        ): void {
+            const address = safeResolveExport(
+                module.name,
+                functionName,
+                `database:native:${module.name}`
+            );
+
+            if (!address) {
+                devlog(
+                    `Native SQLite export unavailable: ${module.name}!${functionName}`
+                );
+                return;
+            }
+
+            devlog(
+                `Installing native SQLite hook: ${module.name}!${functionName}`
+            );
+            callback(address);
+        }
+
+        // sqlite3_open / sqlite3_open_v2 use UTF-8 paths.
+        ["sqlite3_open", "sqlite3_open_v2"].forEach((functionName) => {
+            hookFunction(functionName, (address) => {
+                safeAttach(address, `database:${module.name}:${functionName}`, {
+                    onEnter(args) {
+                        this.databasePath = readUtf8(args[0]);
                     },
-                    onLeave: function(retval) {
+
+                    onLeave(retval) {
                         const resultCode = retval.toInt32();
-                        const status = resultCode === 0 ? "success" : `error code ${resultCode}`;
-                        
+
                         createDatabaseEvent("database.native.open", {
-                            method: funcName,
-                            database_path: this.dbPath,
+                            method: functionName,
+                            native_function: functionName,
+                            module_name: module.name,
+                            architecture: Process.arch,
+                            database_path: this.databasePath || null,
                             result_code: resultCode,
-                            status: status,
+                            status: resultCode === 0
+                                ? "success"
+                                : `error code ${resultCode}`,
                             database_type: "Native SQLite"
                         });
                     }
                 });
             });
         });
-        
-        // Hook sqlite3_exec (direct SQL execution)
-        hookFunction("sqlite3_exec", address => {
-            safeAttach(address, "database:sqlite3_exec", {
-                onEnter: function(args) {
-                    const dbHandle = args[0];
-                    const sql = args[1].readUtf8String();
-                    
+
+        // sqlite3_open16 uses a UTF-16 path.
+        hookFunction("sqlite3_open16", (address) => {
+            safeAttach(address, `database:${module.name}:sqlite3_open16`, {
+                onEnter(args) {
+                    this.databasePath = readUtf16(args[0]);
+                },
+
+                onLeave(retval) {
+                    const resultCode = retval.toInt32();
+
+                    createDatabaseEvent("database.native.open", {
+                        method: "sqlite3_open16",
+                        native_function: "sqlite3_open16",
+                        module_name: module.name,
+                        architecture: Process.arch,
+                        database_path: this.databasePath || null,
+                        result_code: resultCode,
+                        status: resultCode === 0
+                            ? "success"
+                            : `error code ${resultCode}`,
+                        database_type: "Native SQLite",
+                        sql_encoding: "utf16"
+                    });
+                }
+            });
+        });
+
+        hookFunction("sqlite3_exec", (address) => {
+            safeAttach(address, `database:${module.name}:sqlite3_exec`, {
+                onEnter(args) {
                     createDatabaseEvent("database.native.exec", {
                         method: "sqlite3_exec",
-                        sql: sql,
+                        native_function: "sqlite3_exec",
+                        module_name: module.name,
+                        architecture: Process.arch,
+                        statement_handle: args[0].toString(),
+                        sql: readUtf8(args[1]),
                         database_type: "Native SQLite"
                     });
                 }
             });
         });
-        
-        // Hook sqlite3_prepare and variants (SQL statement preparation)
-        ["sqlite3_prepare", "sqlite3_prepare_v2", "sqlite3_prepare_v3", "sqlite3_prepare16", "sqlite3_prepare16_v2", "sqlite3_prepare16_v3"].forEach(funcName => {
-            hookFunction(funcName, address => {
-                safeAttach(address, `database:${funcName}`, {
-                    onEnter: function(args) {
-                        const sql = args[1].readUtf8String();
-                        this.sql = sql;
+
+        const utf8PrepareFunctions = [
+            "sqlite3_prepare",
+            "sqlite3_prepare_v2",
+            "sqlite3_prepare_v3"
+        ];
+
+        utf8PrepareFunctions.forEach((functionName) => {
+            hookFunction(functionName, (address) => {
+                safeAttach(address, `database:${module.name}:${functionName}`, {
+                    onEnter(args) {
+                        const byteLength = args[2].toInt32();
+                        this.sql = readUtf8(args[1], byteLength);
                     },
-                    onLeave: function(retval) {
+
+                    onLeave(retval) {
                         const resultCode = retval.toInt32();
-                        const status = resultCode === 0 ? "success" : `error code ${resultCode}`;
-                        
-                        am_send(PROFILE_HOOKING_TYPE, `event_type: NativeSQLite, method: ${funcName},
-                        sql: ${this.sql},
-                        status: ${status}`);
+
+                        createDatabaseEvent("database.native.prepare", {
+                            method: functionName,
+                            native_function: functionName,
+                            module_name: module.name,
+                            architecture: Process.arch,
+                            sql: this.sql || null,
+                            sql_encoding: "utf8",
+                            result_code: resultCode,
+                            status: resultCode === 0
+                                ? "success"
+                                : `error code ${resultCode}`,
+                            database_type: "Native SQLite"
+                        });
                     }
                 });
             });
         });
-        
-        // Hook sqlite3_step (statement execution)
-        hookFunction("sqlite3_step", address => {
-            safeAttach(address, "database:sqlite3_step", {
-                onEnter: function(args) {
-                    this.stmtHandle = args[0];
+
+        const utf16PrepareFunctions = [
+            "sqlite3_prepare16",
+            "sqlite3_prepare16_v2",
+            "sqlite3_prepare16_v3"
+        ];
+
+        utf16PrepareFunctions.forEach((functionName) => {
+            hookFunction(functionName, (address) => {
+                safeAttach(address, `database:${module.name}:${functionName}`, {
+                    onEnter(args) {
+                        const byteLength = args[2].toInt32();
+                        this.sql = readUtf16(args[1], byteLength);
+                    },
+
+                    onLeave(retval) {
+                        const resultCode = retval.toInt32();
+
+                        createDatabaseEvent("database.native.prepare", {
+                            method: functionName,
+                            native_function: functionName,
+                            module_name: module.name,
+                            architecture: Process.arch,
+                            sql: this.sql || null,
+                            sql_encoding: "utf16",
+                            result_code: resultCode,
+                            status: resultCode === 0
+                                ? "success"
+                                : `error code ${resultCode}`,
+                            database_type: "Native SQLite"
+                        });
+                    }
+                });
+            });
+        });
+
+        hookFunction("sqlite3_step", (address) => {
+            safeAttach(address, `database:${module.name}:sqlite3_step`, {
+                onEnter(args) {
+                    this.statementHandle = args[0].toString();
                 },
-                onLeave: function(retval) {
-                    // Result codes: SQLITE_DONE(101), SQLITE_ROW(100), etc.
+
+                onLeave(retval) {
                     const resultCode = retval.toInt32();
+
                     let status = "unknown";
-                    
-                    if (resultCode === 100) status = "row available";
-                    else if (resultCode === 101) status = "completed";
-                    else status = `error code ${resultCode}`;
-                    
-                    am_send(PROFILE_HOOKING_TYPE, `event_type: NativeSQLite, method: sqlite3_step,
-                    status: ${status}`);
+                    if (resultCode === 100) {
+                        status = "row available";
+                    } else if (resultCode === 101) {
+                        status = "completed";
+                    } else {
+                        status = `error code ${resultCode}`;
+                    }
+
+                    createDatabaseEvent("database.native.step", {
+                        method: "sqlite3_step",
+                        native_function: "sqlite3_step",
+                        module_name: module.name,
+                        architecture: Process.arch,
+                        statement_handle: this.statementHandle,
+                        result_code: resultCode,
+                        status: status,
+                        database_type: "Native SQLite"
+                    });
                 }
             });
         });
-        
-        // Hook sqlite3_close and sqlite3_close_v2
-        ["sqlite3_close", "sqlite3_close_v2"].forEach(funcName => {
-            hookFunction(funcName, address => {
-                safeAttach(address, `database:${funcName}`, {
-                    onEnter: function(args) {
-                        this.dbHandle = args[0];
+
+        ["sqlite3_close", "sqlite3_close_v2"].forEach((functionName) => {
+            hookFunction(functionName, (address) => {
+                safeAttach(address, `database:${module.name}:${functionName}`, {
+                    onEnter(args) {
+                        this.databaseHandle = args[0].toString();
                     },
-                    onLeave: function(retval) {
+
+                    onLeave(retval) {
                         const resultCode = retval.toInt32();
-                        const status = resultCode === 0 ? "success" : `error code ${resultCode}`;
-                        
-                        am_send(PROFILE_HOOKING_TYPE, `event_type: NativeSQLite, method: ${funcName},
-                        status: ${status}`);
+
+                        createDatabaseEvent("database.native.close", {
+                            method: functionName,
+                            native_function: functionName,
+                            module_name: module.name,
+                            architecture: Process.arch,
+                            statement_handle: this.databaseHandle,
+                            result_code: resultCode,
+                            status: resultCode === 0
+                                ? "success"
+                                : `error code ${resultCode}`,
+                            database_type: "Native SQLite"
+                        });
                     }
                 });
             });
         });
-        
-        // Hook sqlite3_bind_* functions (for parameter binding)
-        ["sqlite3_bind_text", "sqlite3_bind_blob", "sqlite3_bind_int", "sqlite3_bind_int64", "sqlite3_bind_double", "sqlite3_bind_null"].forEach(funcName => {
-            hookFunction(funcName, address => {
-                safeAttach(address, `database:${funcName}`, {
-                    onEnter: function(args) {
-                        const stmtHandle = args[0];
-                        const paramIndex = args[1].toInt32();
-                        
-                        let paramValue = "unknown";
-                        try {
-                            if (funcName === "sqlite3_bind_text" || funcName === "sqlite3_bind_blob") {
-                                paramValue = args[2].readUtf8String();
-                            } else if (funcName === "sqlite3_bind_int") {
-                                paramValue = args[2].toInt32().toString();
-                            } else if (funcName === "sqlite3_bind_int64") {
-                                paramValue = args[2].toString();
-                            } else if (funcName === "sqlite3_bind_double") {
-                                paramValue = args[2].readDouble().toString();
-                            } else if (funcName === "sqlite3_bind_null") {
-                                paramValue = "NULL";
-                            }
-                        } catch (e) {
-                            paramValue = "Error reading value";
-                        }
-                        
-                        am_send(PROFILE_HOOKING_TYPE, `event_type: NativeSQLite, method: ${funcName},
-                        index: ${paramIndex},
-                        value: ${paramValue}`);
-                    }
-                });
+
+        function emitBindEvent(
+            functionName: string,
+            args: InvocationArguments,
+            data: Record<string, any>
+        ): void {
+            createDatabaseEvent("database.native.bind", {
+                method: functionName,
+                native_function: functionName,
+                module_name: module.name,
+                architecture: Process.arch,
+                statement_handle: args[0].toString(),
+                bind_index: args[1].toInt32(),
+                database_type: "Native SQLite",
+                ...data
+            });
+        }
+
+        hookFunction("sqlite3_bind_text", (address) => {
+            safeAttach(address, `database:${module.name}:sqlite3_bind_text`, {
+                onEnter(args) {
+                    const byteLength = args[3].toInt32();
+
+                    emitBindEvent("sqlite3_bind_text", args, {
+                        bind_type: "text",
+                        bind_value: readUtf8(args[2], byteLength),
+                        bind_value_length: byteLength >= 0 ? byteLength : null,
+                        value_available: true
+                    });
+                }
             });
         });
-    });
+
+        hookFunction("sqlite3_bind_text16", (address) => {
+            safeAttach(address, `database:${module.name}:sqlite3_bind_text16`, {
+                onEnter(args) {
+                    const byteLength = args[3].toInt32();
+
+                    emitBindEvent("sqlite3_bind_text16", args, {
+                        bind_type: "text_utf16",
+                        bind_value: readUtf16(args[2], byteLength),
+                        bind_value_length: byteLength >= 0 ? byteLength : null,
+                        value_available: true
+                    });
+                }
+            });
+        });
+
+        hookFunction("sqlite3_bind_blob", (address) => {
+            safeAttach(address, `database:${module.name}:sqlite3_bind_blob`, {
+                onEnter(args) {
+                    const originalLength = args[3].toInt32();
+                    const blob = readBlob(args[2], originalLength);
+
+                    emitBindEvent("sqlite3_bind_blob", args, {
+                        bind_type: "blob",
+                        bind_value_hex: blob.value_hex,
+                        bind_value_length: originalLength,
+                        bind_value_preview_length: blob.preview_length,
+                        bind_value_truncated: blob.truncated,
+                        value_available: blob.value_hex !== null
+                    });
+                }
+            });
+        });
+
+        hookFunction("sqlite3_bind_int", (address) => {
+            safeAttach(address, `database:${module.name}:sqlite3_bind_int`, {
+                onEnter(args) {
+                    emitBindEvent("sqlite3_bind_int", args, {
+                        bind_type: "int",
+                        bind_value: args[2].toInt32(),
+                        value_available: true
+                    });
+                }
+            });
+        });
+
+        hookFunction("sqlite3_bind_int64", (address) => {
+            safeAttach(address, `database:${module.name}:sqlite3_bind_int64`, {
+                onEnter(args) {
+                    // NativePointer string retains all 64 argument bits without
+                    // truncating through JavaScript's Number representation.
+                    const bindValue = readSignedInt64Argument(args[2]);
+
+                    emitBindEvent("sqlite3_bind_int64", args, {
+                        bind_type: "int64",
+                        bind_value: bindValue.value,
+                        value_available: bindValue.value_available
+                    });
+                }
+            });
+        });
+
+        hookFunction("sqlite3_bind_double", (address) => {
+            safeAttach(address, `database:${module.name}:sqlite3_bind_double`, {
+                onEnter(args) {
+                    let bindValue: number | null = null;
+                    let valueAvailable = false;
+
+                    // ARM64 ABI passes the third floating-point argument in d0.
+                    // x86/x64 SIMD state is not exposed by Frida's Android
+                    // InvocationContext on tested devices, so report unavailable
+                    // rather than reading the incorrect args[2] pointer value.
+                    if (
+                        Process.arch === "arm64" &&
+                        (this.context as any).d0 !== undefined
+                    ) {
+                        bindValue = Number((this.context as any).d0);
+                        valueAvailable = Number.isFinite(bindValue);
+                    }
+
+                    emitBindEvent("sqlite3_bind_double", args, {
+                        bind_type: "double",
+                        bind_value: bindValue,
+                        value_available: valueAvailable
+                    });
+                }
+            });
+        });
+
+        hookFunction("sqlite3_bind_null", (address) => {
+            safeAttach(address, `database:${module.name}:sqlite3_bind_null`, {
+                onEnter(args) {
+                    emitBindEvent("sqlite3_bind_null", args, {
+                        bind_type: "null",
+                        bind_value: null,
+                        value_available: true
+                    });
+                }
+            });
+        });
+    }
+
+    // Hook modules loaded before agent installation.
+    Process.enumerateModules()
+        .filter(isSQLiteModule)
+        .forEach(installSQLiteModuleHooks);
+
+    // Hook future modules, including the test app's late-loaded
+    // libsqlite_native_tests.so containing a statically linked SQLite copy.
+    if (
+        !nativeSQLiteModuleObserverInstalled &&
+        typeof (Process as any).attachModuleObserver === "function"
+    ) {
+        nativeSQLiteModuleObserverInstalled = true;
+
+        (Process as any).attachModuleObserver({
+            onAdded(module: any) {
+                if (!isSQLiteModule(module)) {
+                    return;
+                }
+
+                // onAdded() runs in the module-loading path. Resolving exports or
+                // attaching synchronously here may deadlock against the linker/loader.
+                // Defer hook installation until the observer callback has returned.
+                setImmediate(() => {
+                    try {
+                        installSQLiteModuleHooks(module);
+                    } catch (error) {
+                        devlog(
+                            `[HOOK] Failed to hook SQLite module ${module.name}: ${error}`
+                        );
+                    }
+                });
+            },
+
+            onRemoved(module: any) {
+                hookedNativeSQLiteModules.delete(`${module.name}@${module.base}`);
+            }
+        });
+    } else if (!nativeSQLiteModuleObserverInstalled) {
+        devlog(
+            "Native SQLite module observer unavailable; late-loaded SQLite modules will not be hooked"
+        );
+    }
 }
 
 
@@ -3154,7 +3189,7 @@ function hook_wcdb() {
                                 flags_description: flags.value !== null
                                     ? decodeFlags(flags.value)
                                     : null,
-                                connection_pool_size: connectionPoolSize,                                    
+                                connection_pool_size: connectionPoolSize,
                                 has_factory: hasFactory,
                                 has_error_handler: hasErrorHandler,
                                 has_cipher_spec: hasCipherSpec,
