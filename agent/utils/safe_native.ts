@@ -350,6 +350,30 @@ export function safeEnumerateModuleExports(
   }
 }
 
+/**
+ * Safely enumerate a module's ELF symbols.
+ *
+ * Unlike exports, symbols may include hidden SQLite functions in a statically
+ * linked library. Returns an empty array if the module disappeared before
+ * inspection or symbol enumeration fails.
+ */
+export function safeEnumerateModuleSymbols(
+  moduleName: string,
+  context: string
+): any[] {
+  try {
+    const module = Process.findModuleByName(moduleName);
+
+    if (!module) {
+      return [];
+    }
+
+    return module.enumerateSymbols();
+  } catch (error) {
+    hookError(`${context}:enumerateSymbols`, error);
+    return [];
+  }
+}
 
 /**
  * Safe alternative to Module.enumerateExports() + manual substring matching.
