@@ -3,7 +3,7 @@ import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where, bytesToHex } from "../utils/misc.js"
 import { Java} from "../utils/javalib.js"
 import { safePerform,safeUse, safeDeferred, safeOverload,safeImplementation, PropagateException } from "../utils/safe_java.js"
-import { safeResolveExport, safeAttach, safeEnumerateModuleExports } from "../utils/safe_native.js"
+import { safeResolveExport, safeAttach, safeEnumerateModuleExports, safeReplace } from "../utils/safe_native.js"
 
 /**
  * Some parts are taken from https://codeshare.frida.re/@ninjadiary/sqlite-database/
@@ -2835,13 +2835,16 @@ function hook_native_sqlite() {
             });
         });
 
-        function emitBindEvent(
+        function emitBindEventForStatement(
             functionName: string,
-            args: InvocationArguments,
+            statementHandle: string,
+            bindIndex: number,
             data: Record<string, any>
         ): void {
-            const statementHandle = args[0].toString();
-            const statementContext = getStatementContext(module, statementHandle);
+            const statementContext = getStatementContext(
+                module,
+                statementHandle
+            );
 
             createDatabaseEvent("database.native.bind", {
                 method: functionName,
@@ -2856,10 +2859,23 @@ function hook_native_sqlite() {
                 statement_handle: statementHandle,
                 sql: statementContext?.sql || null,
                 sql_encoding: statementContext?.sql_encoding || null,
-                bind_index: args[1].toInt32(),
+                bind_index: bindIndex,
                 database_type: "Native SQLite",
                 ...data
             });
+        }
+
+        function emitBindEvent(
+            functionName: string,
+            args: InvocationArguments,
+            data: Record<string, any>
+        ): void {
+            emitBindEventForStatement(
+                functionName,
+                args[0].toString(),
+                args[1].toInt32(),
+                data
+            );
         }
 
         hookFunction("sqlite3_bind_text", (address) => {
@@ -2939,15 +2955,66 @@ function hook_native_sqlite() {
         });
 
         hookFunction("sqlite3_bind_double", (address) => {
+            // On x64, sqlite3_bind_double's value is passed in XMM0.
+            // Interceptor.attach() does not expose XMM register state in the
+            // tested Android Frida InvocationContext, but NativeCallback's
+            // typed ABI marshalling does receive the double correctly.
+            if (Process.arch === "x64") {
+                const installed = safeReplace(
+                    address,
+                    `database:${module.name}:sqlite3_bind_double:x64`,
+                    "int",
+                    ["pointer", "int", "double"],
+                    function (
+                        original,
+                        statementPointer: NativePointer,
+                        bindIndex: number,
+                        bindValue: number
+                    ) {
+                        if (!original) {
+                            // SQLITE_MISUSE. This should be unreachable after
+                            // safeReplace() has successfully installed.
+                            return 21;
+                        }
+
+                        emitBindEventForStatement(
+                            "sqlite3_bind_double",
+                            statementPointer.toString(),
+                            bindIndex,
+                            {
+                                bind_type: "double",
+                                bind_value: bindValue,
+                                value_available: Number.isFinite(bindValue)
+                            }
+                        );
+
+                        return original(
+                            statementPointer,
+                            bindIndex,
+                            bindValue
+                        );
+                    }
+                );
+
+                if (installed) {
+                    return;
+                }
+
+                // If replacement could not be installed, retain the prior
+                // conservative behavior rather than losing the event entirely.
+                devlog(
+                    `Falling back to unavailable x64 double value: ${module.name}`
+                );
+            }
+
             safeAttach(address, `database:${module.name}:sqlite3_bind_double`, {
                 onEnter(args) {
                     let bindValue: number | null = null;
                     let valueAvailable = false;
 
                     // ARM64 ABI passes the third floating-point argument in d0.
-                    // x86/x64 SIMD state is not exposed by Frida's Android
-                    // InvocationContext on tested devices, so report unavailable
-                    // rather than reading the incorrect args[2] pointer value.
+                    // For x86/x64 without a typed replacement, do not invent
+                    // a value from the general-purpose argument representation.
                     if (
                         Process.arch === "arm64" &&
                         (this.context as any).d0 !== undefined
