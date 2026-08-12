@@ -143,6 +143,74 @@ static void test_sqlite3_bind_int(JNIEnv *env, jstring dbDir) {
         sqlite3_finalize(stmt);
     }
 
+    /*
+     * sqlite3_prepare_v3 uses a different ppStmt argument position than
+     * sqlite3_prepare_v2. This verifies native statement correlation for v3.
+     */
+    stmt = NULL;
+    rc = sqlite3_prepare_v3(
+            db,
+            "SELECT ? AS v3_value",
+            -1,
+            0,
+            &stmt,
+            NULL
+    );
+    TEST_ASSERT(rc == SQLITE_OK, "sqlite3_prepare_v3 for correlation");
+
+    if (rc == SQLITE_OK && stmt) {
+        rc = sqlite3_bind_int(stmt, 1, 7);
+        TEST_ASSERT(
+                rc == SQLITE_OK,
+                "sqlite3_bind_int(stmt, 1, 7) after prepare_v3"
+        );
+
+        rc = sqlite3_step(stmt);
+        TEST_ASSERT(
+                rc == SQLITE_ROW,
+                "sqlite3_step after prepare_v3 returns SQLITE_ROW"
+        );
+
+        sqlite3_finalize(stmt);
+    }
+
+    /*
+     * sqlite3_prepare16_v3 also places ppStmt at argument index 4.
+     * This validates UTF-16 v3 statement correlation.
+     */
+    static const jchar sql16v3[] = {
+            'S', 'E', 'L', 'E', 'C', 'T', ' ', '?', ' ',
+            'A', 'S', ' ', 'v', '1', '6', '_', 'v', 'a', 'l', 'u', 'e',
+            0
+    };
+
+    stmt = NULL;
+    rc = sqlite3_prepare16_v3(
+            db,
+            sql16v3,
+            -1,
+            0,
+            &stmt,
+            NULL
+    );
+    TEST_ASSERT(rc == SQLITE_OK, "sqlite3_prepare16_v3 for correlation");
+
+    if (rc == SQLITE_OK && stmt) {
+        rc = sqlite3_bind_int(stmt, 1, 8);
+        TEST_ASSERT(
+                rc == SQLITE_OK,
+                "sqlite3_bind_int(stmt, 1, 8) after prepare16_v3"
+        );
+
+        rc = sqlite3_step(stmt);
+        TEST_ASSERT(
+                rc == SQLITE_ROW,
+                "sqlite3_step after prepare16_v3 returns SQLITE_ROW"
+        );
+
+        sqlite3_finalize(stmt);
+    }
+    
     sqlite3_close(db);
 }
 
