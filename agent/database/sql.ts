@@ -2259,6 +2259,110 @@ function hook_native_sqlite() {
 
     const MAX_NATIVE_BLOB_PREVIEW_BYTES = 4096;
 
+    interface NativeDatabaseContext {
+        database_path: string | null;
+    }
+
+    interface NativeStatementContext {
+        database_handle: string;
+        sql: string | null;
+        sql_encoding: string;
+    }
+
+    const nativeDatabaseContexts = new Map<string, NativeDatabaseContext>();
+    const nativeStatementContexts = new Map<string, NativeStatementContext>();
+
+    function moduleIdentity(module: any): string {
+        return `${module.name}@${module.base}`;
+    }
+
+    function databaseContextKey(module: any, databaseHandle: string): string {
+        return `${moduleIdentity(module)}:db:${databaseHandle}`;
+    }
+
+    function statementContextKey(module: any, statementHandle: string): string {
+        return `${moduleIdentity(module)}:stmt:${statementHandle}`;
+    }
+
+    function getDatabasePath(
+        module: any,
+        databaseHandle: string | null
+    ): string | null {
+        if (!databaseHandle) {
+            return null;
+        }
+
+        return nativeDatabaseContexts.get(
+            databaseContextKey(module, databaseHandle)
+        )?.database_path ?? null;
+    }
+
+    function getStatementContext(
+        module: any,
+        statementHandle: string | null
+    ): NativeStatementContext | null {
+        if (!statementHandle) {
+            return null;
+        }
+
+        return nativeStatementContexts.get(
+            statementContextKey(module, statementHandle)
+        ) ?? null;
+    }
+
+    function removeDatabaseStatements(
+        module: any,
+        databaseHandle: string
+    ): void {
+        const modulePrefix = `${moduleIdentity(module)}:stmt:`;
+
+        for (const [key, context] of nativeStatementContexts.entries()) {
+            if (
+                key.startsWith(modulePrefix) &&
+                context.database_handle === databaseHandle
+            ) {
+                nativeStatementContexts.delete(key);
+            }
+        }
+    }
+
+    function removeModuleContexts(module: any): void {
+        const modulePrefix = `${moduleIdentity(module)}:`;
+
+        for (const key of nativeDatabaseContexts.keys()) {
+            if (key.startsWith(modulePrefix)) {
+                nativeDatabaseContexts.delete(key);
+            }
+        }
+
+        for (const key of nativeStatementContexts.keys()) {
+            if (key.startsWith(modulePrefix)) {
+                nativeStatementContexts.delete(key);
+            }
+        }
+    }
+
+    function readPointerValue(pointer: NativePointer): NativePointer | null {
+        try {
+            if (!pointer || pointer.isNull()) {
+                return null;
+            }
+
+            return pointer.readPointer();
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function getPrepareStatementOutArgument(
+        functionName: string,
+        args: InvocationArguments
+    ): NativePointer {
+        return functionName.endsWith("_v3")
+            ? args[4]
+            : args[3];
+    }
+
     function hasSQLiteLikeName(module: any): boolean {
         return module.name.toLowerCase().includes("sqlite");
     }
@@ -2413,16 +2517,33 @@ function hook_native_sqlite() {
                 safeAttach(address, `database:${module.name}:${functionName}`, {
                     onEnter(args) {
                         this.databasePath = readUtf8(args[0]);
+                        this.databaseHandleOut = args[1];
                     },
 
                     onLeave(retval) {
                         const resultCode = retval.toInt32();
+                        const databaseHandlePointer = resultCode === 0
+                            ? readPointerValue(this.databaseHandleOut)
+                            : null;
+                        const databaseHandle = databaseHandlePointer
+                            ? databaseHandlePointer.toString()
+                            : null;
+
+                        if (databaseHandle) {
+                            nativeDatabaseContexts.set(
+                                databaseContextKey(module, databaseHandle),
+                                {
+                                    database_path: this.databasePath || null
+                                }
+                            );
+                        }
 
                         createDatabaseEvent("database.native.open", {
                             method: functionName,
                             native_function: functionName,
                             module_name: module.name,
                             architecture: Process.arch,
+                            database_handle: databaseHandle,
                             database_path: this.databasePath || null,
                             result_code: resultCode,
                             status: resultCode === 0
@@ -2440,16 +2561,33 @@ function hook_native_sqlite() {
             safeAttach(address, `database:${module.name}:sqlite3_open16`, {
                 onEnter(args) {
                     this.databasePath = readUtf16(args[0]);
+                    this.databaseHandleOut = args[1];
                 },
 
                 onLeave(retval) {
                     const resultCode = retval.toInt32();
+                    const databaseHandlePointer = resultCode === 0
+                        ? readPointerValue(this.databaseHandleOut)
+                        : null;
+                    const databaseHandle = databaseHandlePointer
+                        ? databaseHandlePointer.toString()
+                        : null;
+
+                    if (databaseHandle) {
+                        nativeDatabaseContexts.set(
+                            databaseContextKey(module, databaseHandle),
+                            {
+                                database_path: this.databasePath || null
+                            }
+                        );
+                    }
 
                     createDatabaseEvent("database.native.open", {
                         method: "sqlite3_open16",
                         native_function: "sqlite3_open16",
                         module_name: module.name,
                         architecture: Process.arch,
+                        database_handle: databaseHandle,
                         database_path: this.databasePath || null,
                         result_code: resultCode,
                         status: resultCode === 0
@@ -2470,7 +2608,8 @@ function hook_native_sqlite() {
                         native_function: "sqlite3_exec",
                         module_name: module.name,
                         architecture: Process.arch,
-                        statement_handle: args[0].toString(),
+                        database_handle: args[0].toString(),
+                        database_path: getDatabasePath(module, args[0].toString()),
                         sql: readUtf8(args[1]),
                         database_type: "Native SQLite"
                     });
@@ -2489,17 +2628,45 @@ function hook_native_sqlite() {
                 safeAttach(address, `database:${module.name}:${functionName}`, {
                     onEnter(args) {
                         const byteLength = args[2].toInt32();
+
+                        this.databaseHandle = args[0].toString();
+                        this.statementHandleOut = getPrepareStatementOutArgument(
+                            functionName,
+                            args
+                        );
                         this.sql = readUtf8(args[1], byteLength);
                     },
 
                     onLeave(retval) {
                         const resultCode = retval.toInt32();
+                        const statementHandlePointer = resultCode === 0
+                            ? readPointerValue(this.statementHandleOut)
+                            : null;
+                        const statementHandle = statementHandlePointer
+                            ? statementHandlePointer.toString()
+                            : null;
+                        const databaseHandle = this.databaseHandle || null;
+                        const databasePath = getDatabasePath(module, databaseHandle);
+
+                        if (statementHandle && databaseHandle) {
+                            nativeStatementContexts.set(
+                                statementContextKey(module, statementHandle),
+                                {
+                                    database_handle: databaseHandle,
+                                    sql: this.sql || null,
+                                    sql_encoding: "utf8"
+                                }
+                            );
+                        }
 
                         createDatabaseEvent("database.native.prepare", {
                             method: functionName,
                             native_function: functionName,
                             module_name: module.name,
                             architecture: Process.arch,
+                            database_handle: databaseHandle,
+                            database_path: databasePath,
+                            statement_handle: statementHandle,
                             sql: this.sql || null,
                             sql_encoding: "utf8",
                             result_code: resultCode,
@@ -2524,17 +2691,45 @@ function hook_native_sqlite() {
                 safeAttach(address, `database:${module.name}:${functionName}`, {
                     onEnter(args) {
                         const byteLength = args[2].toInt32();
+
+                        this.databaseHandle = args[0].toString();
+                        this.statementHandleOut = getPrepareStatementOutArgument(
+                            functionName,
+                            args
+                        );
                         this.sql = readUtf16(args[1], byteLength);
                     },
 
                     onLeave(retval) {
                         const resultCode = retval.toInt32();
+                        const statementHandlePointer = resultCode === 0
+                            ? readPointerValue(this.statementHandleOut)
+                            : null;
+                        const statementHandle = statementHandlePointer
+                            ? statementHandlePointer.toString()
+                            : null;
+                        const databaseHandle = this.databaseHandle || null;
+                        const databasePath = getDatabasePath(module, databaseHandle);
+
+                        if (statementHandle && databaseHandle) {
+                            nativeStatementContexts.set(
+                                statementContextKey(module, statementHandle),
+                                {
+                                    database_handle: databaseHandle,
+                                    sql: this.sql || null,
+                                    sql_encoding: "utf16"
+                                }
+                            );
+                        }
 
                         createDatabaseEvent("database.native.prepare", {
                             method: functionName,
                             native_function: functionName,
                             module_name: module.name,
                             architecture: Process.arch,
+                            database_handle: databaseHandle,
+                            database_path: databasePath,
+                            statement_handle: statementHandle,
                             sql: this.sql || null,
                             sql_encoding: "utf16",
                             result_code: resultCode,
@@ -2552,6 +2747,10 @@ function hook_native_sqlite() {
             safeAttach(address, `database:${module.name}:sqlite3_step`, {
                 onEnter(args) {
                     this.statementHandle = args[0].toString();
+                    this.statementContext = getStatementContext(
+                        module,
+                        this.statementHandle
+                    );
                 },
 
                 onLeave(retval) {
@@ -2571,6 +2770,13 @@ function hook_native_sqlite() {
                         native_function: "sqlite3_step",
                         module_name: module.name,
                         architecture: Process.arch,
+                        database_handle: this.statementContext?.database_handle || null,
+                        database_path: getDatabasePath(
+                            module,
+                            this.statementContext?.database_handle || null
+                        ),
+                        sql: this.statementContext?.sql || null,
+                        sql_encoding: this.statementContext?.sql_encoding || null,
                         statement_handle: this.statementHandle,
                         result_code: resultCode,
                         status: status,
@@ -2580,11 +2786,26 @@ function hook_native_sqlite() {
             });
         });
 
+        hookFunction("sqlite3_finalize", (address) => {
+            safeAttach(address, `database:${module.name}:sqlite3_finalize`, {
+                onEnter(args) {
+                    this.statementHandle = args[0].toString();
+                },
+
+                onLeave() {
+                    nativeStatementContexts.delete(
+                        statementContextKey(module, this.statementHandle)
+                    );
+                }
+            });
+        });
+
         ["sqlite3_close", "sqlite3_close_v2"].forEach((functionName) => {
             hookFunction(functionName, (address) => {
                 safeAttach(address, `database:${module.name}:${functionName}`, {
                     onEnter(args) {
                         this.databaseHandle = args[0].toString();
+                        this.databasePath = getDatabasePath(module, this.databaseHandle);
                     },
 
                     onLeave(retval) {
@@ -2595,13 +2816,20 @@ function hook_native_sqlite() {
                             native_function: functionName,
                             module_name: module.name,
                             architecture: Process.arch,
-                            statement_handle: this.databaseHandle,
+                            database_handle: this.databaseHandle,
+                            database_path: this.databasePath,
                             result_code: resultCode,
                             status: resultCode === 0
                                 ? "success"
                                 : `error code ${resultCode}`,
                             database_type: "Native SQLite"
                         });
+                        if (resultCode === 0 && functionName === "sqlite3_close") {
+                            nativeDatabaseContexts.delete(
+                                databaseContextKey(module, this.databaseHandle)
+                            );
+                            removeDatabaseStatements(module, this.databaseHandle);
+                        }
                     }
                 });
             });
@@ -2612,12 +2840,22 @@ function hook_native_sqlite() {
             args: InvocationArguments,
             data: Record<string, any>
         ): void {
+            const statementHandle = args[0].toString();
+            const statementContext = getStatementContext(module, statementHandle);
+
             createDatabaseEvent("database.native.bind", {
                 method: functionName,
                 native_function: functionName,
                 module_name: module.name,
                 architecture: Process.arch,
-                statement_handle: args[0].toString(),
+                database_handle: statementContext?.database_handle || null,
+                database_path: getDatabasePath(
+                    module,
+                    statementContext?.database_handle || null
+                ),
+                statement_handle: statementHandle,
+                sql: statementContext?.sql || null,
+                sql_encoding: statementContext?.sql_encoding || null,
                 bind_index: args[1].toInt32(),
                 database_type: "Native SQLite",
                 ...data
@@ -2799,6 +3037,7 @@ function hook_native_sqlite() {
 
             onRemoved(module: any) {
                 hookedNativeSQLiteModules.delete(`${module.name}@${module.base}`);
+                removeModuleContexts(module);
             }
         });
     } else if (!nativeSQLiteModuleObserverInstalled) {
