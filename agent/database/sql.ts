@@ -2,8 +2,8 @@ import { devlog, am_send } from "../utils/logging.js"
 import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where, bytesToHex } from "../utils/misc.js"
 import { Java} from "../utils/javalib.js"
-import { safePerform,safeUse,safeDeferred, safeOverload,safeImplementation, PropagateException } from "../utils/safe_java.js"
-import { safeResolveExport, safeAttach } from "../utils/safe_native.js"
+import { safePerform,safeUse, safeDeferred, safeOverload,safeImplementation, PropagateException } from "../utils/safe_java.js"
+import { safeResolveExport, safeAttach, safeEnumerateModuleExports } from "../utils/safe_native.js"
 
 /**
  * Some parts are taken from https://codeshare.frida.re/@ninjadiary/sqlite-database/
@@ -2259,9 +2259,25 @@ function hook_native_sqlite() {
 
     const MAX_NATIVE_BLOB_PREVIEW_BYTES = 4096;
 
-    function isSQLiteModule(module: any): boolean {
-        const name = module.name.toLowerCase();
-        return name.includes("sqlite");
+    function hasSQLiteLikeName(module: any): boolean {
+        return module.name.toLowerCase().includes("sqlite");
+    }
+
+    function getSQLiteExportNames(module: any): Set<string> {
+        const exports = safeEnumerateModuleExports(
+            module.name,
+            `database:native:${module.name}`
+        );
+
+        return new Set(
+            exports
+                .filter(
+                    (entry: any) =>
+                        entry.type === "function" &&
+                        entry.name.startsWith("sqlite3_")
+                )
+                .map((entry: any) => entry.name)
+        );
     }
 
     function readUtf8(pointer: NativePointer, length?: number): string | null {
@@ -2351,7 +2367,10 @@ function hook_native_sqlite() {
         }
     }
 
-    function installSQLiteModuleHooks(module: any): void {
+    function installSQLiteModuleHooks(
+        module: any,
+        sqliteExportNames: Set<string>
+    ): void {
         const moduleKey = `${module.name}@${module.base}`;
 
         if (hookedNativeSQLiteModules.has(moduleKey)) {
@@ -2365,6 +2384,10 @@ function hook_native_sqlite() {
             functionName: string,
             callback: (address: NativePointer) => void
         ): void {
+            if (!sqliteExportNames.has(functionName)) {
+                return;
+            }
+
             const address = safeResolveExport(
                 module.name,
                 functionName,
@@ -2717,13 +2740,52 @@ function hook_native_sqlite() {
         });
     }
 
-    // Hook modules loaded before agent installation.
-    Process.enumerateModules()
-        .filter(isSQLiteModule)
-        .forEach(installSQLiteModuleHooks);
+    function inspectAndInstallSQLiteModuleHooks(module: any): void {
+        const sqliteExportNames = getSQLiteExportNames(module);
 
-    // Hook future modules, including the test app's late-loaded
-    // libsqlite_native_tests.so containing a statically linked SQLite copy.
+        if (sqliteExportNames.size === 0) {
+            return;
+        }
+
+        devlog(
+            `Detected ${sqliteExportNames.size} SQLite exports in ${module.name}`
+        );
+
+        installSQLiteModuleHooks(module, sqliteExportNames);
+    }
+
+    function scheduleSQLiteModuleInspection(module: any): void {
+        // Export enumeration and hook installation must not happen directly from
+        // Process.attachModuleObserver().onAdded(), as that executes in Android's
+        // loader path and may deadlock against linker internals.
+        setImmediate(() => {
+            try {
+                inspectAndInstallSQLiteModuleHooks(module);
+            } catch (error) {
+                devlog(
+                    `[HOOK] Failed to inspect SQLite exports in ${module.name}: ${error}`
+                );
+            }
+        });
+    }
+
+    // Prioritize modules whose names already identify them as SQLite-related.
+    // They are inspected synchronously because agent installation is not running
+    // inside the linker callback.
+    const existingModules = Process.enumerateModules();
+
+    existingModules
+        .filter(hasSQLiteLikeName)
+        .forEach(inspectAndInstallSQLiteModuleHooks);
+
+    // Also discover statically linked SQLite in arbitrary already-loaded modules.
+    // This is deferred to keep initial hook installation responsive.
+    existingModules
+        .filter((module) => !hasSQLiteLikeName(module))
+        .forEach(scheduleSQLiteModuleInspection);
+
+    // Inspect every future module by exports, not just by filename. This detects
+    // statically linked SQLite copies in arbitrary application library names.
     if (
         !nativeSQLiteModuleObserverInstalled &&
         typeof (Process as any).attachModuleObserver === "function"
@@ -2732,22 +2794,7 @@ function hook_native_sqlite() {
 
         (Process as any).attachModuleObserver({
             onAdded(module: any) {
-                if (!isSQLiteModule(module)) {
-                    return;
-                }
-
-                // onAdded() runs in the module-loading path. Resolving exports or
-                // attaching synchronously here may deadlock against the linker/loader.
-                // Defer hook installation until the observer callback has returned.
-                setImmediate(() => {
-                    try {
-                        installSQLiteModuleHooks(module);
-                    } catch (error) {
-                        devlog(
-                            `[HOOK] Failed to hook SQLite module ${module.name}: ${error}`
-                        );
-                    }
-                });
+                scheduleSQLiteModuleInspection(module);
             },
 
             onRemoved(module: any) {
@@ -2760,7 +2807,6 @@ function hook_native_sqlite() {
         );
     }
 }
-
 
 function hook_wcdb() {
     safePerform("database:hook_wcdb", () => {
