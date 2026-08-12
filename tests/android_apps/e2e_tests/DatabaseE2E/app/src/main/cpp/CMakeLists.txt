@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22.1)
 project("databasee2e")
 
 add_library(
-        sqlite_native_tests
+        native_db_tests
         SHARED
         sqlite_native_tests.c
         sqlite3.c
@@ -12,7 +12,7 @@ add_library(
 find_library(log-lib log)
 
 target_link_libraries(
-        sqlite_native_tests
+        native_db_tests
         ${log-lib}
 )
 

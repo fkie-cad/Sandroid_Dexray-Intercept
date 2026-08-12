@@ -3,8 +3,9 @@ package com.test.databasee2e;
 public final class SqliteNativeTests {
 
     static {
-        // Loads libsqlite_native_tests.so
-        System.loadLibrary("sqlite_native_tests");
+        // Loads libnative_db_tests.so. The filename intentionally does not contain
+        // "sqlite", so the agent must discover SQLite through exported symbols.
+        System.loadLibrary("native_db_tests");
     }
 
     /**
