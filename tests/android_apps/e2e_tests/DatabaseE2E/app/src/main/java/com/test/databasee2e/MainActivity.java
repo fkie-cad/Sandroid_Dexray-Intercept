@@ -39,6 +39,13 @@ public class MainActivity extends Activity {
         Log.i(TAG, "DatabaseE2E started");
 
         try {
+            SqliteNativeTests.preload();
+            Log.i(TAG, "SqliteNativeTests library preloaded");
+        } catch (Throwable t) {
+            Log.e(TAG, "SqliteNativeTests preload failed", t);
+        }
+
+        try {
 
             // 1) android.database.sqlite.SQLiteDatabase - all overloads
             try {
