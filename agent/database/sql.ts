@@ -3,7 +3,7 @@ import { get_path_from_fd } from "../utils/android_runtime_requests.js"
 import { Where, bytesToHex } from "../utils/misc.js"
 import { Java} from "../utils/javalib.js"
 import { safePerform,safeUse, safeDeferred, safeOverload,safeImplementation, PropagateException } from "../utils/safe_java.js"
-import { safeResolveExport, safeAttach, safeEnumerateModuleExports, safeReplace } from "../utils/safe_native.js"
+import { safeAttach, safeEnumerateModuleExports, safeEnumerateModuleSymbols, safeReplace } from "../utils/safe_native.js"
 
 /**
  * Some parts are taken from https://codeshare.frida.re/@ninjadiary/sqlite-database/
@@ -2367,21 +2367,59 @@ function hook_native_sqlite() {
         return module.name.toLowerCase().includes("sqlite");
     }
 
-    function getSQLiteExportNames(module: any): Set<string> {
+    interface NativeSQLiteFunctionDiscovery {
+        functions: Map<string, NativePointer>;
+        exported_count: number;
+        symbol_only_count: number;
+    }
+
+    function getSQLiteFunctionDiscovery(
+        module: any
+    ): NativeSQLiteFunctionDiscovery {
+        const functions = new Map<string, NativePointer>();
+        let exportedCount = 0;
+        let symbolOnlyCount = 0;
+
         const exports = safeEnumerateModuleExports(
             module.name,
             `database:native:${module.name}`
         );
 
-        return new Set(
-            exports
-                .filter(
-                    (entry: any) =>
-                        entry.type === "function" &&
-                        entry.name.startsWith("sqlite3_")
-                )
-                .map((entry: any) => entry.name)
+        for (const entry of exports) {
+            if (
+                entry.type === "function" &&
+                entry.name.startsWith("sqlite3_") &&
+                entry.address &&
+                !entry.address.isNull()
+            ) {
+                functions.set(entry.name, entry.address);
+                exportedCount++;
+            }
+        }
+
+        const symbols = safeEnumerateModuleSymbols(
+            module.name,
+            `database:native:${module.name}`
         );
+
+        for (const entry of symbols) {
+            if (
+                entry.type === "function" &&
+                entry.name.startsWith("sqlite3_") &&
+                entry.address &&
+                !entry.address.isNull() &&
+                !functions.has(entry.name)
+            ) {
+                functions.set(entry.name, entry.address);
+                symbolOnlyCount++;
+            }
+        }
+
+        return {
+            functions: functions,
+            exported_count: exportedCount,
+            symbol_only_count: symbolOnlyCount
+        };
     }
 
     function readUtf8(pointer: NativePointer, length?: number): string | null {
@@ -2501,7 +2539,7 @@ function hook_native_sqlite() {
 
     function installSQLiteModuleHooks(
         module: any,
-        sqliteExportNames: Set<string>
+        sqliteFunctionAddresses: Map<string, NativePointer>
     ): void {
         const moduleKey = `${module.name}@${module.base}`;
 
@@ -2516,20 +2554,9 @@ function hook_native_sqlite() {
             functionName: string,
             callback: (address: NativePointer) => void
         ): void {
-            if (!sqliteExportNames.has(functionName)) {
-                return;
-            }
+            const address = sqliteFunctionAddresses.get(functionName);
 
-            const address = safeResolveExport(
-                module.name,
-                functionName,
-                `database:native:${module.name}`
-            );
-
-            if (!address) {
-                devlog(
-                    `Native SQLite export unavailable: ${module.name}!${functionName}`
-                );
+            if (!address || address.isNull()) {
                 return;
             }
 
@@ -3123,17 +3150,19 @@ function hook_native_sqlite() {
     }
 
     function inspectAndInstallSQLiteModuleHooks(module: any): void {
-        const sqliteExportNames = getSQLiteExportNames(module);
+        const discovery = getSQLiteFunctionDiscovery(module);
 
-        if (sqliteExportNames.size === 0) {
+        if (discovery.functions.size === 0) {
             return;
         }
 
         devlog(
-            `Detected ${sqliteExportNames.size} SQLite exports in ${module.name}`
+            `Detected ${discovery.functions.size} SQLite functions in ` +
+            `${module.name} (${discovery.exported_count} exports, ` +
+            `${discovery.symbol_only_count} symbols)`
         );
 
-        installSQLiteModuleHooks(module, sqliteExportNames);
+        installSQLiteModuleHooks(module, discovery.functions);
     }
 
     function scheduleSQLiteModuleInspection(module: any): void {
