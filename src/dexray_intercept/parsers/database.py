@@ -74,6 +74,7 @@ class DatabaseParser(BaseParser):
             'architecture': 'architecture',
             'sql_encoding': 'sql_encoding',
             'statement_handle': 'statement_handle',
+            'database_handle': 'database_handle',
             'bind_index': 'bind_index',
             'bind_type': 'bind_type',
             'bind_value': 'bind_value',

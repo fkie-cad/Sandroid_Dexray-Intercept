@@ -518,6 +518,7 @@ class DatabaseEvent(Event):
         self.architecture = None
         self.sql_encoding = None
         self.statement_handle = None
+        self.database_handle = None 
         self.bind_index = None
         self.bind_type = None
         self.bind_value = None
@@ -544,8 +545,8 @@ class DatabaseEvent(Event):
             'query_type', 'table_names', 'in_transaction',
             'owner_class', 'observer_class', 'old_version', 'new_version',
             'native_function', 'module_name', 'architecture', 'sql_encoding',
-            'statement_handle', 'bind_index', 'bind_type', 'bind_value',
-            'bind_value_hex', 'bind_value_length',
+            'statement_handle', 'database_handle', 'bind_index',
+            'bind_type', 'bind_value', 'bind_value_hex', 'bind_value_length',
             'bind_value_preview_length', 'bind_value_truncated',
             'value_available',
         ]

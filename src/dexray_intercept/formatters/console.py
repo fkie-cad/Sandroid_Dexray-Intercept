@@ -741,6 +741,9 @@ class ConsoleFormatter(BaseFormatter):
 
         if event.statement_handle:
             lines.append(f"[*] Statement Handle: {event.statement_handle}")
+            
+        if event.database_handle:
+            lines.append(f"[*] Database Handle: {event.database_handle}")
 
         if event.bind_index is not None:
             lines.append(f"[*] Bind Index: {event.bind_index}")
