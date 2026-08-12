@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 from typing import Optional
-import json 
+import json
 from .base import BaseFormatter
 from ..models.events import (
-    Event, FileSystemEvent, CryptoEvent, NetworkEvent, 
+    Event, FileSystemEvent, CryptoEvent, NetworkEvent,
     ProcessEvent, IPCEvent, ServiceEvent, DatabaseEvent,
     DEXEvent, JNIEvent
 )
@@ -15,15 +15,15 @@ from ..utils.string_utils import truncate_string
 
 class ConsoleFormatter(BaseFormatter):
     """Console formatter for human-readable output"""
-    
+
     def __init__(self, verbose_mode: bool = False):
         self.verbose_mode = verbose_mode
-    
+
     def format_event(self, event: Event) -> Optional[str]:
         """Format event for console output"""
         if self.should_skip_event(event):
             return None
-        
+
         # Route to specific formatter based on event type
         if isinstance(event, FileSystemEvent):
             return self._format_filesystem_event(event)
@@ -45,11 +45,11 @@ class ConsoleFormatter(BaseFormatter):
             return self._format_jni_event(event)
         else:
             return self._format_generic_event(event)
-    
+
     def _format_filesystem_event(self, event: FileSystemEvent) -> str:
         """Format file system events"""
         lines = []
-        
+
         if event.event_type == 'file.create':
             lines.append("\n[*] [File] File Creation:")
             lines.append(f"[*] Operation: {event.operation or 'Unknown'}")
@@ -57,13 +57,13 @@ class ConsoleFormatter(BaseFormatter):
             if event.parent_path:
                 lines.append(f"[*] Parent: {event.parent_path}")
                 lines.append(f"[*] Child: {event.child_path}")
-        
+
         elif event.event_type == 'file.stream.create':
             lines.append("\n[*] [File] Stream Creation:")
             lines.append(f"[*] Operation: {event.operation or 'Unknown'}")
             lines.append(f"[*] Stream Type: {event.stream_type or 'Unknown'}")
             lines.append(f"[*] File Path: {event.file_path or 'Unknown'}")
-        
+
         elif event.event_type == 'file.read':
             lines.append("\n[*] [File] Read Operation:")
             lines.append(f"[*] Operation: {event.operation or 'Unknown'}")
@@ -73,7 +73,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Offset: {event.offset}, Length: {event.length or 0}")
             if event.bytes_read:
                 lines.append(f"[*] Bytes Read: {event.bytes_read}")
-            
+
             # Display data if available (truncated for terminal)
             if event.data_hex:
                 lines.append("[*] Data:")
@@ -87,7 +87,7 @@ class ConsoleFormatter(BaseFormatter):
             elif event.plaintext:
                 plaintext = truncate_string(event.plaintext, 100)
                 lines.append(f"[*] Content: {plaintext}")
-        
+
         elif event.event_type == 'file.write':
             lines.append("\n[*] [File] Write Operation:")
             lines.append(f"[*] Operation: {event.operation or 'Unknown'}")
@@ -97,7 +97,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Offset: {event.offset}, Length: {event.length or 0}")
             if event.is_large_data:
                 lines.append(f"[*] Data truncated (showing {getattr(event, 'displayed_length', 0)} of {getattr(event, 'original_length', 0)} bytes)")
-            
+
             # Display data based on file type (truncated for terminal)
             if event.file_type == 'xml' and event.plaintext:
                 plaintext = truncate_string(event.plaintext, 200)
@@ -114,22 +114,22 @@ class ConsoleFormatter(BaseFormatter):
             elif event.plaintext:
                 plaintext = truncate_string(event.plaintext, 100)
                 lines.append(f"[*] Content: {plaintext}")
-        
+
         elif event.event_type.startswith('file.delete'):
             lines.append(f"\n[*] [File] File Deletion ({event.event_type}):")
             lines.append(f"[*] File Path: {event.file_path or 'Unknown'}")
-        
+
         else:
             # Fallback for unknown filesystem events
             lines.append(f"[*] [File] {event.event_type}: {event.file_path or 'Unknown'}")
-        
+
         lines.append("")  # Empty line
         return '\n'.join(lines)
-    
+
     def _format_crypto_event(self, event: CryptoEvent) -> str:
         """Format crypto events"""
         lines = []
-        
+
         if event.event_type == 'crypto.cipher.operation':
             lines.append(f"\n[*] AES {event.operation_mode_desc or 'UNKNOWN'} Operation:")
             lines.append(f"    Algorithm: {event.algorithm or 'N/A'}")
@@ -154,7 +154,7 @@ class ConsoleFormatter(BaseFormatter):
             if event.plaintext:
                 plaintext = truncate_string(event.plaintext, 100)
                 lines.append(f"    Plaintext: {plaintext}")
-        
+
         elif event.event_type == 'crypto.key.creation':
             lines.append("[*] AES Key Created:")
             lines.append(f"    Algorithm: {event.algorithm or 'N/A'}")
@@ -175,33 +175,33 @@ class ConsoleFormatter(BaseFormatter):
                 if iv_dump:
                     for line in iv_dump.split('\n'):
                         lines.append(f"      {line}")
-        
+
         else:
             lines.append(f"[*] Crypto: {event.event_type}")
-        
+
         lines.append("")  # Empty line
         return '\n'.join(lines)
-    
+
     def _format_network_event(self, event: NetworkEvent) -> str:
         """Format network events"""
         lines = []
-        
+
         # Handle different web event types
         if event.event_type.startswith('url.'):
             lines.append(f"[*] [{event.event_type}] URL: {event.url or 'unknown'}")
             if event.req_method:
                 lines.append(f"[*] [{event.event_type}] Method: {event.req_method}")
-        
+
         elif event.event_type.startswith('uri.'):
             lines.append(f"[*] [{event.event_type}] URI: {event.uri or 'unknown'}")
-        
+
         elif event.event_type.startswith(('http.', 'https.')):
             lines.append(f"[*] [{event.event_type}] URL: {event.url or 'unknown'}")
             if event.status_code:
                 lines.append(f"[*] [{event.event_type}] Status: {event.status_code}")
             if event.method:
                 lines.append(f"[*] [{event.event_type}] Method: {event.method}")
-        
+
         elif event.event_type.startswith('okhttp.'):
             lines.append(f"[*] [{event.event_type}] URL: {event.url or 'unknown'}")
             if event.headers:
@@ -209,47 +209,47 @@ class ConsoleFormatter(BaseFormatter):
             if event.body:
                 body = truncate_string(event.body, 100)
                 lines.append(f"[*] [{event.event_type}] Body: {body}")
-        
+
         elif event.event_type.startswith('webview.'):
             lines.append(f"[*] [{event.event_type}] URL: {event.url or 'N/A'}")
             if event.data:
                 lines.append(f"[*] [{event.event_type}] Data: {event.data}")
             if event.mime_type:
                 lines.append(f"[*] [{event.event_type}] MIME Type: {event.mime_type}")
-        
+
         elif event.event_type.startswith('socket.'):
             operation = event.operation or 'Socket Operation'
             socket_desc = event.socket_description or 'Unknown Socket'
             lines.append(f"\n[*] [Socket] {operation} ({socket_desc}):")
-            
+
             if event.socket_descriptor:
                 lines.append(f"[*] Socket FD: {event.socket_descriptor}")
-            
+
             if event.local_address:
                 lines.append(f"[*] Local: {event.local_address}")
-                
+
             if event.remote_address:
                 lines.append(f"[*] Remote: {event.remote_address}")
-                
+
             if event.connection_string:
                 lines.append(f"[*] Connection: {event.connection_string}")
-                
+
             if event.data_length:
                 lines.append(f"[*] Data Length: {event.data_length} bytes")
-                
+
             if event.has_buffer:
                 lines.append("[*] Buffer Data: Available")
-        
+
         else:
             lines.append(f"[*] [Network] {event.event_type}: {getattr(event, 'url', '') or getattr(event, 'uri', '') or 'Unknown'}")
-        
+
         lines.append("")  # Empty line
         return '\n'.join(lines)
-    
+
     def _format_process_event(self, event: ProcessEvent) -> str:
         """Format process events"""
         lines = []
-        
+
         if event.event_type == 'process.creation':
             lines.append("\n[*] [Process] New Process Creation:")
             if event.nice_name:
@@ -262,7 +262,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Target SDK: {event.target_sdk_version}")
             if event.abi:
                 lines.append(f"[*] ABI: {event.abi}")
-        
+
         elif event.event_type in ['process.kill', 'process.signal']:
             action = 'Kill Process' if event.event_type == 'process.kill' else 'Send Signal'
             lines.append(f"\n[*] [Process] {action}:")
@@ -270,7 +270,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Target PID: {event.target_pid}")
             if event.signal:
                 lines.append(f"[*] Signal: {event.signal}")
-        
+
         elif event.event_type.startswith('process.fork'):
             lines.append(f"\n[*] [Process] Fork Operation ({event.event_type}):")
             if event.caller_pid:
@@ -279,14 +279,14 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Child PID: {event.child_pid}")
             if event.success is not None:
                 lines.append(f"[*] Success: {event.success}")
-        
+
         elif event.event_type.startswith('process.system'):
             lines.append(f"\n[*] [Process] System Command ({event.event_type}):")
             if event.command:
                 lines.append(f"[*] Command: {event.command}")
             if event.return_value is not None:
                 lines.append(f"[*] Return Value: {event.return_value}")
-        
+
         elif event.event_type == 'runtime.exec':
             lines.append("\n[*] [Runtime] Command Execution:")
             if event.command:
@@ -295,7 +295,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Working Directory: {event.working_directory}")
             if event.environment:
                 lines.append(f"[*] Environment: {event.environment}")
-        
+
         elif event.event_type in ['runtime.load_library', 'runtime.load']:
             action = 'Load Library' if event.event_type == 'runtime.load_library' else 'Load'
             lines.append(f"\n[*] [Runtime] {action}:")
@@ -303,20 +303,20 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Library: {event.library_name}")
             if event.filename:
                 lines.append(f"[*] Filename: {event.filename}")
-        
+
         elif event.event_type.startswith('reflection.'):
             lines.extend(self._format_reflection_event(event))
-        
+
         else:
             lines.append(f"[*] [Process] {event.event_type}: {event.command or event.library_name or 'Unknown'}")
-        
+
         lines.append("")  # Empty line
         return '\n'.join(lines)
-    
+
     def _format_reflection_event(self, event: ProcessEvent) -> list:
         """Format reflection-specific events"""
         lines = []
-        
+
         if event.event_type in ['reflection.class_for_name', 'reflection.load_class']:
             action = 'Class.forName' if event.event_type == 'reflection.class_for_name' else 'ClassLoader.loadClass'
             lines.append(f"\n[*] [Reflection] {action}:")
@@ -326,7 +326,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Initialize: {event.metadata['initialize']}")
             if 'resolve' in event.metadata:
                 lines.append(f"[*] Resolve: {event.metadata['resolve']}")
-        
+
         elif event.event_type in ['reflection.get_method', 'reflection.get_declared_method']:
             access = 'Public' if event.event_type == 'reflection.get_method' else 'Declared'
             lines.append(f"\n[*] [Reflection] Get {access} Method:")
@@ -336,7 +336,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Method: {event.metadata['method_name']}")
             if 'method_signature' in event.metadata:
                 lines.append(f"[*] Signature: {event.metadata['method_signature']}")
-        
+
         elif event.event_type == 'reflection.method_invoke':
             lines.append("\n[*] [Reflection] Method Invoke:")
             if 'method_name' in event.metadata:
@@ -348,16 +348,16 @@ class ConsoleFormatter(BaseFormatter):
             if 'result' in event.metadata and event.metadata['result']:
                 result = truncate_string(str(event.metadata['result']), 100)
                 lines.append(f"[*] Result: {result}")
-        
+
         else:
             lines.append(f"[*] [Reflection] {event.event_type}")
-        
+
         return lines
-    
+
     def _format_ipc_event(self, event: IPCEvent) -> str:
         """Format IPC events"""
         lines = []
-        
+
         if event.event_type.startswith('shared_prefs.'):
             if event.key and event.value:
                 lines.append(f"[*] [{event.event_type}] {event.key} = {event.value}")
@@ -365,7 +365,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] [{event.event_type}] File: {event.file}")
             else:
                 lines.append(f"[*] [{event.event_type}] {event.method or 'unknown'}")
-        
+
         elif event.event_type.startswith('datastore'):
             if event.key and event.value:
                 lines.append(f"[*] [{event.event_type}] {event.key} = {event.value}")
@@ -373,7 +373,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] [{event.event_type}] Data: {event.data}")
             else:
                 lines.append(f"[*] [{event.event_type}] {event.method or 'unknown'}")
-        
+
         elif event.event_type == 'binder.transaction':
             is_control    = getattr(event, 'is_control', None)
             trans_desc    = getattr(event, 'transaction_desc', None)
@@ -381,14 +381,14 @@ class ConsoleFormatter(BaseFormatter):
             sender_pid    = event.sender_pid or 'unknown'
             code          = event.code or 0
             data_size     = event.data_size or 0
-            
+
             if is_control:
                 # Control/liveness call — compact single line, no payload dump
                 lines.append(
                     f"[*] [Binder] Control Transaction: {trans_desc or 'Unknown'} "
                     f"(PID: {sender_pid}, Code: 0x{code:08X})"
                 )
-            
+
             else:
                 # Real data transaction
                 label = trans_desc or trans_type or 'Transaction'
@@ -403,7 +403,7 @@ class ConsoleFormatter(BaseFormatter):
                         truncate=True, max_bytes=0x50
                     )
                     lines.append(f"[*] Payload:\n{payload_dump}")
-        
+
         elif event.event_type.startswith('intent.'):
             lines.append(f"\n[*] [Intent] {event.event_type}:")
             if event.intent_name:
@@ -426,7 +426,7 @@ class ConsoleFormatter(BaseFormatter):
                             lines.append(f"    {key} ({val.get('type', '?')}): {val.get('value', '')}")
                         else:
                             lines.append(f"    {key}: {val}")
-        
+
         elif event.event_type.startswith('broadcast.'):
             lines.append(f"\n[*] [Broadcast] {event.event_type}:")
             if event.intent_name:
@@ -439,7 +439,7 @@ class ConsoleFormatter(BaseFormatter):
                     lines.append(f"[*] Component: {details['component']}")
                 if details.get('data_uri'):
                     lines.append(f"[*] Data URI: {details['data_uri']}")
-        
+
         elif event.event_type.startswith('activity.'):
             lines.append(f"\n[*] [Activity] {event.event_type}:")
             if event.intent_name:
@@ -462,17 +462,17 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Stream: {event.stream}")
             if event.thread_name:
                 lines.append(f"[*] Thread: {event.thread_name}")
-        
+
         else:
             lines.append(f"[*] [IPC] {event.event_type}")
-        
+
         lines.append("")  # Empty line
         return '\n'.join(lines)
-    
+
     def _format_service_event(self, event: ServiceEvent) -> str:
         """Format service events"""
         lines = []
-        
+
         # Bluetooth events
         if event.event_type.startswith('bluetooth.'):
             lines.append(f"\n[*] [Bluetooth] {event.event_description or event.event_type}:")
@@ -484,7 +484,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Device Name: {event.device_name}")
             if event.value_hex:
                 lines.append(f"[*] Value (hex): {event.value_hex}")
-        
+
         # Telephony events
         elif event.event_type.startswith('telephony.'):
             lines.append(f"\n[*] [Telephony] {event.event_description or event.event_type}:")
@@ -499,7 +499,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] IMEI: {event.imei}")
             if event.property_key:
                 lines.append(f"[*] Property: {event.property_key} = {event.property_value or 'N/A'}")
-        
+
         # Location events
         elif event.event_type.startswith('location.'):
             lines.append(f"\n[*] [Location] {event.event_description or event.event_type}:")
@@ -537,7 +537,7 @@ class ConsoleFormatter(BaseFormatter):
 
             if event.library and event.event_type == 'location.fused_provider.get_last_location':
                 lines.append(f"[*] Client: {event.library}")
-    
+
         # Clipboard events
         elif event.event_type.startswith('clipboard.'):
             lines.append(f"\n[*] [Clipboard] {event.event_description or event.event_type}:")
@@ -548,7 +548,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Content: {content}")
             if event.item_count is not None:
                 lines.append(f"[*] Items: {event.item_count}")
-        
+
         # Camera events
         elif event.event_type.startswith('camera.'):
             lines.append(f"\n[*] [Camera] {event.event_description or event.event_type}:")
@@ -558,13 +558,13 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Available Cameras: {event.camera_count}")
             if event.success is not None:
                 lines.append(f"[*] Success: {event.success}")
-        
+
         else:
             lines.append(f"[*] [Service] {event.event_type}")
-        
+
         lines.append("")  # Empty line
         return '\n'.join(lines)
-    
+
     def _format_database_event(self, event: DatabaseEvent) -> str:
         """Format database events."""
         lines = []
@@ -649,7 +649,7 @@ class ConsoleFormatter(BaseFormatter):
             lines.append(
                 f"[*] Connection Pool Size: {event.connection_pool_size}"
             )
-        
+
         if event.create_if_necessary is not None:
             lines.append(f"[*] Create If Necessary: {event.create_if_necessary}")
 
@@ -685,7 +685,7 @@ class ConsoleFormatter(BaseFormatter):
 
         if event.password:
             lines.append(f"[*] Password: {truncate_string(event.password, 100)}")
-        
+
         if event.password_type:
             lines.append(f"[*] Password Type: {event.password_type}")
 
@@ -703,7 +703,7 @@ class ConsoleFormatter(BaseFormatter):
 
         if event.database_class:
             lines.append(f"[*] Database Class: {event.database_class}")
-        
+
         if event.query_type:
             lines.append(f"[*] Query Type: {event.query_type}")
 
@@ -726,10 +726,51 @@ class ConsoleFormatter(BaseFormatter):
 
         if event.new_version is not None:
             lines.append(f"[*] New Version: {event.new_version}")
-            
+
+        if event.native_function:
+            lines.append(f"[*] Native Function: {event.native_function}")
+
+        if event.module_name:
+            lines.append(f"[*] Module: {event.module_name}")
+
+        if event.architecture:
+            lines.append(f"[*] Architecture: {event.architecture}")
+
+        if event.sql_encoding:
+            lines.append(f"[*] SQL Encoding: {event.sql_encoding}")
+
+        if event.statement_handle:
+            lines.append(f"[*] Statement Handle: {event.statement_handle}")
+
+        if event.bind_index is not None:
+            lines.append(f"[*] Bind Index: {event.bind_index}")
+
+        if event.bind_type:
+            lines.append(f"[*] Bind Type: {event.bind_type}")
+
+        if event.value_available is not None:
+            lines.append(f"[*] Value Available: {event.value_available}")
+
+        if event.bind_value is not None:
+            lines.append(f"[*] Bind Value: {event.bind_value}")
+
+        if event.bind_value_hex:
+            lines.append(f"[*] Bind Value (hex): {event.bind_value_hex}")
+
+        if event.bind_value_length is not None:
+            lines.append(f"[*] Bind Value Length: {event.bind_value_length}")
+
+        if event.bind_value_preview_length is not None:
+            lines.append(
+                f"[*] Bind Preview Length: {event.bind_value_preview_length}"
+            )
+
+        if event.bind_value_truncated:
+            lines.append("[*] Bind Value Truncated: True")
+
         lines.append("")
         return "\n".join(lines)
-    
+
     def _format_dex_event(self, event: DEXEvent) -> str:
         """Format DEX events"""
         lines = []
@@ -770,7 +811,7 @@ class ConsoleFormatter(BaseFormatter):
             lines.append(f"[*] DEX: {event.event_type}")
 
         return '\n'.join(lines) if lines else ""
-    
+
     def _format_jni_event(self, event: JNIEvent) -> str:
         """Format JNI events"""
         lines = []
@@ -816,7 +857,7 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Decoded Return: {md['string_return']}")
             if method == "GetStringCritical" and md.get("string_return"):
                 lines.append(f"[*] Critical String: {md['string_return']}")
-                
+
             # Decoded method/field IDs
             if method in ("GetMethodID", "GetStaticMethodID"):
                 if md.get("method_name"):
@@ -861,7 +902,7 @@ class ConsoleFormatter(BaseFormatter):
                     lines.append(f"[*] Class Data Length: {md['class_data_length']} bytes")
                 if md.get("class_data_hex"):
                     lines.append(f"[*] Class Data (hex, truncated): {md['class_data_hex']}")
-            
+
             # Direct buffer details (if present)
             if method in ("NewDirectByteBuffer", "GetDirectBufferAddress", "GetDirectBufferCapacity"):
                 if md.get("direct_buffer_address"):
@@ -877,7 +918,7 @@ class ConsoleFormatter(BaseFormatter):
                             lines.append(f"    {line}")
                 if md.get("buffer_truncated"):
                     lines.append("[*] Direct buffer data truncated in console view")
-            
+
             if md.get("array_length") is not None:
                 lines.append(f"[*] Array Length: {md['array_length']} elements")
 
@@ -889,7 +930,7 @@ class ConsoleFormatter(BaseFormatter):
                 if dump:
                     for line in dump.split('\n'):
                         lines.append(f"    {line}")
-            
+
             if md.get("array_values") is not None:
                 lines.append(f"[*] Array Values: {md['array_values']}")
 
@@ -905,7 +946,7 @@ class ConsoleFormatter(BaseFormatter):
 
             # Backtrace (if available)
             self._append_jni_backtrace(md, lines)
-            
+
             if desc:
                 lines.append(f"[*] Summary: {desc}")
 
@@ -938,7 +979,7 @@ class ConsoleFormatter(BaseFormatter):
 
         lines.append("")  # Empty line at end
         return "\n".join(lines)
-    
+
     def _append_jni_backtrace(self, md, lines):
         bt = md.get("backtrace")
         if not bt:
@@ -979,11 +1020,11 @@ class ConsoleFormatter(BaseFormatter):
                     lines.append(f"    {addr}")
 
                 count += 1
-    
+
     def _format_generic_event(self, event: Event) -> str:
         """Format generic events"""
         return f"[*] {event.event_type}: {getattr(event, 'payload', 'Unknown')}"
-    
+
     def should_skip_event(self, event: Event) -> bool:
         """Determine if event should be skipped from console output"""
         # Skip certain verbose events unless in verbose mode
@@ -991,12 +1032,12 @@ class ConsoleFormatter(BaseFormatter):
             skip_types = ['parse_error', 'console_dev']
             if any(skip_type in event.event_type for skip_type in skip_types):
                 return True
-        
+
         # Skip file write events for certain paths unless verbose
         if isinstance(event, FileSystemEvent) and not self.verbose_mode:
             if event.file_path and "/system/fonts/" in event.file_path:
                 return True
             if "stat" in getattr(event, 'operation', ''):
                 return True
-        
+
         return False

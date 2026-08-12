@@ -9,13 +9,13 @@ from ..models.events import DatabaseEvent
 
 class DatabaseParser(BaseParser):
     """Parser for database events (SQLite, SQLCipher, WCDB, Room, Native SQLite)"""
-    
+
     def parse_json_data(self, data: dict, timestamp: str) -> Optional[DatabaseEvent]:
         """Parse JSON data into DatabaseEvent"""
         event_type = data.get('event_type', 'database.unknown')
-        
+
         event = DatabaseEvent(event_type, timestamp)
-        
+
         # Map JSON fields to event attributes
         field_mapping = {
             'database_path': 'database_path',
@@ -44,7 +44,7 @@ class DatabaseParser(BaseParser):
             'entity': 'entity',
             'callback_type': 'callback_type',
             'database_object': 'database_object',
-            'database_name': 'database_name', 
+            'database_name': 'database_name',
             'database_class': 'database_class',
             'result_code': 'result_code',
             'status': 'status',
@@ -67,12 +67,27 @@ class DatabaseParser(BaseParser):
             'observer_class': 'observer_class',
             'old_version': 'old_version',
             'new_version': 'new_version',
+
+            # native SQLite
+            'native_function': 'native_function',
+            'module_name': 'module_name',
+            'architecture': 'architecture',
+            'sql_encoding': 'sql_encoding',
+            'statement_handle': 'statement_handle',
+            'bind_index': 'bind_index',
+            'bind_type': 'bind_type',
+            'bind_value': 'bind_value',
+            'bind_value_hex': 'bind_value_hex',
+            'bind_value_length': 'bind_value_length',
+            'bind_value_preview_length': 'bind_value_preview_length',
+            'bind_value_truncated': 'bind_value_truncated',
+            'value_available': 'value_available',
         }
-        
+
         for json_field, event_field in field_mapping.items():
             if json_field in data:
                 setattr(event, event_field, data[json_field])
-        
+
         # Add event descriptions based on type
         if event_type.startswith('database.sqlite.'):
             if 'exec' in event_type:
@@ -105,14 +120,14 @@ class DatabaseParser(BaseParser):
                 event.add_metadata('operation_description', 'Room database lifecycle callback')
         elif event_type.startswith('database.native.'):
             event.add_metadata('operation_description', 'Native SQLite operation')
-        
+
         # Add any remaining metadata
         for key, value in data.items():
             if key not in ['event_type', 'timestamp'] and not hasattr(event, key):
                 event.add_metadata(key, value)
-        
+
         return event
-    
+
     def parse_legacy_data(self, raw_data: str, timestamp: str) -> Optional[DatabaseEvent]:
         """Parse legacy database data"""
         try:
@@ -123,7 +138,7 @@ class DatabaseParser(BaseParser):
             except json.JSONDecodeError:
                 # Handle legacy string format
                 event = DatabaseEvent("database.legacy", timestamp)
-                
+
                 # Try to extract basic info from legacy format
                 if "SQLiteExecSQL" in raw_data:
                     event.event_type = "database.sqlite.exec_legacy"
@@ -155,9 +170,9 @@ class DatabaseParser(BaseParser):
                 elif "NativeSQLite" in raw_data:
                     event.event_type = "database.native.legacy"
                     event.add_metadata('operation_description', 'Legacy Native SQLite operation')
-                
+
                 event.add_metadata('raw_data', raw_data)
                 return event
-                
+
         except Exception as e:
             return self.handle_parse_error(raw_data, timestamp, str(e))

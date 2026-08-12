@@ -8,16 +8,16 @@ from datetime import datetime
 
 class Event(ABC):
     """Base class for all security events"""
-    
+
     def __init__(self, event_type: str, timestamp: str = None):
         self.event_type = event_type
         self.timestamp = timestamp or datetime.now().isoformat()
         self.metadata = {}
-    
+
     def add_metadata(self, key: str, value: Any):
         """Add metadata to the event"""
         self.metadata[key] = value
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert event to dictionary for serialization"""
         result = {
@@ -28,7 +28,7 @@ class Event(ABC):
         if self.metadata:
             result['metadata'] = self.metadata
         return result
-    
+
     @abstractmethod
     def get_event_data(self) -> Dict[str, Any]:
         """Get event-specific data"""
@@ -37,7 +37,7 @@ class Event(ABC):
 
 class FileSystemEvent(Event):
     """File system operation event"""
-    
+
     def __init__(self, event_type: str, file_path: str, timestamp: str = None):
         super().__init__(event_type, timestamp)
         self.file_path = file_path
@@ -56,7 +56,7 @@ class FileSystemEvent(Event):
         self.bytes_read = None
         self.bytes_written = None
         self.hexdump_display = None
-    
+
     def get_event_data(self) -> Dict[str, Any]:
         data = {'file_path': self.file_path}
 
@@ -78,7 +78,7 @@ class FileSystemEvent(Event):
 
 class CryptoEvent(Event):
     """Cryptographic operation event"""
-    
+
     def __init__(self, event_type: str, algorithm: str = None, timestamp: str = None):
         super().__init__(event_type, timestamp)
         self.algorithm = algorithm
@@ -95,10 +95,10 @@ class CryptoEvent(Event):
         self.plaintext = None
         self.update_call = None
         self.doFinal_variant = None
-    
+
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
-        
+
         # Include all non-None values
         fields = [
             'algorithm', 'operation_mode', 'operation_mode_desc',
@@ -106,18 +106,18 @@ class CryptoEvent(Event):
             'key_hex', 'key_length', 'iv_hex', 'iv_length', 'plaintext',
             'update_call', 'doFinal_variant'
         ]
-        
+
         for field in fields:
             value = getattr(self, field)
             if value is not None:
                 data[field] = value
-                
+
         return data
 
 
 class NetworkEvent(Event):
     """Network operation event"""
-    
+
     def __init__(self, event_type: str, timestamp: str = None):
         super().__init__(event_type, timestamp)
         self.url = None
@@ -142,10 +142,10 @@ class NetworkEvent(Event):
         self.has_buffer = False
         self.operation = None
         self.socket_description = None
-    
+
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
-        
+
         fields = [
             'url', 'uri', 'method', 'req_method', 'status_code', 'headers',
             'body', 'data', 'mime_type', 'socket_type', 'socket_descriptor',
@@ -153,18 +153,18 @@ class NetworkEvent(Event):
             'local_address', 'remote_address', 'connection_string',
             'data_length', 'has_buffer', 'operation', 'socket_description'
         ]
-        
+
         for field in fields:
             value = getattr(self, field)
             if value is not None:
                 data[field] = value
-                
+
         return data
 
 
 class ProcessEvent(Event):
     """Process operation event"""
-    
+
     def __init__(self, event_type: str, timestamp: str = None):
         super().__init__(event_type, timestamp)
         self.nice_name = None
@@ -184,28 +184,28 @@ class ProcessEvent(Event):
         self.working_directory = None
         self.environment = None
         self.event_description = None
-    
+
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
-        
+
         fields = [
             'nice_name', 'uid', 'gid', 'target_sdk_version', 'abi',
             'target_pid', 'signal', 'caller_pid', 'child_pid', 'success',
             'command', 'return_value', 'library_name', 'filename',
             'working_directory', 'environment', 'event_description'
         ]
-        
+
         for field in fields:
             value = getattr(self, field)
             if value is not None:
                 data[field] = value
-                
+
         return data
 
 
 class IPCEvent(Event):
     """Inter-Process Communication event"""
-    
+
     def __init__(self, event_type: str, timestamp: str = None):
         super().__init__(event_type, timestamp)
         self.key = None
@@ -246,10 +246,10 @@ class IPCEvent(Event):
         self.initial_data = None
         self.initial_code = None
         self.options = None
-    
+
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
-        
+
         fields = [
             'key', 'value', 'file', 'method', 'data',
             'stream', 'hook_family', 'declaring_class', 'method_signature',
@@ -260,20 +260,20 @@ class IPCEvent(Event):
             'receiver_permission', 'receiver_class', 'actions', 'bundle',
             'source_class', 'flags', 'is_control', 'notification_id',
             'foreground_service_type', 'request_code', 'initial_data',
-            'initial_code', 'options', 
+            'initial_code', 'options',
         ]
-        
+
         for field in fields:
             value = getattr(self, field)
             if value is not None:
                 data[field] = value
-                
+
         return data
 
 
 class ServiceEvent(Event):
     """Android system service event"""
-    
+
     def __init__(self, event_type: str, timestamp: str = None):
         super().__init__(event_type, timestamp)
         self.event_description = None
@@ -431,30 +431,30 @@ class ServiceEvent(Event):
 
 class DEXEvent(Event):
     """DEX loading/unpacking event"""
-    
+
     def __init__(self, event_type: str, timestamp: str = None):
         super().__init__(event_type, timestamp)
         self.unpacking = False
         self.dumped = None
         self.orig_location = None
         self.even_type = None  # Keep original field name for compatibility
-    
+
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
-        
+
         fields = ['unpacking', 'dumped', 'orig_location', 'even_type']
-        
+
         for field in fields:
             value = getattr(self, field)
             if value is not None:
                 data[field] = value
-                
+
         return data
 
 
 class DatabaseEvent(Event):
     """Database operation event"""
-    
+
     def __init__(self, event_type: str, timestamp: str = None):
         super().__init__(event_type, timestamp)
         self.database_path = None
@@ -498,11 +498,11 @@ class DatabaseEvent(Event):
         self.edit_table = None
         self.conflict_algorithm = None
         self.has_error_handler = None
-        
+
         self.password_type = None
         self.overload_signature = None
         self.has_database_hook = None
-        
+
         # Room fields
         self.query_type = None
         self.table_names = None
@@ -511,10 +511,25 @@ class DatabaseEvent(Event):
         self.observer_class = None
         self.old_version = None
         self.new_version = None
-    
+
+        # native SQLite
+        self.native_function = None
+        self.module_name = None
+        self.architecture = None
+        self.sql_encoding = None
+        self.statement_handle = None
+        self.bind_index = None
+        self.bind_type = None
+        self.bind_value = None
+        self.bind_value_hex = None
+        self.bind_value_length = None
+        self.bind_value_preview_length = None
+        self.bind_value_truncated = None
+        self.value_available = None
+
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
-        
+
         fields = [
             'database_path', 'database_type', 'method', 'table', 'sql',
             'bind_args', 'content_values', 'where_clause', 'where_args',
@@ -528,15 +543,20 @@ class DatabaseEvent(Event):
             'password_type', 'overload_signature', 'has_database_hook',
             'query_type', 'table_names', 'in_transaction',
             'owner_class', 'observer_class', 'old_version', 'new_version',
+            'native_function', 'module_name', 'architecture', 'sql_encoding',
+            'statement_handle', 'bind_index', 'bind_type', 'bind_value',
+            'bind_value_hex', 'bind_value_length',
+            'bind_value_preview_length', 'bind_value_truncated',
+            'value_available',
         ]
-        
+
         for field in fields:
             value = getattr(self, field)
             if value is not None:
                 data[field] = value
-                
+
         return data
-    
+
 class JNIEvent(Event):
     """JNI operation event"""
     def __init__(self, event_type: str, timestamp: str):
