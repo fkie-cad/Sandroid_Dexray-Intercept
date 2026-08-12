@@ -16,8 +16,9 @@ target_link_libraries(
         ${log-lib}
 )
 
-# Suppress warnings from the SQLite amalgamation
+# Hide SQLite from the dynamic export table while retaining local symbol names
+# for symbol-table based hook discovery.
 set_source_files_properties(
         sqlite3.c
-        PROPERTIES COMPILE_FLAGS "-w"
+        PROPERTIES COMPILE_FLAGS "-w -fvisibility=hidden"
 )

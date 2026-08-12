@@ -48,6 +48,12 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            keepDebugSymbols += ["**/libnative_db_tests.so"]
+        }
+    }
+
 }
 
 dependencies {
