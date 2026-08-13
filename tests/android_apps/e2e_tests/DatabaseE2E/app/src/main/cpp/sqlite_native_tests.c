@@ -252,8 +252,54 @@ static void test_sqlite3_bind_int(JNIEnv *env, jstring dbDir) {
 
         sqlite3_finalize(stmt);
     }
-    
-    sqlite3_close(db);
+
+    /*
+     * sqlite3_close_v2() succeeds while statements remain valid. The agent must
+     * retain database/statement correlation through bind and step, then release
+     * it when sqlite3_finalize() runs.
+     */
+    stmt = NULL;
+    rc = sqlite3_prepare_v2(
+            db,
+            "SELECT ? AS close_v2_value",
+            -1,
+            &stmt,
+            NULL
+    );
+    TEST_ASSERT(rc == SQLITE_OK, "sqlite3_prepare_v2 for close_v2 lifecycle");
+
+    if (rc == SQLITE_OK && stmt) {
+        rc = sqlite3_close_v2(db);
+        TEST_ASSERT(
+                rc == SQLITE_OK,
+                "sqlite3_close_v2 with outstanding statement"
+        );
+
+        if (rc == SQLITE_OK) {
+            // SQLite keeps the database alive until stmt is finalized.
+            db = NULL;
+
+            rc = sqlite3_bind_int(stmt, 1, 9);
+            TEST_ASSERT(
+                    rc == SQLITE_OK,
+                    "sqlite3_bind_int after sqlite3_close_v2"
+            );
+
+            rc = sqlite3_step(stmt);
+            TEST_ASSERT(
+                    rc == SQLITE_ROW,
+                    "sqlite3_step after sqlite3_close_v2 returns SQLITE_ROW"
+            );
+        }
+
+        // Required whether close_v2 succeeded or failed.
+        sqlite3_finalize(stmt);
+    }
+
+    // Only close normally if close_v2() did not succeed.
+    if (db) {
+        sqlite3_close(db);
+    }
 }
 
 JNIEXPORT void JNICALL
