@@ -1,9 +1,21 @@
-import { devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd } from "../utils/android_runtime_requests.js"
-import { Where, bytesToHex } from "../utils/misc.js"
-import { Java} from "../utils/javalib.js"
-import { safePerform,safeUse, safeDeferred, safeOverload,safeImplementation, PropagateException } from "../utils/safe_java.js"
-import { safeAttach, safeEnumerateModuleExports, safeEnumerateModuleSymbols, safeReplace } from "../utils/safe_native.js"
+import { devlog, am_send } from "../utils/logging.js";
+import { bytesToHex } from "../utils/misc.js";
+import { Java } from "../utils/javalib.js";
+import {
+    PropagateException,
+    safeImplementation,
+    safeOverload,
+    safePerform,
+    safeUse
+} from "../utils/safe_java.js";
+import {
+    safeAttach,
+    safeEnumerateModuleExports,
+    safeEnumerateModuleSymbols,
+    safeNativeFunction,
+    safeReplace
+} from "../utils/safe_native.js";
+
 
 /**
  * Some parts are taken from https://codeshare.frida.re/@ninjadiary/sqlite-database/
@@ -13,21 +25,21 @@ import { safeAttach, safeEnumerateModuleExports, safeEnumerateModuleSymbols, saf
 
 const PROFILE_HOOKING_TYPE: string = "DATABASE"
 
-interface DatabaseEvent {
-    event_type: string;
-    database_path?: string;
-    sql?: string;
-    table?: string;
-    method?: string;
-    bind_args?: any[];
-    content_values?: any;
-    where_clause?: string;
-    where_args?: string[];
-    flags?: number;
-    password?: string;
-    result_code?: number;
-    rows_affected?: number;
-}
+// interface DatabaseEvent {
+//     event_type: string;
+//     database_path?: string;
+//     sql?: string;
+//     table?: string;
+//     method?: string;
+//     bind_args?: any[];
+//     content_values?: any;
+//     where_clause?: string;
+//     where_args?: string[];
+//     flags?: number;
+//     password?: string;
+//     result_code?: number;
+//     rows_affected?: number;
+// }
 
 function createDatabaseEvent(eventType: string, data: any): void {
     const event = {
@@ -2271,6 +2283,11 @@ function hook_native_sqlite() {
 
     const nativeDatabaseContexts = new Map<string, NativeDatabaseContext>();
     const nativeStatementContexts = new Map<string, NativeStatementContext>();
+    const pendingNativeCloseV2Contexts = new Set<string>();
+    const nativeNextStatementFunctions = new Map<
+        string,
+        NativeFunction<any, any>
+    >();
 
     function moduleIdentity(module: any): string {
         return `${module.name}@${module.base}`;
@@ -2326,6 +2343,116 @@ function hook_native_sqlite() {
         }
     }
 
+    function getTrackedStatementCount(
+        module: any,
+        databaseHandle: string
+    ): number {
+        const modulePrefix = `${moduleIdentity(module)}:stmt:`;
+        let count = 0;
+
+        for (const [key, context] of nativeStatementContexts.entries()) {
+            if (
+                key.startsWith(modulePrefix) &&
+                context.database_handle === databaseHandle
+            ) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    function getLiveStatementHandles(
+        module: any,
+        databaseHandle: string
+    ): Set<string> | null {
+        const nextStatement = nativeNextStatementFunctions.get(
+            moduleIdentity(module)
+        );
+
+        if (!nextStatement) {
+            return null;
+        }
+
+        try {
+            const liveHandles = new Set<string>();
+            let previousStatement = ptr("0");
+
+            while (true) {
+                const nextStatementPointer = nextStatement(
+                    ptr(databaseHandle),
+                    previousStatement
+                ) as NativePointer;
+
+                if (
+                    !nextStatementPointer ||
+                    nextStatementPointer.isNull()
+                ) {
+                    break;
+                }
+
+                const statementHandle = nextStatementPointer.toString();
+                liveHandles.add(statementHandle);
+                previousStatement = nextStatementPointer;
+            }
+
+            return liveHandles;
+        } catch (error) {
+            devlog(
+                `Failed to enumerate native SQLite statements: ` +
+                `${module.name}!${databaseHandle}: ${error}`
+            );
+            return null;
+        }
+    }
+
+    function pruneTrackedStatements(
+        module: any,
+        databaseHandle: string,
+        liveStatementHandles: Set<string>
+    ): void {
+        const modulePrefix = `${moduleIdentity(module)}:stmt:`;
+
+        for (const [key, context] of nativeStatementContexts.entries()) {
+            if (
+                key.startsWith(modulePrefix) &&
+                context.database_handle === databaseHandle
+            ) {
+                const statementHandle = key.substring(
+                    `${modulePrefix}`.length
+                );
+
+                if (!liveStatementHandles.has(statementHandle)) {
+                    nativeStatementContexts.delete(key);
+                }
+            }
+        }
+    }
+
+    function releasePendingCloseV2Context(
+        module: any,
+        databaseHandle: string
+    ): void {
+        const databaseKey = databaseContextKey(module, databaseHandle);
+
+        if (!pendingNativeCloseV2Contexts.has(databaseKey)) {
+            return;
+        }
+
+        if (getTrackedStatementCount(module, databaseHandle) > 0) {
+            return;
+        }
+
+        pendingNativeCloseV2Contexts.delete(databaseKey);
+        nativeDatabaseContexts.delete(databaseKey);
+        removeDatabaseStatements(module, databaseHandle);
+
+        devlog(
+            `Released native SQLite close_v2 context: ` +
+            `${module.name}!${databaseHandle}`
+        );
+    }
+
     function removeModuleContexts(module: any): void {
         const modulePrefix = `${moduleIdentity(module)}:`;
 
@@ -2340,6 +2467,14 @@ function hook_native_sqlite() {
                 nativeStatementContexts.delete(key);
             }
         }
+
+        for (const key of pendingNativeCloseV2Contexts.keys()) {
+            if (key.startsWith(modulePrefix)) {
+                pendingNativeCloseV2Contexts.delete(key);
+            }
+        }
+
+        nativeNextStatementFunctions.delete(moduleIdentity(module));
     }
 
     function readPointerValue(pointer: NativePointer): NativePointer | null {
@@ -2545,6 +2680,17 @@ function hook_native_sqlite() {
 
         if (hookedNativeSQLiteModules.has(moduleKey)) {
             return;
+        }
+
+        const nextStatement = safeNativeFunction(
+            sqliteFunctionAddresses.get("sqlite3_next_stmt") || null,
+            "pointer",
+            ["pointer", "pointer"],
+            `database:native:${module.name}:sqlite3_next_stmt`
+        );
+
+        if (nextStatement) {
+            nativeNextStatementFunctions.set(moduleKey, nextStatement);
         }
 
         hookedNativeSQLiteModules.add(moduleKey);
@@ -2859,13 +3005,36 @@ function hook_native_sqlite() {
         hookFunction("sqlite3_finalize", (address) => {
             safeAttach(address, `database:${module.name}:sqlite3_finalize`, {
                 onEnter(args) {
-                    this.statementHandle = args[0].toString();
+                    const statementPointer = args[0];
+
+                    this.statementHandle =
+                        statementPointer && !statementPointer.isNull()
+                            ? statementPointer.toString()
+                            : null;
+
+                    this.statementContext = this.statementHandle
+                        ? getStatementContext(module, this.statementHandle)
+                        : null;
                 },
 
                 onLeave() {
+                    if (!this.statementHandle) {
+                        return;
+                    }
+
                     nativeStatementContexts.delete(
                         statementContextKey(module, this.statementHandle)
                     );
+
+                    const databaseHandle =
+                        this.statementContext?.database_handle || null;
+
+                    if (databaseHandle) {
+                        releasePendingCloseV2Context(
+                            module,
+                            databaseHandle
+                        );
+                    }
                 }
             });
         });
@@ -2876,6 +3045,10 @@ function hook_native_sqlite() {
                     onEnter(args) {
                         this.databaseHandle = args[0].toString();
                         this.databasePath = getDatabasePath(module, this.databaseHandle);
+
+                        this.liveStatementHandles = functionName === "sqlite3_close_v2"
+                            ? getLiveStatementHandles(module, this.databaseHandle)
+                            : null;
                     },
 
                     onLeave(retval) {
@@ -2894,12 +3067,52 @@ function hook_native_sqlite() {
                                 : `error code ${resultCode}`,
                             database_type: "Native SQLite"
                         });
-                        if (resultCode === 0 && functionName === "sqlite3_close") {
-                            nativeDatabaseContexts.delete(
-                                databaseContextKey(module, this.databaseHandle)
-                            );
-                            removeDatabaseStatements(module, this.databaseHandle);
+
+                        if (resultCode !== 0) {
+                            return;
                         }
+
+                        const databaseKey = databaseContextKey(
+                            module,
+                            this.databaseHandle
+                        );
+
+                        if (functionName === "sqlite3_close") {
+                            pendingNativeCloseV2Contexts.delete(databaseKey);
+
+                            nativeDatabaseContexts.delete(databaseKey);
+                            removeDatabaseStatements(
+                                module,
+                                this.databaseHandle
+                            );
+                            return;
+                        }
+
+                        const liveStatementHandles = this.liveStatementHandles as
+                            | Set<string>
+                            | null;
+
+                        // If sqlite3_next_stmt is unavailable or failed, retain correlation
+                        // conservatively. Do not guess whether SQLite still owns statements.
+                        if (liveStatementHandles === null) {
+                            pendingNativeCloseV2Contexts.add(databaseKey);
+                            return;
+                        }
+
+                        // Remove contexts for statements SQLite had already finalized before
+                        // sqlite3_close_v2(). This prevents stale internal statements from
+                        // blocking cleanup of the close-v2 lifecycle.
+                        pruneTrackedStatements(
+                            module,
+                            this.databaseHandle,
+                            liveStatementHandles
+                        );
+
+                        pendingNativeCloseV2Contexts.add(databaseKey);
+                        releasePendingCloseV2Context(
+                            module,
+                            this.databaseHandle
+                        );
                     }
                 });
             });
