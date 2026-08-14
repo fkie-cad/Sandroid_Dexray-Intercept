@@ -191,24 +191,58 @@ class ConsoleFormatter(BaseFormatter):
             lines.append(f"[*] [{event.event_type}] URL: {event.url or 'unknown'}")
             if event.req_method:
                 lines.append(f"[*] [{event.event_type}] Method: {event.req_method}")
+            if event.provider_class:
+                lines.append(f"[*] [{event.event_type}] Provider: {event.provider_class}")
+            if event.declaring_class:
+                lines.append(f"[*] [{event.event_type}] Declaring Class: {event.declaring_class}")
+            if event.overload_signature:
+                lines.append(f"[*] [{event.event_type}] Overload: {event.overload_signature}")
 
         elif event.event_type.startswith('uri.'):
             lines.append(f"[*] [{event.event_type}] URI: {event.uri or 'unknown'}")
 
         elif event.event_type.startswith(('http.', 'https.')):
             lines.append(f"[*] [{event.event_type}] URL: {event.url or 'unknown'}")
-            if event.status_code:
+            if event.status_code is not None:
                 lines.append(f"[*] [{event.event_type}] Status: {event.status_code}")
             if event.method:
                 lines.append(f"[*] [{event.event_type}] Method: {event.method}")
+            if event.data:
+                lines.append(f"[*] [{event.event_type}] Data: {event.data}")
+            if event.provider_class:
+                lines.append(f"[*] [{event.event_type}] Provider: {event.provider_class}")
+            if event.declaring_class:
+                lines.append(f"[*] [{event.event_type}] Declaring Class: {event.declaring_class}")
+            if event.overload_signature:
+                lines.append(f"[*] [{event.event_type}] Overload: {event.overload_signature}")
 
-        elif event.event_type.startswith('okhttp.'):
+        elif event.event_type.startswith((
+            'okhttp.', 'okhttp_old.', 'retrofit.', 'volley.', 'websocket.'
+        )):
             lines.append(f"[*] [{event.event_type}] URL: {event.url or 'unknown'}")
+            if event.status_code is not None:
+                lines.append(f"[*] [{event.event_type}] Status: {event.status_code}")
+            if event.method:
+                lines.append(f"[*] [{event.event_type}] Method: {event.method}")
             if event.headers:
                 lines.append(f"[*] [{event.event_type}] Headers: {event.headers}")
             if event.body:
                 body = truncate_string(event.body, 100)
                 lines.append(f"[*] [{event.event_type}] Body: {body}")
+            if event.data:
+                lines.append(f"[*] [{event.event_type}] Data: {event.data}")
+            if event.provider_class:
+                lines.append(f"[*] [{event.event_type}] Provider: {event.provider_class}")
+            if event.declaring_class:
+                lines.append(
+                    f"[*] [{event.event_type}] Declaring Class: "
+                    f"{event.declaring_class}"
+                )
+            if event.overload_signature:
+                lines.append(
+                    f"[*] [{event.event_type}] Overload: "
+                    f"{event.overload_signature}"
+                )
 
         elif event.event_type.startswith('webview.'):
             lines.append(f"[*] [{event.event_type}] URL: {event.url or 'N/A'}")

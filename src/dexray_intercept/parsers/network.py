@@ -35,7 +35,10 @@ class NetworkParser(BaseParser):
             'remote_ip': 'remote_ip',
             'remote_port': 'remote_port',
             'data_length': 'data_length',
-            'has_buffer': 'has_buffer'
+            'has_buffer': 'has_buffer',
+            'provider_class': 'provider_class',
+            'declaring_class': 'declaring_class',
+            'overload_signature': 'overload_signature'
         }
         
         for json_field, event_field in field_mapping.items():

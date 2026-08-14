@@ -142,6 +142,9 @@ class NetworkEvent(Event):
         self.has_buffer = False
         self.operation = None
         self.socket_description = None
+        self.provider_class = None
+        self.declaring_class = None
+        self.overload_signature = None
 
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
@@ -151,7 +154,8 @@ class NetworkEvent(Event):
             'body', 'data', 'mime_type', 'socket_type', 'socket_descriptor',
             'local_ip', 'local_port', 'remote_ip', 'remote_port',
             'local_address', 'remote_address', 'connection_string',
-            'data_length', 'has_buffer', 'operation', 'socket_description'
+            'data_length', 'has_buffer', 'operation', 'socket_description',
+            'provider_class', 'declaring_class', 'overload_signature'
         ]
 
         for field in fields:
