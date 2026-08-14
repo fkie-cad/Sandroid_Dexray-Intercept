@@ -134,7 +134,11 @@ class WebParser(NetworkParser):
         event = super().parse_json_data(data, timestamp)
         
         # Web-specific processing
-        if event and event.event_type.startswith(('url.', 'uri.', 'http.', 'https.', 'okhttp.', 'webview.', 'retrofit.', 'volley.', 'websocket.', 'customtabs.', 'x5webview.')):
+        if event and event.event_type.startswith((
+                'url.', 'uri.', 'http.', 'https.', 'okhttp.', 'okhttp_old.',
+                'webview.', 'retrofit.', 'volley.', 'websocket.', 'customtabs.',
+                'x5webview.'
+        )):
             # Add web-specific metadata for enhanced context
             if event.event_type.startswith('retrofit.'):
                 event.add_metadata('library', 'Retrofit')
@@ -145,7 +149,7 @@ class WebParser(NetworkParser):
             elif event.event_type.startswith('websocket.'):
                 event.add_metadata('library', 'WebSocket')
                 event.add_metadata('type', 'Real-time Communication')
-            elif event.event_type.startswith('okhttp.'):
+            elif event.event_type.startswith(('okhttp.', 'okhttp_old.')):
                 event.add_metadata('library', 'OkHttp')
                 event.add_metadata('type', 'HTTP Client')
             elif event.event_type.startswith('webview.'):
