@@ -1,8 +1,13 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd } from "../utils/android_runtime_requests.js"
-import { Where } from "../utils/misc.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { Java } from "../utils/javalib.js"
-import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import {
+    PropagateException,
+    safePerform,
+    safeUse,
+    safeUseFromClassLoader,
+    safeOverload,
+    safeImplementation
+} from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "WEB"
 
@@ -21,6 +26,9 @@ interface WebEvent {
     data?: string;
     mime_type?: string;
     encoding?: string;
+    provider_class?: string;
+    declaring_class?: string;
+    overload_signature?: string;
 }
 
 function createWebEvent(eventType: string, data: Partial<WebEvent>): void {
@@ -30,6 +38,547 @@ function createWebEvent(eventType: string, data: Partial<WebEvent>): void {
         ...data
     };
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
+type ConnectionEventPrefix = "http" | "https";
+
+interface RuntimeMethodHookTarget {
+    methodName: string;
+    parameterTypes: string[];
+    overloadSignature: string;
+}
+
+const connectionHookRegistry = new Set<string>();
+
+const connectionHookTargets: RuntimeMethodHookTarget[] = [
+    {
+        methodName: "setRequestMethod",
+        parameterTypes: ["java.lang.String"],
+        overloadSignature: "setRequestMethod(java.lang.String)"
+    },
+    {
+        methodName: "setRequestProperty",
+        parameterTypes: ["java.lang.String", "java.lang.String"],
+        overloadSignature: "setRequestProperty(java.lang.String,java.lang.String)"
+    },
+    {
+        methodName: "connect",
+        parameterTypes: [],
+        overloadSignature: "connect()"
+    },
+    {
+        methodName: "getInputStream",
+        parameterTypes: [],
+        overloadSignature: "getInputStream()"
+    },
+    {
+        methodName: "getOutputStream",
+        parameterTypes: [],
+        overloadSignature: "getOutputStream()"
+    },
+    {
+        methodName: "getResponseCode",
+        parameterTypes: [],
+        overloadSignature: "getResponseCode()"
+    }
+];
+
+function callOriginal(
+    original: any,
+    receiver: any,
+    ...args: any[]
+): any {
+    try {
+        return original.call(receiver, ...args);
+    } catch (error) {
+        // Preserve original Java exceptions without calling the method twice.
+        throw new PropagateException(error);
+    }
+}
+
+function createWebEventSafely(
+    eventType: string,
+    data: Partial<WebEvent>
+): void {
+    try {
+        createWebEvent(eventType, data);
+    } catch (error) {
+        devlog(`[HOOK] Failed to create ${eventType} event: ${error}`);
+    }
+}
+
+function getJavaClassName(javaClass: any): string {
+    try {
+        return javaClass.getName().toString();
+    } catch (_) {
+        return "unknown";
+    }
+}
+
+function getRuntimeJavaClass(instance: any): any | null {
+    try {
+        const Object = safeUse(
+            "java.lang.Object",
+            "web:getRuntimeJavaClass"
+        );
+        if (!Object) {
+            return null;
+        }
+
+        return Java.cast(instance, Object).getClass();
+    } catch (error) {
+        devlog(`[HOOK] Failed to get runtime Java class: ${error}`);
+        return null;
+    }
+}
+
+function getRuntimeProviderClass(instance: any): string {
+    const javaClass = getRuntimeJavaClass(instance);
+    return javaClass ? getJavaClassName(javaClass) : "unknown";
+}
+
+function getConnectionUrl(connection: any): string {
+    try {
+        return connection.getURL().toString();
+    } catch (_) {
+        return "unknown";
+    }
+}
+
+function getConnectionMethod(connection: any): string {
+    try {
+        const method = connection.getRequestMethod();
+        return method ? method.toString() : "GET";
+    } catch (_) {
+        return "GET";
+    }
+}
+
+function getConnectionEventPrefixFromClass(
+    javaClass: any
+): ConnectionEventPrefix | null {
+    try {
+        let currentClass = javaClass;
+
+        while (currentClass) {
+            const className = getJavaClassName(currentClass);
+
+            if (className === "javax.net.ssl.HttpsURLConnection") {
+                return "https";
+            }
+
+            if (className === "java.net.HttpURLConnection") {
+                return "http";
+            }
+
+            currentClass = currentClass.getSuperclass();
+        }
+    } catch (_) {
+        return null;
+    }
+
+    return null;
+}
+
+function getConnectionEventPrefix(
+    connection: any
+): ConnectionEventPrefix | null {
+    const javaClass = getRuntimeJavaClass(connection);
+
+    if (!javaClass) {
+        return null;
+    }
+
+    return getConnectionEventPrefixFromClass(javaClass);
+}
+
+const connectionEventPrefixStack = new Map<number, ConnectionEventPrefix[]>();
+
+function getConnectionThreadId(): number {
+    try {
+        return Process.getCurrentThreadId();
+    } catch (_) {
+        return -1;
+    }
+}
+
+function getActiveConnectionEventPrefixes(): ConnectionEventPrefix[] {
+    const threadId = getConnectionThreadId();
+
+    if (threadId === -1) {
+        return [];
+    }
+
+    return connectionEventPrefixStack.get(threadId) || [];
+}
+
+function hasActiveHttpsConnection(): boolean {
+    return getActiveConnectionEventPrefixes().includes("https");
+}
+
+function runWithConnectionEventPrefix(
+    eventPrefix: ConnectionEventPrefix | null,
+    callback: () => any
+): any {
+    if (!eventPrefix) {
+        return callback();
+    }
+
+    const threadId = getConnectionThreadId();
+
+    if (threadId === -1) {
+        return callback();
+    }
+
+    let prefixes = connectionEventPrefixStack.get(threadId);
+
+    if (!prefixes) {
+        prefixes = [];
+        connectionEventPrefixStack.set(threadId, prefixes);
+    }
+
+    prefixes.push(eventPrefix);
+
+    try {
+        return callback();
+    } finally {
+        prefixes.pop();
+
+        if (prefixes.length === 0) {
+            connectionEventPrefixStack.delete(threadId);
+        }
+    }
+}
+
+function shouldSuppressConnectionEvent(
+    eventPrefix: ConnectionEventPrefix | null
+): boolean {
+    /*
+     * HTTPS providers commonly delegate to an internal HTTP connection.
+     * The outer HTTPS operation is the canonical event. Suppress the
+     * nested HTTP implementation event, not the underlying method call.
+     */
+    return eventPrefix === "http" && hasActiveHttpsConnection();
+}
+
+function getClassLoaderIdentity(javaClass: any): string {
+    try {
+        const classLoader = javaClass.getClassLoader();
+
+        if (classLoader === null || classLoader === undefined) {
+            return "bootstrap";
+        }
+
+        const handle = (classLoader as any).$h;
+        return handle ? handle.toString() : classLoader.toString();
+    } catch (_) {
+        return "unknown";
+    }
+}
+
+function classDeclaresMethod(
+    javaClass: any,
+    target: RuntimeMethodHookTarget
+): boolean {
+    try {
+        const methods = javaClass.getDeclaredMethods();
+
+        for (let i = 0; i < methods.length; i++) {
+            const method = methods[i];
+
+            if (method.getName().toString() !== target.methodName) {
+                continue;
+            }
+
+            const modifiers = method.getModifiers();
+
+            // Ignore static and abstract declarations.
+            if ((modifiers & 0x0008) !== 0 || (modifiers & 0x0400) !== 0) {
+                continue;
+            }
+
+            const parameterTypes = method.getParameterTypes();
+
+            if (parameterTypes.length !== target.parameterTypes.length) {
+                continue;
+            }
+
+            let matches = true;
+
+            for (let j = 0; j < parameterTypes.length; j++) {
+                if (parameterTypes[j].getName().toString() !== target.parameterTypes[j]) {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (matches) {
+                return true;
+            }
+        }
+    } catch (error) {
+        devlog(
+            `[HOOK] Failed to inspect ${getJavaClassName(javaClass)} ` +
+            `${target.overloadSignature}: ${error}`
+        );
+    }
+
+    return false;
+}
+
+function getConnectionEventMetadata(
+    connection: any,
+    declaringClassName: string,
+    overloadSignature: string
+): Partial<WebEvent> {
+    return {
+        provider_class: getRuntimeProviderClass(connection),
+        declaring_class: declaringClassName,
+        overload_signature: overloadSignature
+    };
+}
+
+function installConnectionMethodHook(
+    declaringClass: any,
+    target: RuntimeMethodHookTarget
+): void {
+    const declaringClassName = getJavaClassName(declaringClass);
+    const classLoaderIdentity = getClassLoaderIdentity(declaringClass);
+
+    const registryKey = [
+        classLoaderIdentity,
+        declaringClassName,
+        target.overloadSignature
+    ].join("|");
+
+    if (connectionHookRegistry.has(registryKey)) {
+        return;
+    }
+
+    // Avoid repeated resolution attempts for the same concrete declaration.
+    connectionHookRegistry.add(registryKey);
+
+    const context = `web:${declaringClassName}.${target.overloadSignature}`;
+
+    let classLoader: any = null;
+
+    try {
+        classLoader = declaringClass.getClassLoader();
+    } catch (_) {
+        classLoader = null;
+    }
+
+    const Connection = safeUseFromClassLoader(
+        declaringClassName,
+        classLoader,
+        context
+    );
+    if (!Connection) {
+        return;
+    }
+
+    const methodRef = Connection[target.methodName];
+    const overload = safeOverload(
+        methodRef,
+        context,
+        ...target.parameterTypes
+    );
+    if (!overload) {
+        return;
+    }
+
+    overload.implementation = safeImplementation(
+        context,
+        overload,
+        function (original, ...args: any[]) {
+            const eventPrefix = getConnectionEventPrefix(this);
+            const metadata = getConnectionEventMetadata(
+                this,
+                declaringClassName,
+                target.overloadSignature
+            );
+            const suppressEvent = shouldSuppressConnectionEvent(eventPrefix);
+
+            if (target.methodName === "setRequestMethod") {
+                if (eventPrefix && !suppressEvent) {
+                    createWebEventSafely(`${eventPrefix}.request_method`, {
+                        url: getConnectionUrl(this),
+                        method: args[0],
+                        ...metadata
+                    });
+                }
+
+                return runWithConnectionEventPrefix(
+                    eventPrefix,
+                    () => callOriginal(original, this, ...args)
+                );
+            }
+
+            if (target.methodName === "setRequestProperty") {
+                if (eventPrefix && !suppressEvent) {
+                    createWebEventSafely(`${eventPrefix}.request_property`, {
+                        url: getConnectionUrl(this),
+                        method: "setRequestProperty",
+                        data: `${args[0]}: ${args[1]}`,
+                        ...metadata
+                    });
+                }
+
+                return runWithConnectionEventPrefix(
+                    eventPrefix,
+                    () => callOriginal(original, this, ...args)
+                );
+            }
+
+            if (target.methodName === "connect") {
+                if (eventPrefix && !suppressEvent) {
+                    createWebEventSafely("url.connection", {
+                        url: getConnectionUrl(this),
+                        req_method: getConnectionMethod(this),
+                        ...metadata
+                    });
+                }
+
+                const result = runWithConnectionEventPrefix(
+                    eventPrefix,
+                    () => callOriginal(original, this, ...args)
+                );
+
+                if (eventPrefix && !suppressEvent) {
+                    createWebEventSafely(`${eventPrefix}.connect`, {
+                        url: getConnectionUrl(this),
+                        method: getConnectionMethod(this),
+                        ...metadata
+                    });
+                }
+
+                return result;
+            }
+
+            if (target.methodName === "getInputStream") {
+                const inputStream = runWithConnectionEventPrefix(
+                    eventPrefix,
+                    () => callOriginal(original, this, ...args)
+                );
+
+                if (eventPrefix && !suppressEvent) {
+                    createWebEventSafely(`${eventPrefix}.input_stream`, {
+                        url: getConnectionUrl(this),
+                        method: getConnectionMethod(this),
+                        ...metadata
+                    });
+                }
+
+                return inputStream;
+            }
+
+            if (target.methodName === "getOutputStream") {
+                const outputStream = runWithConnectionEventPrefix(
+                    eventPrefix,
+                    () => callOriginal(original, this, ...args)
+                );
+
+                if (eventPrefix && !suppressEvent) {
+                    createWebEventSafely(`${eventPrefix}.output_stream`, {
+                        url: getConnectionUrl(this),
+                        method: getConnectionMethod(this),
+                        ...metadata
+                    });
+                }
+
+                return outputStream;
+            }
+
+            if (target.methodName === "getResponseCode") {
+                const responseCode = runWithConnectionEventPrefix(
+                    eventPrefix,
+                    () => callOriginal(original, this, ...args)
+                );
+
+                if (eventPrefix && !suppressEvent) {
+                    createWebEventSafely(`${eventPrefix}.response_code`, {
+                        url: getConnectionUrl(this),
+                        method: getConnectionMethod(this),
+                        status_code: responseCode,
+                        ...metadata
+                    });
+                }
+
+                return responseCode;
+            }
+
+            return runWithConnectionEventPrefix(
+                eventPrefix,
+                () => callOriginal(original, this, ...args)
+            );
+        }
+    );
+}
+
+function installConnectionProviderHooks(connection: any): void {
+    try {
+        const providerClass = getRuntimeJavaClass(connection);
+
+        if (!providerClass || !getConnectionEventPrefixFromClass(providerClass)) {
+            return;
+        }
+
+        for (const target of connectionHookTargets) {
+            let currentClass = providerClass;
+
+            while (currentClass) {
+                if (classDeclaresMethod(currentClass, target)) {
+                    installConnectionMethodHook(currentClass, target);
+                    break;
+                }
+
+                currentClass = currentClass.getSuperclass();
+            }
+        }
+    } catch (error) {
+        devlog(`[HOOK] Failed to install URL connection provider hooks: ${error}`);
+    }
+}
+
+function hookUrlOpenConnection(
+    URL: any,
+    context: string,
+    ...parameterTypes: string[]
+): void {
+    const overloadSignature = parameterTypes.length === 0
+        ? "openConnection()"
+        : `openConnection(${parameterTypes.join(",")})`;
+
+    const openConnection = safeOverload(
+        URL.openConnection,
+        context,
+        ...parameterTypes
+    );
+    if (!openConnection) {
+        return;
+    }
+
+    openConnection.implementation = safeImplementation(
+        context,
+        openConnection,
+        function (original, ...args: any[]) {
+            const result = callOriginal(original, this, ...args);
+
+            createWebEventSafely("url.open_connection", {
+                url: getConnectionUrl(result),
+                req_method: getConnectionMethod(result),
+                provider_class: getRuntimeProviderClass(result),
+                declaring_class: "java.net.URL",
+                overload_signature: overloadSignature
+            });
+
+            // Provider inspection occurs after the original returns.
+            // A discovery failure must not call openConnection() again.
+            installConnectionProviderHooks(result);
+
+            return result;
+        }
+    );
 }
 
 function install_url_hooks() {
@@ -62,45 +611,16 @@ function install_url_hooks() {
             }
 
             // Hook URL openConnection
-            const openConnection = safeOverload(
-                URL.openConnection,
+            hookUrlOpenConnection(
+                URL,
                 "web:URL.openConnection"
             );
-            if (openConnection) {
-                openConnection.implementation = safeImplementation(
-                    "web:URL.openConnection",
-                    openConnection,
-                    function(original) {
-                        const result = original.call(this);
-                        createWebEvent("url.open_connection", {
-                            url: result.getURL().toString(),
-                            req_method: "GET"
-                        });
-                        return result;
-                    }
-                );
-            }
-        }
 
-        const HttpURLConnection = safeUse(
-            "java.net.HttpURLConnection",
-            "web:install_url_hooks"
-        );
-        if (HttpURLConnection) {
-            // note: connect is also hooked in install_http_hooks below with more detail
-            // second assignment will overwrite this one
-            // Hook connection
-            const connectRef = HttpURLConnection.connect;
-            connectRef.implementation = safeImplementation(
-                "web:HttpURLConnection.connect[url_hooks]",
-                connectRef,
-                function(original) {
-                    createWebEvent("url.connection", {
-                        url: this.getURL ? this.getURL().toString() : "unknown",
-                        req_method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                    });
-                    return original.call(this);
-                }
+            // Hook URL openConnection(Proxy)
+            hookUrlOpenConnection(
+                URL,
+                "web:URL.openConnection[Proxy]",
+                "java.net.Proxy"
             );
         }
 
@@ -132,149 +652,11 @@ function install_url_hooks() {
 }
 
 function install_http_hooks() {
-    devlog("Installing HTTP communication hooks");
-
-    safePerform("web:install_http_hooks", () => {
-        const HttpURLConnection = safeUse(
-            "java.net.HttpURLConnection",
-            "web:install_http_hooks"
-        );
-        if (!HttpURLConnection) return;
-
-        // Hook request method setting
-        const setRequestMethodRef = HttpURLConnection.setRequestMethod;
-        setRequestMethodRef.implementation = safeImplementation(
-            "web:HttpURLConnection.setRequestMethod",
-            setRequestMethodRef,
-            function(original, method: string) {
-                createWebEvent("http.request_method", {
-                    method: method,
-                    url: this.getURL ? this.getURL().toString() : "unknown"
-                });
-                return original.call(this, method);
-            }
-        );
-
-        // Hook connection
-        const connectRef = HttpURLConnection.connect;
-        connectRef.implementation = safeImplementation(
-            "web:HttpURLConnection.connect[http_hooks]",
-            connectRef,
-            function(original) {
-                const result = original.call(this);
-                // inner try-catch intentional: getResponseCode() can throw on some implementations
-                try {
-                    const responseCode = this.getResponseCode();
-                    createWebEvent("http.connect", {
-                        url: this.getURL ? this.getURL().toString() : "unknown",
-                        status_code: responseCode,
-                        method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                    });
-                } catch (e) {
-                    createWebEvent("http.connect", {
-                        url: this.getURL ? this.getURL().toString() : "unknown",
-                        method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                    });
-                }
-                return result;
-            }
-        );
-
-        // Hook output stream (for request body)
-        const getOutputStreamRef = HttpURLConnection.getOutputStream;
-        getOutputStreamRef.implementation = safeImplementation(
-            "web:HttpURLConnection.getOutputStream",
-            getOutputStreamRef,
-            function(original) {
-                const outputStream = original.call(this);
-                createWebEvent("http.output_stream", {
-                    url: this.getURL ? this.getURL().toString() : "unknown",
-                    method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                });
-                return outputStream;
-            }
-        );
-
-        // Hook input stream (for response body)
-        const getInputStreamRef = HttpURLConnection.getInputStream;
-        getInputStreamRef.implementation = safeImplementation(
-            "web:HttpURLConnection.getInputStream",
-            getInputStreamRef,
-            function(original) {
-                const inputStream = original.call(this);
-                createWebEvent("http.input_stream", {
-                    url: this.getURL ? this.getURL().toString() : "unknown",
-                    method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                });
-                return inputStream;
-            }
-        );
-    });
+    devlog("HTTP connection hooks use runtime URL provider discovery");
 }
 
 function install_https_hooks() {
-    devlog("Installing HTTPS communication hooks");
-
-    safePerform("web:install_https_hooks", () => {
-        const HttpsURLConnection = safeUse(
-            "javax.net.ssl.HttpsURLConnection",
-            "web:install_https_hooks"
-        );
-        if (!HttpsURLConnection) return;
-
-        // Hook HTTPS request method setting
-        const setRequestMethodRef = HttpsURLConnection.setRequestMethod;
-        setRequestMethodRef.implementation = safeImplementation(
-            "web:HttpsURLConnection.setRequestMethod",
-            setRequestMethodRef,
-            function(original, method: string) {
-                createWebEvent("https.request_method", {
-                    method: method,
-                    url: this.getURL ? this.getURL().toString() : "unknown"
-                });
-                return original.call(this, method);
-            }
-        );
-
-        // Hook HTTPS connection
-        const connectRef = HttpsURLConnection.connect;
-        connectRef.implementation = safeImplementation(
-            "web:HttpsURLConnection.connect",
-            connectRef,
-            function(original) {
-                const result = original.call(this);
-                try {
-                    const responseCode = this.getResponseCode();
-                    createWebEvent("https.connect", {
-                        url: this.getURL ? this.getURL().toString() : "unknown",
-                        status_code: responseCode,
-                        method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                    });
-                } catch (e) {
-                    createWebEvent("https.connect", {
-                        url: this.getURL ? this.getURL().toString() : "unknown",
-                        method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                    });
-                }
-                return result;
-            }
-        );
-
-        // Hook HTTPS input stream
-        const getInputStreamRef = HttpsURLConnection.getInputStream;
-        getInputStreamRef.implementation = safeImplementation(
-            "web:HttpsURLConnection.getInputStream",
-            getInputStreamRef,
-            function(original) {
-                const inputStream = original.call(this);
-                createWebEvent("https.input_stream", {
-                    url: this.getURL ? this.getURL().toString() : "unknown",
-                    method: this.getRequestMethod ? this.getRequestMethod() : "GET"
-                });
-                return inputStream;
-            }
-        );
-    });
+    devlog("HTTPS connection hooks use runtime URL provider discovery");
 }
 
 function install_okhttp_hooks() {
@@ -321,63 +703,464 @@ function install_okhttp_hooks() {
 
         // Hook legacy OkHttp client
         const OkHttpClientOld = safeUse(
-            'okhttp.OkHttpClient',
+            "com.squareup.okhttp.OkHttpClient",
             "web:install_okhttp_hooks"
         );
         if (OkHttpClientOld) {
             const newCallOld = safeOverload(
                 OkHttpClientOld.newCall,
-                "web:okhttp.OkHttpClient.newCall",
-                'okhttp.Request'
+                "web:com.squareup.okhttp.OkHttpClient.newCall",
+                "com.squareup.okhttp.Request"
             );
             if (newCallOld) {
                 newCallOld.implementation = safeImplementation(
-                    "web:okhttp.OkHttpClient.newCall",
+                    "web:com.squareup.okhttp.OkHttpClient.newCall",
                     newCallOld,
                     function(original, request: any) {
-                        createWebEvent("okhttp_old.request", {
+                        createWebEventSafely("okhttp_old.request", {
                             url: request.url().toString(),
                             method: request.method()
                         });
-                        return original.call(this, request);
+
+                        return callOriginal(original, this, request);
                     }
                 );
             }
         }
+    });
+}
 
-        // Hook HttpURLConnectionImpl from OkHttp
-        const HttpURLConnectionImpl = safeUse(
-            "com.android.okhttp.internal.huc.HttpURLConnectionImpl",
-            "web:install_okhttp_hooks"
-        );
-        if (HttpURLConnectionImpl) {
-            const setRequestPropertyRef = HttpURLConnectionImpl.setRequestProperty;
-            setRequestPropertyRef.implementation = safeImplementation(
-                "web:HttpURLConnectionImpl.setRequestProperty",
-                setRequestPropertyRef,
-                function(original, name: string, value: string) {
-                    createWebEvent("okhttp.request_property", {
-                        url: this.getURL ? this.getURL().toString() : "unknown",
-                        method: "setRequestProperty",
-                        data: `${name}: ${value}`
-                    });
-                    return original.call(this, name, value);
-                }
-            );
+const webSocketSendHookRegistry = new Set<string>();
 
-            const setRequestMethodRef = HttpURLConnectionImpl.setRequestMethod;
-            setRequestMethodRef.implementation = safeImplementation(
-                "web:HttpURLConnectionImpl.setRequestMethod",
-                setRequestMethodRef,
-                function(original, method: string) {
-                    createWebEvent("okhttp.request_method", {
-                        url: this.getURL ? this.getURL().toString() : "unknown",
-                        method: method
-                    });
-                    return original.call(this, method);
-                }
-            );
+function installWebSocketSendHook(webSocket: any): void {
+    try {
+        let currentClass = getRuntimeJavaClass(webSocket);
+
+        if (!currentClass) {
+            devlog("[HOOK] WebSocket runtime class is unavailable");
+            return;
         }
+
+        while (currentClass) {
+            const className = getJavaClassName(currentClass);
+
+            const target = {
+                methodName: "send",
+                parameterTypes: ["java.lang.String"],
+                overloadSignature: "send(java.lang.String)"
+            };
+
+            if (classDeclaresMethod(currentClass, target)) {
+
+                let classLoader: any = null;
+
+                try {
+                    classLoader = currentClass.getClassLoader();
+                } catch (_) {
+                    classLoader = null;
+                }
+
+                const classLoaderIdentity = getClassLoaderIdentity(currentClass);
+                const registryKey = [
+                    classLoaderIdentity,
+                    className,
+                    target.overloadSignature
+                ].join("|");
+
+                if (webSocketSendHookRegistry.has(registryKey)) {
+                    return;
+                }
+
+                webSocketSendHookRegistry.add(registryKey);
+
+                const context = `web:${className}.${target.overloadSignature}`;
+                const WebSocketImplementation = safeUseFromClassLoader(
+                    className,
+                    classLoader,
+                    context
+                );
+                if (!WebSocketImplementation) {
+                    return;
+                }
+
+                const sendText = safeOverload(
+                    WebSocketImplementation.send,
+                    context,
+                    "java.lang.String"
+                );
+                if (!sendText) {
+                    return;
+                }
+
+                sendText.implementation = safeImplementation(
+                    context,
+                    sendText,
+                    function(original, text: string) {
+                        createWebEventSafely("websocket.send_text", {
+                            url: getWebSocketUrl(this),
+                            data: text.length > 200
+                                ? text.substring(0, 200) + "..."
+                                : text,
+                            method: "send",
+                            provider_class: getRuntimeProviderClass(this),
+                            declaring_class: className,
+                            overload_signature: target.overloadSignature
+                        });
+
+                        return callOriginal(original, this, text);
+                    }
+                );
+
+                return;
+            }
+
+            currentClass = currentClass.getSuperclass();
+        }
+    } catch (error) {
+        devlog(`[HOOK] Failed to install WebSocket send hook: ${error}`);
+    }
+}
+
+const webSocketListenerHookRegistry = new Set<string>();
+
+interface RuntimeMethodHookLocation {
+    declaringClass: any;
+    declaringClassName: string;
+    target: RuntimeMethodHookTarget;
+}
+
+function findRuntimeMethod(
+    instance: any,
+    matcher: (methodName: string, parameterTypes: string[]) => boolean
+): RuntimeMethodHookLocation | null {
+    const runtimeClass = getRuntimeJavaClass(instance);
+
+    if (!runtimeClass) {
+        return null;
+    }
+
+    let currentClass = runtimeClass;
+
+    while (currentClass) {
+        try {
+            const methods = currentClass.getDeclaredMethods();
+
+            for (let i = 0; i < methods.length; i++) {
+                const method = methods[i];
+                const modifiers = method.getModifiers();
+
+                // Ignore static and abstract declarations.
+                if ((modifiers & 0x0008) !== 0 || (modifiers & 0x0400) !== 0) {
+                    continue;
+                }
+
+                const methodName = method.getName().toString();
+                const reflectedParameterTypes = method.getParameterTypes();
+                const parameterTypes: string[] = [];
+
+                for (let j = 0; j < reflectedParameterTypes.length; j++) {
+                    parameterTypes.push(
+                        reflectedParameterTypes[j].getName().toString()
+                    );
+                }
+
+                if (!matcher(methodName, parameterTypes)) {
+                    continue;
+                }
+
+                return {
+                    declaringClass: currentClass,
+                    declaringClassName: getJavaClassName(currentClass),
+                    target: {
+                        methodName: methodName,
+                        parameterTypes: parameterTypes,
+                        overloadSignature:
+                            `${methodName}(${parameterTypes.join(",")})`
+                    }
+                };
+            }
+        } catch (error) {
+            devlog(
+                `[HOOK] Failed to inspect WebSocket listener class ` +
+                `${getJavaClassName(currentClass)}: ${error}`
+            );
+            return null;
+        }
+
+        currentClass = currentClass.getSuperclass();
+    }
+
+    return null;
+}
+
+function getListenerHookRegistryKey(
+    location: RuntimeMethodHookLocation
+): string {
+    return [
+        getClassLoaderIdentity(location.declaringClass),
+        location.declaringClassName,
+        location.target.overloadSignature
+    ].join("|");
+}
+
+function installWebSocketOpenedListenerHook(listener: any): void {
+    const location = findRuntimeMethod(
+        listener,
+        (methodName, parameterTypes) =>
+            methodName === "onOpen" &&
+            parameterTypes.length === 2 &&
+            parameterTypes[0] === "okhttp3.WebSocket" &&
+            parameterTypes[1] === "okhttp3.Response"
+    );
+
+    if (!location) {
+        return;
+    }
+
+    const registryKey = getListenerHookRegistryKey(location);
+
+    if (webSocketListenerHookRegistry.has(registryKey)) {
+        return;
+    }
+
+    webSocketListenerHookRegistry.add(registryKey);
+
+    let classLoader: any = null;
+
+    try {
+        classLoader = location.declaringClass.getClassLoader();
+    } catch (_) {
+        classLoader = null;
+    }
+
+    const context =
+        `web:${location.declaringClassName}.` +
+        `${location.target.overloadSignature}`;
+
+    const ListenerClass = safeUseFromClassLoader(
+        location.declaringClassName,
+        classLoader,
+        context
+    );
+    if (!ListenerClass) {
+        return;
+    }
+
+    const onOpen = safeOverload(
+        ListenerClass[location.target.methodName],
+        context,
+        ...location.target.parameterTypes
+    );
+    if (!onOpen) {
+        return;
+    }
+
+    onOpen.implementation = safeImplementation(
+        context,
+        onOpen,
+        function(original, webSocket: any, response: any) {
+            createWebEventSafely("websocket.opened", {
+                url: getWebSocketUrl(webSocket, response),
+                status_code: getWebSocketResponseCode(response),
+                method: location.target.methodName,
+                ...getWebSocketMetadata(
+                    webSocket,
+                    location.declaringClassName,
+                    location.target.overloadSignature
+                )
+            });
+
+            return callOriginal(original, this, webSocket, response);
+        }
+    );
+}
+
+function installWebSocketMessageListenerHook(listener: any): void {
+    const location = findRuntimeMethod(
+        listener,
+        (methodName, parameterTypes) =>
+            methodName === "onMessage" &&
+            parameterTypes.length === 2 &&
+            parameterTypes[0] === "okhttp3.WebSocket" &&
+            parameterTypes[1] === "java.lang.String"
+    );
+
+    if (!location) {
+        return;
+    }
+
+    const registryKey = getListenerHookRegistryKey(location);
+
+    if (webSocketListenerHookRegistry.has(registryKey)) {
+        return;
+    }
+
+    webSocketListenerHookRegistry.add(registryKey);
+
+    let classLoader: any = null;
+
+    try {
+        classLoader = location.declaringClass.getClassLoader();
+    } catch (_) {
+        classLoader = null;
+    }
+
+    const context =
+        `web:${location.declaringClassName}.` +
+        `${location.target.overloadSignature}`;
+
+    const ListenerClass = safeUseFromClassLoader(
+        location.declaringClassName,
+        classLoader,
+        context
+    );
+    if (!ListenerClass) {
+        return;
+    }
+
+    const onMessage = safeOverload(
+        ListenerClass[location.target.methodName],
+        context,
+        ...location.target.parameterTypes
+    );
+    if (!onMessage) {
+        return;
+    }
+
+    onMessage.implementation = safeImplementation(
+        context,
+        onMessage,
+        function(original, webSocket: any, text: string) {
+            createWebEventSafely("websocket.message_received", {
+                url: getWebSocketUrl(webSocket),
+                data: text.length > 200
+                    ? text.substring(0, 200) + "..."
+                    : text,
+                method: location.target.methodName,
+                ...getWebSocketMetadata(
+                    webSocket,
+                    location.declaringClassName,
+                    location.target.overloadSignature
+                )
+            });
+
+            return callOriginal(original, this, webSocket, text);
+        }
+    );
+}
+
+
+function getWebSocketResponseUrl(response: any): string {
+    try {
+        return response.request().url().toString();
+    } catch (_) {
+        return "unknown";
+    }
+}
+
+function normalizeWebSocketUrl(url: string): string {
+    if (url.startsWith("http://")) {
+        return `ws://${url.substring("http://".length)}`;
+    }
+
+    if (url.startsWith("https://")) {
+        return `wss://${url.substring("https://".length)}`;
+    }
+
+    return url;
+}
+
+function getWebSocketUrl(webSocket: any, response?: any): string {
+    try {
+        const request = webSocket.request();
+
+        if (request) {
+            return normalizeWebSocketUrl(request.url().toString());
+        }
+    } catch (_) {
+        // Fall through to the upgrade response URL.
+    }
+
+    if (response) {
+        return normalizeWebSocketUrl(getWebSocketResponseUrl(response));
+    }
+
+    return "unknown";
+}
+
+function getWebSocketResponseCode(response: any): number | undefined {
+    try {
+        return response.code();
+    } catch (_) {
+        return undefined;
+    }
+}
+
+function getWebSocketMetadata(
+    webSocket: any,
+    declaringClassName: string,
+    overloadSignature: string
+): Partial<WebEvent> {
+    return {
+        provider_class: getRuntimeProviderClass(webSocket),
+        declaring_class: declaringClassName,
+        overload_signature: overloadSignature
+    };
+}
+
+function install_websocket_hooks() {
+    devlog("Installing WebSocket hooks");
+
+    safePerform("web:install_websocket_hooks", () => {
+        const OkHttpClient = safeUse(
+            "okhttp3.OkHttpClient",
+            "web:install_websocket_hooks"
+        );
+        if (!OkHttpClient) {
+            return;
+        }
+
+        const newWebSocket = safeOverload(
+            OkHttpClient.newWebSocket,
+            "web:OkHttpClient.newWebSocket",
+            "okhttp3.Request",
+            "okhttp3.WebSocketListener"
+        );
+        if (!newWebSocket) {
+            return;
+        }
+
+        newWebSocket.implementation = safeImplementation(
+            "web:OkHttpClient.newWebSocket",
+            newWebSocket,
+            function(original, request: any, listener: any) {
+                try {
+                    installWebSocketOpenedListenerHook(listener);
+                    installWebSocketMessageListenerHook(listener);
+                } catch (error) {
+                    devlog(
+                        `[HOOK] Failed to inspect WebSocket listener: ${error}`
+                    );
+                }
+
+                const webSocket = callOriginal(
+                    original,
+                    this,
+                    request,
+                    listener
+                );
+
+                try {
+                    installWebSocketSendHook(webSocket);
+                } catch (error) {
+                    devlog(
+                        `[HOOK] Failed to inspect WebSocket implementation: ${error}`
+                    );
+                }
+
+                return webSocket;
+            }
+        );
     });
 }
 
@@ -522,49 +1305,65 @@ function install_retrofit_hooks() {
 
     safePerform("web:install_retrofit_hooks", () => {
         const OkHttpCall = safeUse(
-            'retrofit2.OkHttpCall',
+            "retrofit2.OkHttpCall",
             "web:install_retrofit_hooks"
         );
-        if (OkHttpCall) {
-            const executeRef = OkHttpCall.execute;
-            executeRef.implementation = safeImplementation(
+        if (!OkHttpCall) {
+            return;
+        }
+
+        const execute = safeOverload(
+            OkHttpCall.execute,
+            "web:OkHttpCall.execute"
+        );
+        if (execute) {
+            execute.implementation = safeImplementation(
                 "web:OkHttpCall.execute",
-                executeRef,
+                execute,
                 function(original) {
                     const request = this.request();
+
                     if (request) {
-                        createWebEvent("retrofit.request", {
+                        createWebEventSafely("retrofit.request", {
                             url: request.url().toString(),
                             method: request.method()
                         });
                     }
-                    const response = original.call(this);
+
+                    const response = callOriginal(original, this);
+
                     if (response) {
-                        createWebEvent("retrofit.response", {
+                        createWebEventSafely("retrofit.response", {
                             url: request ? request.url().toString() : "unknown",
                             status_code: response.code()
                         });
                     }
+
                     return response;
                 }
             );
         }
 
-        const Call = safeUse('retrofit2.Call', "web:install_retrofit_hooks");
-        if (Call) {
-            const enqueueRef = Call.enqueue;
-            enqueueRef.implementation = safeImplementation(
-                "web:Call.enqueue",
-                enqueueRef,
+        const enqueue = safeOverload(
+            OkHttpCall.enqueue,
+            "web:OkHttpCall.enqueue",
+            "retrofit2.Callback"
+        );
+        if (enqueue) {
+            enqueue.implementation = safeImplementation(
+                "web:OkHttpCall.enqueue",
+                enqueue,
                 function(original, callback: any) {
                     const request = this.request();
+
                     if (request) {
-                        createWebEvent("retrofit.async_request", {
+                        createWebEventSafely("retrofit.async_request", {
                             url: request.url().toString(),
                             method: request.method()
                         });
                     }
-                    return original.call(this, callback);
+
+                    return callOriginal(original, this, callback);
                 }
             );
         }
@@ -626,70 +1425,6 @@ function install_volley_hooks() {
     });
 }
 
-function install_websocket_hooks() {
-    devlog("Installing WebSocket hooks");
-
-    safePerform("web:install_websocket_hooks", () => {
-        const WebSocket = safeUse('okhttp3.WebSocket', "web:install_websocket_hooks");
-        if (WebSocket) {
-            const sendText = safeOverload(
-                WebSocket.send,
-                "web:WebSocket.send",
-                'java.lang.String'
-            );
-            if (sendText) {
-                sendText.implementation = safeImplementation(
-                    "web:WebSocket.send[String]",
-                    sendText,
-                    function(original, text: string) {
-                        createWebEvent("websocket.send_text", {
-                            data: text.length > 200 ? text.substring(0, 200) + "..." : text,
-                            method: "send"
-                        });
-                        return original.call(this, text);
-                    }
-                );
-            }
-        }
-
-        const WebSocketListener = safeUse(
-            'okhttp3.WebSocketListener',
-            "web:install_websocket_hooks"
-        );
-        if (WebSocketListener) {
-            const onOpenRef = WebSocketListener.onOpen;
-            onOpenRef.implementation = safeImplementation(
-                "web:WebSocketListener.onOpen",
-                onOpenRef,
-                function(original, webSocket: any, response: any) {
-                    createWebEvent("websocket.opened", {
-                        status_code: response.code(),
-                        url: response.request().url().toString()
-                    });
-                    return original.call(this, webSocket, response);
-                }
-            );
-
-            const onMessageText = safeOverload(
-                WebSocketListener.onMessage,
-                "web:WebSocketListener.onMessage",
-                'okhttp3.WebSocket', 'java.lang.String'
-            );
-            if (onMessageText) {
-                onMessageText.implementation = safeImplementation(
-                    "web:WebSocketListener.onMessage[String]",
-                    onMessageText,
-                    function(original, webSocket: any, text: string) {
-                        createWebEvent("websocket.message_received", {
-                            data: text.length > 200 ? text.substring(0, 200) + "..." : text
-                        });
-                        return original.call(this, webSocket, text);
-                    }
-                );
-            }
-        }
-    });
-}
 
 export function install_web_hooks() {
     devlog("\n");
