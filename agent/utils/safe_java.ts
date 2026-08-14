@@ -46,6 +46,35 @@ export function safeUse(className: string, context: string): JavaWrapper | null 
 }
 
 /**
+ * Resolves a Java class through a specific class loader.
+ *
+ * This is needed when a runtime object originates from an application,
+ * plugin, split APK, or custom class loader that differs from the default
+ * Java.use() class loader.
+ *
+ * A null class loader identifies a bootstrap-loaded class and falls back to
+ * Java.use(). Errors are contained and reported through hookError().
+ */
+export function safeUseFromClassLoader(
+    className: string,
+    classLoader: any,
+    context: string
+): JavaWrapper | null {
+    try {
+        if (classLoader === null || classLoader === undefined) {
+            return Java.use(className);
+        }
+
+        return (Java as any).ClassFactory
+            .get(classLoader)
+            .use(className) as JavaWrapper;
+    } catch (error) {
+        hookError(`${context}:${className}`, error);
+        return null;
+    }
+}
+
+/**
  * Safe alternative to method.overload() — returns null instead of throwing.
  *
  * Does:
