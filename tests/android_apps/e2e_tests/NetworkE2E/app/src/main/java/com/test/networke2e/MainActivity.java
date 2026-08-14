@@ -32,6 +32,19 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.security.Principal;
+import java.security.cert.Certificate;
+import java.net.ProtocolException;
+import java.net.Proxy;
+import java.net.URLConnection;
+import java.net.URLStreamHandler;
+
+import javax.net.ssl.SSLPeerUnverifiedException;
+
+
 import javax.net.ssl.HttpsURLConnection;
 
 import okhttp3.OkHttpClient;
@@ -145,7 +158,17 @@ public class MainActivity extends Activity {
                     Log.e(TAG, "runHttpsUrlConnectionTests failed", t);
                 }
 
-                // 3) OkHttp3
+                // 3) Runtime URLConnection provider discovery
+                //    web.ts: URL.openConnection() and URL.openConnection(Proxy)
+                //    -> custom http.* and https.* provider events
+                try {
+                    runCustomUrlConnectionProviderTests();
+                    Log.i(TAG, "runCustomUrlConnectionProviderTests completed");
+                } catch (Throwable t) {
+                    Log.e(TAG, "runCustomUrlConnectionProviderTests failed", t);
+                }
+
+                // 4) OkHttp3
                 //    web.ts: okhttp.request (OkHttpClient.newCall)
                 try {
                     runOkHttp3Tests();
@@ -154,7 +177,7 @@ public class MainActivity extends Activity {
                     Log.e(TAG, "runOkHttp3Tests failed", t);
                 }
 
-                // 4) Legacy OkHttp (com.squareup.okhttp.*)
+                // 5) Legacy OkHttp (com.squareup.okhttp.*)
                 //    web.ts: okhttp_old.request
                 try {
                     runOkHttpLegacyTests();
@@ -163,7 +186,7 @@ public class MainActivity extends Activity {
                     Log.e(TAG, "runOkHttpLegacyTests failed", t);
                 }
 
-                // 5) Retrofit2 - synchronous and asynchronous
+                // 6) Retrofit2 - synchronous and asynchronous
                 //    web.ts: retrofit.request, retrofit.response, retrofit.async_request
                 try {
                     runRetrofitTests();
@@ -172,7 +195,7 @@ public class MainActivity extends Activity {
                     Log.e(TAG, "runRetrofitTests failed", t);
                 }
 
-                // 6) Volley StringRequest + RequestQueue
+                // 7) Volley StringRequest + RequestQueue
                 //    web.ts: volley.string_request, volley.queue_request
                 try {
                     runVolleyTests();
@@ -181,7 +204,7 @@ public class MainActivity extends Activity {
                     Log.e(TAG, "runVolleyTests failed", t);
                 }
 
-                // 7) Java-layer and native socket tests (TCP, Unix domain, UDP)
+                // 8) Java-layer and native socket tests (TCP, Unix domain, UDP)
                 //    sockets.ts: socket.java.server_accept, socket.java.init,
                 //                socket.java.connect, socket.java.local_accept,
                 //                socket.java.datagram_connect
@@ -194,7 +217,7 @@ public class MainActivity extends Activity {
                     Log.e(TAG, "runSocketTests failed", t);
                 }
 
-                // 8) OkHttp3 WebSocket
+                // 9) OkHttp3 WebSocket
                 //    web.ts: websocket.send_text, websocket.opened,
                 //            websocket.message_received
                 try {
@@ -204,7 +227,7 @@ public class MainActivity extends Activity {
                     Log.e(TAG, "runWebSocketTests failed", t);
                 }
 
-                // 9) Native libc syscalls not reliably reached via Java sockets
+                // 10) Native libc syscalls not reliably reached via Java sockets
                 //    sockets.ts: Libc::send, Libc::recv,
                 //                Libc::sendmsg, Libc::recvmsg, Libc::close
                 try {
@@ -382,6 +405,74 @@ public class MainActivity extends Activity {
             try { is.close(); } catch (Throwable ignored) {}
             if (reader != null) try { reader.close(); } catch (Throwable ignored) {}
         }
+    }
+
+
+    // ------------------------------------------------------------
+    // Custom URLConnection providers
+    //
+    // Verifies runtime provider discovery independently of Android's
+    // platform HttpURLConnection and HttpsURLConnection implementations.
+    //
+    // The HTTP provider uses URL.openConnection(Proxy) to cover the
+    // second URL overload. Neither provider performs real network I/O.
+    // ------------------------------------------------------------
+    private void runCustomUrlConnectionProviderTests() throws Exception {
+        Log.i(TAG, "runCustomUrlConnectionProviderTests started");
+
+        URL httpUrl = new URL(
+                null,
+                "e2e-http://provider/path",
+                new E2eHttpUrlStreamHandler()
+        );
+
+        HttpURLConnection httpConnection =
+                (HttpURLConnection) httpUrl.openConnection(Proxy.NO_PROXY);
+
+        httpConnection.setRequestMethod("PUT");
+        httpConnection.setRequestProperty("X-E2E-Provider", "http");
+        httpConnection.connect();
+
+        OutputStream httpOutput = httpConnection.getOutputStream();
+        httpOutput.write("custom-http-request".getBytes("UTF-8"));
+        httpOutput.close();
+
+        int httpStatus = httpConnection.getResponseCode();
+        readInputStream(httpConnection.getInputStream());
+
+        if (httpStatus != 200) {
+            throw new IllegalStateException(
+                    "Custom HTTP provider returned unexpected status: " + httpStatus
+            );
+        }
+
+        URL httpsUrl = new URL(
+                null,
+                "e2e-https://provider/path",
+                new E2eHttpsUrlStreamHandler()
+        );
+
+        HttpsURLConnection httpsConnection =
+                (HttpsURLConnection) httpsUrl.openConnection();
+
+        httpsConnection.setRequestMethod("PATCH");
+        httpsConnection.setRequestProperty("X-E2E-Provider", "https");
+        httpsConnection.connect();
+
+        OutputStream httpsOutput = httpsConnection.getOutputStream();
+        httpsOutput.write("custom-https-request".getBytes("UTF-8"));
+        httpsOutput.close();
+
+        int httpsStatus = httpsConnection.getResponseCode();
+        readInputStream(httpsConnection.getInputStream());
+
+        if (httpsStatus != 200) {
+            throw new IllegalStateException(
+                    "Custom HTTPS provider returned unexpected status: " + httpsStatus
+            );
+        }
+
+        Log.i(TAG, "runCustomUrlConnectionProviderTests passed");
     }
 
     // ------------------------------------------------------------
@@ -872,8 +963,198 @@ public class MainActivity extends Activity {
         } finally {
             client.dispatcher().executorService().shutdown();
             if (serverRef != null) {
-                try { serverRef.stop(); } catch (Throwable ignored) {}
+                try {
+                    serverRef.stop(1000);
+                } catch (Throwable ignored) {}
             }
+        }
+    }
+
+
+    // ------------------------------------------------------------
+    // In-memory URLConnection providers for runtime discovery tests.
+    // ------------------------------------------------------------
+
+    private static final class E2eHttpUrlStreamHandler extends URLStreamHandler {
+
+        @Override
+        protected URLConnection openConnection(URL url) {
+            return new E2eHttpURLConnection(url);
+        }
+
+        @Override
+        protected URLConnection openConnection(URL url, Proxy proxy) {
+            return new E2eHttpURLConnection(url);
+        }
+    }
+
+    private static final class E2eHttpsUrlStreamHandler extends URLStreamHandler {
+
+        @Override
+        protected URLConnection openConnection(URL url) {
+            return new E2eHttpsURLConnection(url);
+        }
+
+        @Override
+        protected URLConnection openConnection(URL url, Proxy proxy) {
+            return new E2eHttpsURLConnection(url);
+        }
+    }
+
+    private static final class E2eHttpURLConnection extends HttpURLConnection {
+
+        private final ByteArrayOutputStream requestBody = new ByteArrayOutputStream();
+        private String requestMethod = "GET";
+
+        E2eHttpURLConnection(URL url) {
+            super(url);
+        }
+
+        @Override
+        public void connect() {
+            connected = true;
+        }
+
+        @Override
+        public void disconnect() {
+            connected = false;
+        }
+
+        @Override
+        public boolean usingProxy() {
+            return false;
+        }
+
+        @Override
+        public void setRequestMethod(String method) throws ProtocolException {
+            requestMethod = method;
+        }
+
+        @Override
+        public String getRequestMethod() {
+            return requestMethod;
+        }
+
+        @Override
+        public void setRequestProperty(String key, String value) {
+            super.setRequestProperty(key, value);
+        }
+
+        @Override
+        public OutputStream getOutputStream() {
+            return requestBody;
+        }
+
+        @Override
+        public InputStream getInputStream() throws IOException {
+            if (!connected) {
+                connect();
+            }
+
+            return new ByteArrayInputStream(
+                    "{\"provider\":\"custom-http\"}".getBytes("UTF-8")
+            );
+        }
+
+        @Override
+        public int getResponseCode() throws IOException {
+            if (!connected) {
+                connect();
+            }
+
+            return 200;
+        }
+    }
+
+    private static final class E2eHttpsURLConnection extends HttpsURLConnection {
+
+        private final ByteArrayOutputStream requestBody = new ByteArrayOutputStream();
+        private String requestMethod = "GET";
+
+        E2eHttpsURLConnection(URL url) {
+            super(url);
+        }
+
+        @Override
+        public void connect() {
+            connected = true;
+        }
+
+        @Override
+        public void disconnect() {
+            connected = false;
+        }
+
+        @Override
+        public boolean usingProxy() {
+            return false;
+        }
+
+        @Override
+        public void setRequestMethod(String method) throws ProtocolException {
+            requestMethod = method;
+        }
+
+        @Override
+        public String getRequestMethod() {
+            return requestMethod;
+        }
+
+        @Override
+        public void setRequestProperty(String key, String value) {
+            super.setRequestProperty(key, value);
+        }
+
+        @Override
+        public OutputStream getOutputStream() {
+            return requestBody;
+        }
+
+        @Override
+        public InputStream getInputStream() throws IOException {
+            if (!connected) {
+                connect();
+            }
+
+            return new ByteArrayInputStream(
+                    "{\"provider\":\"custom-https\"}".getBytes("UTF-8")
+            );
+        }
+
+        @Override
+        public int getResponseCode() throws IOException {
+            if (!connected) {
+                connect();
+            }
+
+            return 200;
+        }
+
+        @Override
+        public String getCipherSuite() {
+            return "TLS_E2E";
+        }
+
+        @Override
+        public Certificate[] getLocalCertificates() {
+            return null;
+        }
+
+        @Override
+        public Certificate[] getServerCertificates()
+                throws SSLPeerUnverifiedException {
+            return new Certificate[0];
+        }
+
+        @Override
+        public Principal getPeerPrincipal()
+                throws SSLPeerUnverifiedException {
+            return null;
+        }
+
+        @Override
+        public Principal getLocalPrincipal() {
+            return null;
         }
     }
 
