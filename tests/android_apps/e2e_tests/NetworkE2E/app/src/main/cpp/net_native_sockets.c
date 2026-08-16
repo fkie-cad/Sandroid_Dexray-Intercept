@@ -108,6 +108,19 @@ static int make_loopback_pair(int *cli_fd, int *srv_fd) {
     return 0;
 }
 
+static void test_socket_created_only(void) {
+    LOGI("");
+    LOGI("=== Native socket tests: direct socket creation ===");
+
+    int fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    TEST_ASSERT(fd >= 0, "socket() direct creation");
+
+    if (fd >= 0) {
+        int rc = close(fd);
+        TEST_ASSERT(rc == 0, "close() direct-created socket");
+    }
+}
+
 /* ------------------------------------------------------------------ */
 /* Test 1: send() / recv()                                             */
 /*                                                                     */
@@ -274,17 +287,14 @@ static void test_sendmsg_recvmsg(void) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Test 3: close() on a hook-tracked socket                            */
-/*                                                                     */
-/* sockets.ts hook:                                                    */
-/*   close -> "Libc::close"                                             */
-/*                                                                     */
-/* The hook only emits for file descriptors present in socket_list,    */
-/* i.e. those that previously passed through the native connect or     */
-/* bind hooks.  A connected loopback pair is therefore used so both    */
-/* fds are candidates for tracking.  A single-byte exchange is         */
-/* performed before close() to ensure the connect hook path was        */
-/* reached first.                                                       */
+/* Test 3: close() on a hook-tracked socket                           */
+/*                                                                    */
+/* sockets.ts hook:                                                   */
+/*   close -> "Libc::close"                                           */
+/*                                                                    */
+/* The hook emits close events for descriptors tracked by the native  */
+/* socket() hook. A connected loopback pair ensures endpoint metadata */
+/* is available before close().                                       */
 /* ------------------------------------------------------------------ */
 static void test_close_tracked(void) {
     LOGI("");
@@ -397,6 +407,10 @@ Java_com_test_networke2e_NativeSocketTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("========================================");
     LOGI("NativeSocketTests: starting");
     LOGI("========================================");
+
+    LOGI("");
+    LOGI(">> Running test_socket_created_only...");
+    test_socket_created_only();
 
     LOGI("");
     LOGI(">> Running test_send_recv...");
