@@ -10,6 +10,8 @@ package com.test.networke2e;
  *   sendmsg() -> "Libc::sendmsg"
  *   recvmsg() -> "Libc::recvmsg"
  *   close()   -> "Libc::close"
+ *   dlsym("send") / dlsym("recv")
+ *       -> direct libc export validation for socket.native.send/recv
  *
  * Must be called from a background thread; POSIX socket syscalls are
  * performed directly on AF_INET loopback file descriptors.

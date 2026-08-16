@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <jni.h>
 #include <android/log.h>
+#include <dlfcn.h>
 
 #define LOG_TAG "NET_NATIVE_SOCKETS"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
@@ -39,6 +40,20 @@ static int tests_failed = 0;
         tests_failed++; \
     } \
 } while (0)
+
+typedef ssize_t (*direct_send_fn)(
+    int sockfd,
+    const void *buf,
+    size_t len,
+    int flags
+);
+
+typedef ssize_t (*direct_recv_fn)(
+    int sockfd,
+    void *buf,
+    size_t len,
+    int flags
+);
 
 /* ------------------------------------------------------------------ */
 /* Helper: create a connected loopback TCP pair in one thread.         */
@@ -169,6 +184,126 @@ static void test_send_recv(void) {
     LOGI("recv(%d, buf2, %zu, 0) -> %zd, data=\"%s\"", cli, sizeof(buf2) - 1, rcvd2, buf2);
     TEST_ASSERT(rcvd2 == sent2, "recv() reply returned correct byte count");
     TEST_ASSERT(memcmp(buf2, reply, (size_t)rcvd2) == 0, "recv() reply data matches");
+
+    close(cli);
+    close(srv);
+}
+
+/* ------------------------------------------------------------------ */
+/* Test 1b: direct dlsym() send() / recv() exports                    */
+/*                                                                     */
+/* The NDK headers on current Android toolchains may lower ordinary    */
+/* send() and recv() calls to sendto() and recvfrom(). This test calls */
+/* the libc exports resolved by dlsym() so the hooks can be verified   */
+/* against actual send() and recv() dispatch.                          */
+/* ------------------------------------------------------------------ */
+static void test_dlsym_send_recv(void) {
+    LOGI("");
+    LOGI("=== Native socket tests: dlsym send / recv ===");
+
+    void *send_symbol = dlsym(RTLD_DEFAULT, "send");
+    void *recv_symbol = dlsym(RTLD_DEFAULT, "recv");
+
+    TEST_ASSERT(send_symbol != NULL, "dlsym() resolved send");
+    TEST_ASSERT(recv_symbol != NULL, "dlsym() resolved recv");
+
+    if (send_symbol == NULL || recv_symbol == NULL) {
+        return;
+    }
+
+    direct_send_fn direct_send = (direct_send_fn)send_symbol;
+    direct_recv_fn direct_recv = (direct_recv_fn)recv_symbol;
+
+    int cli = -1;
+    int srv = -1;
+
+    if (make_loopback_pair(&cli, &srv) != 0) {
+        TEST_ASSERT(0, "make_loopback_pair for dlsym send/recv");
+        return;
+    }
+    TEST_ASSERT(1, "make_loopback_pair for dlsym send/recv");
+
+    const char *message = "dlsym-send-payload";
+    ssize_t sent = direct_send(cli, message, strlen(message), 0);
+
+    LOGI(
+        "dlsym send(%d, \"%s\", %zu, 0) -> %zd",
+        cli,
+        message,
+        strlen(message),
+        sent
+    );
+    TEST_ASSERT(
+        sent == (ssize_t)strlen(message),
+        "dlsym send() returned correct byte count"
+    );
+
+    char receive_buffer[64];
+    memset(receive_buffer, 0, sizeof(receive_buffer));
+
+    ssize_t received = direct_recv(
+        srv,
+        receive_buffer,
+        sizeof(receive_buffer) - 1,
+        0
+    );
+
+    LOGI(
+        "dlsym recv(%d, buf, %zu, 0) -> %zd, data=\"%s\"",
+        srv,
+        sizeof(receive_buffer) - 1,
+        received,
+        receive_buffer
+    );
+    TEST_ASSERT(
+        received == sent,
+        "dlsym recv() returned same byte count as send()"
+    );
+    TEST_ASSERT(
+        memcmp(receive_buffer, message, (size_t)received) == 0,
+        "dlsym recv() data matches sent payload"
+    );
+
+    const char *reply = "dlsym-reply-payload";
+    ssize_t sent_reply = direct_send(srv, reply, strlen(reply), 0);
+
+    LOGI(
+        "dlsym send(%d, \"%s\", %zu, 0) -> %zd",
+        srv,
+        reply,
+        strlen(reply),
+        sent_reply
+    );
+    TEST_ASSERT(
+        sent_reply == (ssize_t)strlen(reply),
+        "dlsym send() reply returned correct byte count"
+    );
+
+    char reply_buffer[64];
+    memset(reply_buffer, 0, sizeof(reply_buffer));
+
+    ssize_t received_reply = direct_recv(
+        cli,
+        reply_buffer,
+        sizeof(reply_buffer) - 1,
+        0
+    );
+
+    LOGI(
+        "dlsym recv(%d, reply, %zu, 0) -> %zd, data=\"%s\"",
+        cli,
+        sizeof(reply_buffer) - 1,
+        received_reply,
+        reply_buffer
+    );
+    TEST_ASSERT(
+        received_reply == sent_reply,
+        "dlsym recv() reply returned same byte count as send()"
+    );
+    TEST_ASSERT(
+        memcmp(reply_buffer, reply, (size_t)received_reply) == 0,
+        "dlsym recv() reply data matches"
+    );
 
     close(cli);
     close(srv);
@@ -415,6 +550,10 @@ Java_com_test_networke2e_NativeSocketTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("");
     LOGI(">> Running test_send_recv...");
     test_send_recv();
+
+    LOGI("");
+    LOGI(">> Running test_dlsym_send_recv...");
+    test_dlsym_send_recv();
 
     LOGI("");
     LOGI(">> Running test_sendmsg_recvmsg...");
