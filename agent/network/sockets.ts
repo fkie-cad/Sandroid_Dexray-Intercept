@@ -139,6 +139,32 @@ function trackSocketFromRuntime(
     }
 }
 
+function trackAcceptedSocket(
+    listeningDescriptor: number,
+    acceptedDescriptor: number
+): void {
+    if (acceptedDescriptor < 0 || nativeSocketStates.has(acceptedDescriptor)) {
+        return;
+    }
+
+    const listeningState =
+        nativeSocketStates.get(listeningDescriptor) ||
+        trackSocketFromRuntime(listeningDescriptor);
+
+    if (listeningState) {
+        nativeSocketStates.set(acceptedDescriptor, {
+            socketType: listeningState.socketType,
+            addressFamily: listeningState.addressFamily,
+            protocol: listeningState.protocol
+        });
+
+        return;
+    }
+
+    // Fallback for a listening socket that existed before agent attachment.
+    trackSocketFromRuntime(acceptedDescriptor);
+}
+
 function hook_java_socket_communication() {
     safePerform("sockets:hook_java_socket_communication", () => {
         const ServerSocket = safeUse(
@@ -449,6 +475,30 @@ function hook_bionic_socket_communication(){
                 remote_ip: remote.ip,
                 remote_port: remote.port
             });
+        }
+    });
+
+    safeAttachExport("libc.so", "accept", "sockets:accept", {
+        onEnter(args) {
+            this.listeningDescriptor = args[0].toInt32();
+        },
+        onLeave(retval) {
+            trackAcceptedSocket(
+                this.listeningDescriptor,
+                retval.toInt32()
+            );
+        }
+    });
+
+    safeAttachExport("libc.so", "accept4", "sockets:accept4", {
+        onEnter(args) {
+            this.listeningDescriptor = args[0].toInt32();
+        },
+        onLeave(retval) {
+            trackAcceptedSocket(
+                this.listeningDescriptor,
+                retval.toInt32()
+            );
         }
     });
 
@@ -814,7 +864,26 @@ function hook_bionic_socket_communication(){
         onLeave(retval) {
             const len = retval.toInt32();
 
-            if (len === -1 || len > this.buflen) {
+            if (len <= 0 || len > this.buflen) {
+                return;
+            }
+
+            const socketState = trackSocketFromRuntime(this.sd);
+
+            if (!socketState || !isInetSocketType(socketState.socketType)) {
+                return;
+            }
+
+            const socketLocal = Socket.localAddress(this.sd);
+            const local = socketLocal && isTcpEndpointAddress(socketLocal)
+                ? socketLocal
+                : undefined;
+            const socketRemote = Socket.peerAddress(this.sd);
+            const remote = socketRemote && isTcpEndpointAddress(socketRemote)
+                ? socketRemote
+                : undefined;
+
+            if (local === undefined || remote === undefined) {
                 return;
             }
 
@@ -825,41 +894,29 @@ function hook_bionic_socket_communication(){
                 buffer = buf.readByteArray(len);
             }
 
-            const socketType = Socket.type(this.sd);
-            const socketLocal = Socket.localAddress(this.sd);
-            const local = socketLocal && isTcpEndpointAddress(socketLocal)
-                ? socketLocal
-                : undefined;
-            const socketRemote = Socket.peerAddress(this.sd);
-            const remote = socketRemote && isTcpEndpointAddress(socketRemote)
-                ? socketRemote
-                : undefined;
-
-            // Historical this.sockType bug retained for S1.2.
-            if (
-                this.sockType === "unix:stream" ||
-                socketType == null ||
-                local === undefined ||
-                remote === undefined
-            ) {
-                return;
-            }
-
-            trackSocketFromRuntime(this.sd);
-
-            const data = {
-                event_type: "Libc::send",
+            createSocketEvent("socket.native.send", {
                 method: "send",
-                sd: this.sd,
-                src_ip: local.ip,
-                src_port: local.port,
-                dst_ip: remote.ip,
-                dst_port: remote.port,
-                len: len,
-                type: socketType
-            };
+                socket_descriptor: this.sd,
+                socket_type: socketState.socketType,
+                address_family: socketState.addressFamily,
+                protocol: socketState.protocol,
+                result_code: len,
+                local_ip: local.ip,
+                local_port: local.port,
+                remote_ip: remote.ip,
+                remote_port: remote.port,
+                data_length: len,
+                has_buffer: buffer !== undefined
+            });
 
-            am_send(PROFILE_HOOKING_TYPE, JSON.stringify(data), buffer);
+            if (buffer) {
+                am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
+                    event_type: "socket.native.send_data",
+                    timestamp: Date.now(),
+                    socket_descriptor: this.sd,
+                    data_length: len
+                }), buffer);
+            }
         }
     });
 
@@ -872,19 +929,16 @@ function hook_bionic_socket_communication(){
         onLeave(retval) {
             const len = retval.toInt32();
 
-            if (len === -1 || len > this.buflen) {
+            if (len <= 0 || len > this.buflen) {
                 return;
             }
 
-            let buffer;
-            const buf = ptr(this.addr);
+            const socketState = trackSocketFromRuntime(this.sd);
 
-            // Historical this.len bug retained for S1.2.
-            if (!buf.isNull()) {
-                buffer = buf.readByteArray(this.len);
+            if (!socketState || !isInetSocketType(socketState.socketType)) {
+                return;
             }
 
-            const socketType = Socket.type(this.sd);
             const socketLocal = Socket.localAddress(this.sd);
             const local = socketLocal && isTcpEndpointAddress(socketLocal)
                 ? socketLocal
@@ -894,30 +948,40 @@ function hook_bionic_socket_communication(){
                 ? socketRemote
                 : undefined;
 
-            if (
-                socketType === "unix:stream" ||
-                socketType == null ||
-                local === undefined ||
-                remote === undefined
-            ) {
+            if (local === undefined || remote === undefined) {
                 return;
             }
 
-            trackSocketFromRuntime(this.sd);
+            let buffer;
+            const buf = ptr(this.addr);
 
-            const data = {
-                event_type: "Libc::recv",
+            if (!buf.isNull()) {
+                buffer = buf.readByteArray(len);
+            }
+
+            createSocketEvent("socket.native.recv", {
                 method: "recv",
-                sd: this.sd,
-                src_ip: remote.ip,
-                src_port: remote.port,
-                dst_ip: local.ip,
-                dst_port: local.port,
-                len: len,
-                type: socketType
-            };
+                socket_descriptor: this.sd,
+                socket_type: socketState.socketType,
+                address_family: socketState.addressFamily,
+                protocol: socketState.protocol,
+                result_code: len,
+                local_ip: local.ip,
+                local_port: local.port,
+                remote_ip: remote.ip,
+                remote_port: remote.port,
+                data_length: len,
+                has_buffer: buffer !== undefined
+            });
 
-            am_send(PROFILE_HOOKING_TYPE, JSON.stringify(data), buffer);
+            if (buffer) {
+                am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
+                    event_type: "socket.native.recv_data",
+                    timestamp: Date.now(),
+                    socket_descriptor: this.sd,
+                    data_length: len
+                }), buffer);
+            }
         }
     });
 
