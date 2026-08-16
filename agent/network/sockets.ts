@@ -396,6 +396,34 @@ function captureIovecPayload(
     }
 }
 
+function getMessageHeaderEndpoint(
+    messageHeaderAddress: any
+): NativeSocketEndpoint | undefined {
+    try {
+        const messageHeader = ptr(messageHeaderAddress);
+
+        if (messageHeader.isNull()) {
+            return undefined;
+        }
+
+        const address = messageHeader.readPointer();
+        const addressLength = messageHeader
+            .add(Process.pointerSize)
+            .readU32();
+
+        if (address.isNull()) {
+            return undefined;
+        }
+
+        return getIpv4EndpointFromSockaddr(
+            address,
+            addressLength
+        );
+    } catch (_) {
+        return undefined;
+    }
+}
+
 function hook_java_socket_communication() {
     safePerform("sockets:hook_java_socket_communication", () => {
         const ServerSocket = safeUse(
@@ -1154,7 +1182,9 @@ function hook_bionic_socket_communication(){
             }
 
             const local = getSocketEndpoint(this.sd, false);
-            const remote = getSocketEndpoint(this.sd, true);
+            const remote =
+                getMessageHeaderEndpoint(this.messageHeader) ||
+                getSocketEndpoint(this.sd, true);
 
             const buffer = captureIovecPayload(
                 this.messageHeader,
@@ -1212,7 +1242,9 @@ function hook_bionic_socket_communication(){
             }
 
             const local = getSocketEndpoint(this.sd, false);
-            const remote = getSocketEndpoint(this.sd, true);
+            const remote =
+                getMessageHeaderEndpoint(this.messageHeader) ||
+                getSocketEndpoint(this.sd, true);
 
             const buffer = captureIovecPayload(
                 this.messageHeader,

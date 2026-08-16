@@ -422,6 +422,127 @@ static void test_sendmsg_recvmsg(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Test 2b: sendmsg() / recvmsg() with UDP msg_name                  */
+/*                                                                     */
+/* Exercises explicit sockaddr_in handling through msghdr.msg_name.   */
+/* The sender remains unconnected, so sendmsg() must use msg_name for */
+/* its destination and recvmsg() must recover the source from its     */
+/* output msg_name.                                                    */
+/* ------------------------------------------------------------------ */
+static void test_sendmsg_recvmsg_udp(void) {
+    LOGI("");
+    LOGI("=== Native socket tests: sendmsg / recvmsg (UDP msg_name) ===");
+
+    int recv_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    TEST_ASSERT(recv_fd >= 0, "socket() receiver for UDP sendmsg/recvmsg");
+    if (recv_fd < 0) {
+        return;
+    }
+
+    struct sockaddr_in recv_addr;
+    socklen_t recv_addrlen = sizeof(recv_addr);
+    memset(&recv_addr, 0, sizeof(recv_addr));
+    recv_addr.sin_family = AF_INET;
+    recv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    recv_addr.sin_port = 0;
+
+    int rc = bind(
+        recv_fd,
+        (struct sockaddr *)&recv_addr,
+        sizeof(recv_addr)
+    );
+    TEST_ASSERT(rc == 0, "bind() receiver for UDP sendmsg/recvmsg");
+    if (rc != 0) {
+        close(recv_fd);
+        return;
+    }
+
+    rc = getsockname(
+        recv_fd,
+        (struct sockaddr *)&recv_addr,
+        &recv_addrlen
+    );
+    TEST_ASSERT(rc == 0, "getsockname() receiver for UDP sendmsg/recvmsg");
+    if (rc != 0) {
+        close(recv_fd);
+        return;
+    }
+
+    int send_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    TEST_ASSERT(send_fd >= 0, "socket() sender for UDP sendmsg/recvmsg");
+    if (send_fd < 0) {
+        close(recv_fd);
+        return;
+    }
+
+    const char *payload = "udp-sendmsg-payload";
+
+    struct iovec send_iov;
+    send_iov.iov_base = (void *)payload;
+    send_iov.iov_len = strlen(payload);
+
+    struct msghdr send_header;
+    memset(&send_header, 0, sizeof(send_header));
+    send_header.msg_name = &recv_addr;
+    send_header.msg_namelen = sizeof(recv_addr);
+    send_header.msg_iov = &send_iov;
+    send_header.msg_iovlen = 1;
+
+    ssize_t sent = sendmsg(send_fd, &send_header, 0);
+
+    LOGI(
+        "sendmsg(%d, UDP msg_name 127.0.0.1:%d, \"%s\", %zu) -> %zd",
+        send_fd,
+        ntohs(recv_addr.sin_port),
+        payload,
+        strlen(payload),
+        sent
+    );
+    TEST_ASSERT(
+        sent == (ssize_t)strlen(payload),
+        "sendmsg() UDP msg_name returned correct byte count"
+    );
+
+    char receive_buffer[64];
+    memset(receive_buffer, 0, sizeof(receive_buffer));
+
+    struct iovec receive_iov;
+    receive_iov.iov_base = receive_buffer;
+    receive_iov.iov_len = sizeof(receive_buffer) - 1;
+
+    struct sockaddr_in source_addr;
+    memset(&source_addr, 0, sizeof(source_addr));
+
+    struct msghdr receive_header;
+    memset(&receive_header, 0, sizeof(receive_header));
+    receive_header.msg_name = &source_addr;
+    receive_header.msg_namelen = sizeof(source_addr);
+    receive_header.msg_iov = &receive_iov;
+    receive_header.msg_iovlen = 1;
+
+    ssize_t received = recvmsg(recv_fd, &receive_header, 0);
+
+    LOGI(
+        "recvmsg(%d, UDP msg_name) -> %zd, source=127.0.0.1:%d, data=\"%s\"",
+        recv_fd,
+        received,
+        ntohs(source_addr.sin_port),
+        receive_buffer
+    );
+    TEST_ASSERT(
+        received == sent,
+        "recvmsg() UDP msg_name returned same byte count as sendmsg()"
+    );
+    TEST_ASSERT(
+        memcmp(receive_buffer, payload, (size_t)received) == 0,
+        "recvmsg() UDP msg_name data matches"
+    );
+
+    close(send_fd);
+    close(recv_fd);
+}
+
+/* ------------------------------------------------------------------ */
 /* Test 3: close() on a hook-tracked socket                           */
 /*                                                                    */
 /* sockets.ts hook:                                                   */
@@ -558,6 +679,10 @@ Java_com_test_networke2e_NativeSocketTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("");
     LOGI(">> Running test_sendmsg_recvmsg...");
     test_sendmsg_recvmsg();
+
+    LOGI("");
+    LOGI(">> Running test_sendmsg_recvmsg_udp...");
+    test_sendmsg_recvmsg_udp();
 
     LOGI("");
     LOGI(">> Running test_close_tracked...");
