@@ -465,8 +465,8 @@ static void test_close_tracked(void) {
 /* Test 4: sendto() / recvfrom() on a UDP loopback pair                */
 /*                                                                     */
 /* sockets.ts hooks:                                                   */
-/*   sendto   -> socket.native.sendto                                  */
-/*   recvfrom -> Libc::recvfrom                                        */
+/*   sendto   -> socket.native.sendto                                */
+/*   recvfrom -> socket.native.recvfrom                                */
 /*                                                                     */
 /* Uses AF_INET SOCK_DGRAM; no connect() so the explicit destination   */
 /* address path in the sendto hook is exercised (this.ipAddr != 0).   */

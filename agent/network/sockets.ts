@@ -38,11 +38,18 @@ function createSocketEvent(eventType: string, data: any): void {
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
 }
 
+// helper functions
+
 function getStackTrace() {
     const threadDef = Java.use("java.lang.Thread");
     const threadInstance = threadDef.$new();
 
     return Where(threadInstance.currentThread().getStackTrace());
+}
+
+function swap16(value) {
+    return ((value & 0xFF) << 8) |
+        ((value >> 8) & 0xFF);
 }
 
 // we need this in order to handle the compiling 
@@ -163,6 +170,112 @@ function trackAcceptedSocket(
 
     // Fallback for a listening socket that existed before agent attachment.
     trackSocketFromRuntime(acceptedDescriptor);
+}
+
+interface NativeSocketEndpoint {
+    ip: string;
+    port: number;
+}
+
+function getSocketEndpoint(
+    socketDescriptor: number,
+    peer: boolean
+): NativeSocketEndpoint | undefined {
+    try {
+        const address = peer
+            ? Socket.peerAddress(socketDescriptor)
+            : Socket.localAddress(socketDescriptor);
+
+        return address && isTcpEndpointAddress(address)
+            ? {
+                ip: address.ip,
+                port: address.port
+            }
+            : undefined;
+    } catch (_) {
+        return undefined;
+    }
+}
+
+function getSockaddrLength(addressLengthPointer: any): number | undefined {
+    try {
+        const pointerValue = ptr(addressLengthPointer);
+
+        if (pointerValue.isNull()) {
+            return undefined;
+        }
+
+        return pointerValue.readU32();
+    } catch (_) {
+        return undefined;
+    }
+}
+
+function getIpv4EndpointFromSockaddr(
+    address: any,
+    addressLength: number
+): NativeSocketEndpoint | undefined {
+    if (addressLength < 8) {
+        return undefined;
+    }
+
+    try {
+        const sockaddr = ptr(address);
+
+        if (sockaddr.isNull() || sockaddr.readU16() !== AF_INET) {
+            return undefined;
+        }
+
+        const port = swap16(sockaddr.add(2).readU16());
+        const ip = [
+            sockaddr.add(4).readU8(),
+            sockaddr.add(5).readU8(),
+            sockaddr.add(6).readU8(),
+            sockaddr.add(7).readU8()
+        ].join(".");
+
+        return {
+            ip: ip,
+            port: port
+        };
+    } catch (_) {
+        return undefined;
+    }
+}
+
+function readSocketBuffer(
+    address: any,
+    length: number
+): ArrayBuffer | undefined {
+    try {
+        const buffer = ptr(address);
+
+        if (buffer.isNull()) {
+            return undefined;
+        }
+
+        return buffer.readByteArray(length) || undefined;
+    } catch (_) {
+        return undefined;
+    }
+}
+
+function sendSocketPayloadEvent(
+    eventType: string,
+    socketDescriptor: number,
+    dataLength: number,
+    buffer: ArrayBuffer | undefined
+): void {
+    if (!buffer) {
+        return;
+    }
+
+    am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
+        event_type: eventType,
+        timestamp: Date.now(),
+        socket_descriptor: socketDescriptor,
+        data_length: dataLength
+    }), buffer);
 }
 
 function hook_java_socket_communication() {
@@ -355,12 +468,6 @@ function hook_bionic_socket_communication(){
     // TCP/UDP functions in libc.so. Each symbol is resolved and hooked
     // via safeAttachExport independently so a missing symbol does not
     // abort the full install
-
-    // helper function
-    function swap16(value) {
-        return ((value & 0xFF) << 8) |
-            ((value >> 8) & 0xFF);
-    }
 
     safeAttachExport("libc.so", "socket", "sockets:socket", {
         onEnter(args) {
@@ -645,113 +752,65 @@ function hook_bionic_socket_communication(){
             this.sd = args[0].toInt32();
             this.addr = args[1];
             this.buflen = args[2].toInt32();
-            this.ipAddr = args[4];
+            this.destinationAddress = args[4];
+            this.destinationAddressLength = args[5].toInt32();
         },
         onLeave(retval) {
             const len = retval.toInt32();
 
-            if (len === -1 || len > this.buflen) {
+            if (len <= 0 || len > this.buflen) {
                 return;
             }
 
-            const socketType = Socket.type(this.sd);
-            const socketLocal = Socket.localAddress(this.sd);
-            const local = socketLocal && isTcpEndpointAddress(socketLocal)
-                ? socketLocal
-                : undefined;
+            const socketState = trackSocketFromRuntime(this.sd);
 
-            if (
-                socketType === "unix:stream" ||
-                socketType == null ||
-                local === undefined
-            ) {
+            if (!socketState || !isInetSocketType(socketState.socketType)) {
                 return;
             }
 
-            trackSocketFromRuntime(this.sd);
+            const local = getSocketEndpoint(this.sd, false);
+            let remote: NativeSocketEndpoint | undefined;
 
-            let buffer;
-            const buf = ptr(this.addr);
-
-            if (!buf.isNull()) {
-                buffer = buf.readByteArray(len);
+            if (this.destinationAddress.isNull()) {
+                remote = getSocketEndpoint(this.sd, true);
+            } else {
+                remote = getIpv4EndpointFromSockaddr(
+                    this.destinationAddress,
+                    this.destinationAddressLength
+                );
             }
 
-            if (this.ipAddr.toInt32() === 0) {
-                const socketRemote = Socket.peerAddress(this.sd);
-                const remote = socketRemote && isTcpEndpointAddress(socketRemote)
-                    ? socketRemote
-                    : undefined;
+            const buffer = readSocketBuffer(this.addr, len);
 
-                if (remote === undefined) {
-                    return;
-                }
+            const eventData: any = {
+                method: "sendto",
+                socket_descriptor: this.sd,
+                socket_type: socketState.socketType,
+                address_family: socketState.addressFamily,
+                protocol: socketState.protocol,
+                result_code: len,
+                data_length: len,
+                has_buffer: buffer !== undefined
+            };
 
-                createSocketEvent("socket.native.sendto", {
-                    method: "sendto",
-                    socket_descriptor: this.sd,
-                    socket_type: socketType,
-                    local_ip: local.ip,
-                    local_port: local.port,
-                    remote_ip: remote.ip,
-                    remote_port: remote.port,
-                    data_length: len,
-                    has_buffer: buffer !== undefined
-                });
-
-                if (buffer) {
-                    am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
-                        event_type: "socket.native.sendto_data",
-                        timestamp: Date.now(),
-                        socket_descriptor: this.sd,
-                        data_length: len
-                    }), buffer);
-                }
-
-                return;
+            if (local) {
+                eventData.local_ip = local.ip;
+                eventData.local_port = local.port;
             }
 
-            const destAddr = ptr(this.ipAddr);
-
-            if (destAddr.isNull()) {
-                return;
+            if (remote) {
+                eventData.remote_ip = remote.ip;
+                eventData.remote_port = remote.port;
             }
 
-            const family = destAddr.readS16();
+            createSocketEvent("socket.native.sendto", eventData);
 
-            // Historical behavior retained for S1.2 normalization.
-            if (family === 1) {
-                const port = swap16(destAddr.add(2).readU16());
-
-                const addrB0 = destAddr.add(4).readU8();
-                const addrB1 = destAddr.add(5).readU8();
-                const addrB2 = destAddr.add(6).readU8();
-                const addrB3 = destAddr.add(7).readU8();
-                const ipString =
-                    `${addrB0}.${addrB1}.${addrB2}.${addrB3}`;
-
-                createSocketEvent("socket.native.sendto", {
-                    method: "sendto",
-                    socket_descriptor: this.sd,
-                    socket_type: socketType,
-                    local_ip: local.ip,
-                    local_port: local.port,
-                    remote_ip: ipString,
-                    remote_port: port,
-                    address_family: family,
-                    data_length: len,
-                    has_buffer: buffer !== undefined
-                });
-
-                if (buffer) {
-                    am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
-                        event_type: "socket.native.sendto_data",
-                        timestamp: Date.now(),
-                        socket_descriptor: this.sd,
-                        data_length: len
-                    }), buffer);
-                }
-            }
+            sendSocketPayloadEvent(
+                "socket.native.sendto_data",
+                this.sd,
+                len,
+                buffer
+            );
         }
     });
 
@@ -760,98 +819,71 @@ function hook_bionic_socket_communication(){
             this.sd = args[0].toInt32();
             this.addr = args[1];
             this.buflen = args[2].toInt32();
-            this.ipAddr = args[4];
+            this.sourceAddress = args[4];
+            this.sourceAddressLengthPointer = args[5];
         },
         onLeave(retval) {
             const len = retval.toInt32();
 
-            if (len === -1 || len > this.buflen) {
+            if (len <= 0 || len > this.buflen) {
                 return;
             }
 
-            let buffer;
-            const buf = ptr(this.addr);
+            const socketState = trackSocketFromRuntime(this.sd);
 
-            if (!buf.isNull()) {
-                buffer = buf.readByteArray(len);
-            }
-
-            const socketType = Socket.type(this.sd);
-            const socketLocal = Socket.localAddress(this.sd);
-            const local = socketLocal && isTcpEndpointAddress(socketLocal)
-                ? socketLocal
-                : undefined;
-
-            if (
-                socketType === "unix:stream" ||
-                socketType == null ||
-                local === undefined
-            ) {
+            if (!socketState || !isInetSocketType(socketState.socketType)) {
                 return;
             }
 
-            trackSocketFromRuntime(this.sd);
+            const local = getSocketEndpoint(this.sd, false);
+            let remote: NativeSocketEndpoint | undefined;
 
-            if (this.ipAddr.toInt32() === 0) {
-                const socketRemote = Socket.peerAddress(this.sd);
-                const remote = socketRemote && isTcpEndpointAddress(socketRemote)
-                    ? socketRemote
-                    : undefined;
+            if (this.sourceAddress.isNull()) {
+                remote = getSocketEndpoint(this.sd, true);
+            } else {
+                const sourceAddressLength = getSockaddrLength(
+                    this.sourceAddressLengthPointer
+                );
 
-                if (remote === undefined) {
-                    return;
+                if (sourceAddressLength !== undefined) {
+                    remote = getIpv4EndpointFromSockaddr(
+                        this.sourceAddress,
+                        sourceAddressLength
+                    );
                 }
-
-                const data = {
-                    event_type: "Libc::recvfrom",
-                    method: "recvfrom",
-                    sd: this.sd,
-                    src_ip: remote.ip,
-                    src_port: remote.port,
-                    dst_ip: local.ip,
-                    dst_port: local.port,
-                    len: len,
-                    type: socketType
-                };
-
-                am_send(PROFILE_HOOKING_TYPE, JSON.stringify(data), buffer);
-                return;
             }
 
-            const srcAddr = ptr(this.ipAddr);
+            const buffer = readSocketBuffer(this.addr, len);
 
-            if (srcAddr.isNull()) {
-                return;
+            const eventData: any = {
+                method: "recvfrom",
+                socket_descriptor: this.sd,
+                socket_type: socketState.socketType,
+                address_family: socketState.addressFamily,
+                protocol: socketState.protocol,
+                result_code: len,
+                data_length: len,
+                has_buffer: buffer !== undefined
+            };
+
+            if (local) {
+                eventData.local_ip = local.ip;
+                eventData.local_port = local.port;
             }
 
-            const family = srcAddr.readS16();
-
-            // Historical behavior retained for S1.2 normalization.
-            if (family === 1) {
-                const port = swap16(srcAddr.add(2).readU16());
-
-                const addrB0 = srcAddr.add(4).readU8();
-                const addrB1 = srcAddr.add(5).readU8();
-                const addrB2 = srcAddr.add(6).readU8();
-                const addrB3 = srcAddr.add(7).readU8();
-                const ipString =
-                    `${addrB0}.${addrB1}.${addrB2}.${addrB3}`;
-
-                const data = {
-                    event_type: "Libc::recvfrom",
-                    method: "recvfrom",
-                    sd: this.sd,
-                    len: len,
-                    src_ip: local.ip,
-                    src_port: local.port,
-                    dst_ip: ipString,
-                    dst_port: port,
-                    dst_family: family,
-                    type: socketType
-                };
-
-                am_send(PROFILE_HOOKING_TYPE, JSON.stringify(data), buffer);
+            if (remote) {
+                eventData.remote_ip = remote.ip;
+                eventData.remote_port = remote.port;
             }
+
+            createSocketEvent("socket.native.recvfrom", eventData);
+
+            sendSocketPayloadEvent(
+                "socket.native.recvfrom_data",
+                this.sd,
+                len,
+                buffer
+            );
         }
     });
 
