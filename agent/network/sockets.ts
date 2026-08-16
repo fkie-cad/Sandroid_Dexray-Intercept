@@ -278,6 +278,124 @@ function sendSocketPayloadEvent(
     }), buffer);
 }
 
+const MAX_SOCKET_IOVEC_COUNT = 64;
+const MAX_SOCKET_PAYLOAD_CAPTURE = 64 * 1024;
+
+function getNativeSize(address: NativePointer): number | undefined {
+    try {
+        const rawValue = Process.pointerSize === 8
+            ? address.readU64().toString()
+            : address.readU32().toString();
+
+        const value = Number(rawValue);
+
+        if (!Number.isSafeInteger(value) || value < 0) {
+            return undefined;
+        }
+
+        return value;
+    } catch (_) {
+        return undefined;
+    }
+}
+
+function captureIovecPayload(
+    messageHeaderAddress: any,
+    resultLength: number
+): ArrayBuffer | undefined {
+    if (
+        resultLength <= 0 ||
+        resultLength > MAX_SOCKET_PAYLOAD_CAPTURE
+    ) {
+        return undefined;
+    }
+
+    try {
+        const messageHeader = ptr(messageHeaderAddress);
+
+        if (messageHeader.isNull()) {
+            return undefined;
+        }
+
+        const pointerSize = Process.pointerSize;
+
+        /*
+         * struct msghdr:
+         *   void *msg_name;
+         *   socklen_t msg_namelen;
+         *   struct iovec *msg_iov;
+         *   size_t msg_iovlen;
+         *
+         * The offsets are derived from pointer width and bionic ABI alignment.
+         */
+        const iovecOffset = pointerSize === 8 ? 16 : 8;
+        const iovecCountOffset = pointerSize === 8 ? 24 : 12;
+        const iovecStride = pointerSize * 2;
+
+        const iovecAddress = messageHeader
+            .add(iovecOffset)
+            .readPointer();
+
+        const iovecCount = getNativeSize(
+            messageHeader.add(iovecCountOffset)
+        );
+
+        if (
+            iovecAddress.isNull() ||
+            iovecCount === undefined ||
+            iovecCount === 0 ||
+            iovecCount > MAX_SOCKET_IOVEC_COUNT
+        ) {
+            return undefined;
+        }
+
+        const captured = new Uint8Array(resultLength);
+        let remaining = resultLength;
+        let destinationOffset = 0;
+
+        for (let index = 0; index < iovecCount && remaining > 0; index++) {
+            const iovec = iovecAddress.add(index * iovecStride);
+            const bufferAddress = iovec.readPointer();
+            const bufferLength = getNativeSize(
+                iovec.add(pointerSize)
+            );
+
+            if (
+                bufferAddress.isNull() ||
+                bufferLength === undefined
+            ) {
+                return undefined;
+            }
+
+            const bytesToRead = Math.min(bufferLength, remaining);
+
+            if (bytesToRead === 0) {
+                continue;
+            }
+
+            const part = bufferAddress.readByteArray(bytesToRead);
+
+            if (!part) {
+                return undefined;
+            }
+
+            captured.set(
+                new Uint8Array(part),
+                destinationOffset
+            );
+
+            destinationOffset += bytesToRead;
+            remaining -= bytesToRead;
+        }
+
+        return remaining === 0
+            ? captured.buffer
+            : undefined;
+    } catch (_) {
+        return undefined;
+    }
+}
+
 function hook_java_socket_communication() {
     safePerform("sockets:hook_java_socket_communication", () => {
         const ServerSocket = safeUse(
@@ -1020,97 +1138,116 @@ function hook_bionic_socket_communication(){
     safeAttachExport("libc.so", "sendmsg", "sockets:sendmsg", {
         onEnter(args) {
             this.sd = args[0].toInt32();
+            this.messageHeader = args[1];
         },
         onLeave(retval) {
             const len = retval.toInt32();
 
-            if (len === -1) {
+            if (len <= 0) {
                 return;
             }
 
-            const socketType = Socket.type(this.sd);
-            const socketLocal = Socket.localAddress(this.sd);
-            const local = socketLocal && isTcpEndpointAddress(socketLocal)
-                ? socketLocal
-                : undefined;
-            const socketRemote = Socket.peerAddress(this.sd);
-            const remote = socketRemote && isTcpEndpointAddress(socketRemote)
-                ? socketRemote
-                : undefined;
+            const socketState = trackSocketFromRuntime(this.sd);
 
-            if (
-                socketType === "unix:stream" ||
-                socketType == null ||
-                local === undefined ||
-                remote === undefined
-            ) {
+            if (!socketState || !isInetSocketType(socketState.socketType)) {
                 return;
             }
 
-            trackSocketFromRuntime(this.sd);
+            const local = getSocketEndpoint(this.sd, false);
+            const remote = getSocketEndpoint(this.sd, true);
 
-            const data = {
-                event_type: "Libc::sendmsg",
+            const buffer = captureIovecPayload(
+                this.messageHeader,
+                len
+            );
+
+            const eventData: any = {
                 method: "sendmsg",
-                sd: this.sd,
-                src_ip: local.ip,
-                src_port: local.port,
-                dst_ip: remote.ip,
-                dst_port: remote.port,
-                len: len,
-                type: socketType
+                socket_descriptor: this.sd,
+                socket_type: socketState.socketType,
+                address_family: socketState.addressFamily,
+                protocol: socketState.protocol,
+                result_code: len,
+                data_length: len,
+                has_buffer: buffer !== undefined
             };
 
-            am_send(PROFILE_HOOKING_TYPE, JSON.stringify(data));
+            if (local) {
+                eventData.local_ip = local.ip;
+                eventData.local_port = local.port;
+            }
+
+            if (remote) {
+                eventData.remote_ip = remote.ip;
+                eventData.remote_port = remote.port;
+            }
+
+            createSocketEvent("socket.native.sendmsg", eventData);
+
+            sendSocketPayloadEvent(
+                "socket.native.sendmsg_data",
+                this.sd,
+                len,
+                buffer
+            );
         }
     });
 
     safeAttachExport("libc.so", "recvmsg", "sockets:recvmsg", {
         onEnter(args) {
             this.sd = args[0].toInt32();
-            this.addr = args[1];
+            this.messageHeader = args[1];
         },
         onLeave(retval) {
             const len = retval.toInt32();
 
-            if (len === -1) {
+            if (len <= 0) {
                 return;
             }
 
-            const socketType = Socket.type(this.sd);
-            const socketLocal = Socket.localAddress(this.sd);
-            const local = socketLocal && isTcpEndpointAddress(socketLocal)
-                ? socketLocal
-                : undefined;
-            const socketRemote = Socket.peerAddress(this.sd);
-            const remote = socketRemote && isTcpEndpointAddress(socketRemote)
-                ? socketRemote
-                : undefined;
+            const socketState = trackSocketFromRuntime(this.sd);
 
-            if (
-                socketType === "unix:stream" ||
-                socketType == null ||
-                local === undefined ||
-                remote === undefined
-            ) {
+            if (!socketState || !isInetSocketType(socketState.socketType)) {
                 return;
             }
 
-            trackSocketFromRuntime(this.sd);
+            const local = getSocketEndpoint(this.sd, false);
+            const remote = getSocketEndpoint(this.sd, true);
 
-            const data = {
-                event_type: "Libc::recvmsg",
+            const buffer = captureIovecPayload(
+                this.messageHeader,
+                len
+            );
+
+            const eventData: any = {
                 method: "recvmsg",
-                sd: this.sd,
-                src_ip: remote.ip,
-                src_port: remote.port,
-                dst_ip: local.ip,
-                dst_port: local.port,
-                len: len,
-                type: socketType
+                socket_descriptor: this.sd,
+                socket_type: socketState.socketType,
+                address_family: socketState.addressFamily,
+                protocol: socketState.protocol,
+                result_code: len,
+                data_length: len,
+                has_buffer: buffer !== undefined
             };
 
-            am_send(PROFILE_HOOKING_TYPE, JSON.stringify(data));
+            if (local) {
+                eventData.local_ip = local.ip;
+                eventData.local_port = local.port;
+            }
+
+            if (remote) {
+                eventData.remote_ip = remote.ip;
+                eventData.remote_port = remote.port;
+            }
+
+            createSocketEvent("socket.native.recvmsg", eventData);
+
+            sendSocketPayloadEvent(
+                "socket.native.recvmsg_data",
+                this.sd,
+                len,
+                buffer
+            );
         }
     });
 
