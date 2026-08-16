@@ -256,7 +256,7 @@ class ConsoleFormatter(BaseFormatter):
             socket_desc = event.socket_description or 'Unknown Socket'
             lines.append(f"\n[*] [Socket] {operation} ({socket_desc}):")
 
-            if event.socket_descriptor:
+            if event.socket_descriptor is not None:
                 lines.append(f"[*] Socket FD: {event.socket_descriptor}")
 
             if event.local_address:
@@ -268,11 +268,23 @@ class ConsoleFormatter(BaseFormatter):
             if event.connection_string:
                 lines.append(f"[*] Connection: {event.connection_string}")
 
-            if event.data_length:
+            if event.data_length is not None:
                 lines.append(f"[*] Data Length: {event.data_length} bytes")
 
             if event.has_buffer:
                 lines.append("[*] Buffer Data: Available")
+
+            if event.socket_type:
+                lines.append(f"[*] Socket Type: {event.socket_type}")
+
+            if event.address_family is not None:
+                lines.append(f"[*] Address Family: {event.address_family}")
+
+            if event.protocol is not None:
+                lines.append(f"[*] Protocol: {event.protocol}")
+
+            if event.result_code is not None:
+                lines.append(f"[*] Result: {event.result_code}")
 
         else:
             lines.append(f"[*] [Network] {event.event_type}: {getattr(event, 'url', '') or getattr(event, 'uri', '') or 'Unknown'}")

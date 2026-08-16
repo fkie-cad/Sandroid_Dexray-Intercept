@@ -38,7 +38,10 @@ class NetworkParser(BaseParser):
             'has_buffer': 'has_buffer',
             'provider_class': 'provider_class',
             'declaring_class': 'declaring_class',
-            'overload_signature': 'overload_signature'
+            'overload_signature': 'overload_signature',
+            'address_family': 'address_family',
+            'protocol': 'protocol',
+            'result_code': 'result_code'
         }
         
         for json_field, event_field in field_mapping.items():

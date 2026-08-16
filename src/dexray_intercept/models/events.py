@@ -145,6 +145,9 @@ class NetworkEvent(Event):
         self.provider_class = None
         self.declaring_class = None
         self.overload_signature = None
+        self.address_family = None
+        self.protocol = None
+        self.result_code = None
 
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
@@ -155,6 +158,7 @@ class NetworkEvent(Event):
             'local_ip', 'local_port', 'remote_ip', 'remote_port',
             'local_address', 'remote_address', 'connection_string',
             'data_length', 'has_buffer', 'operation', 'socket_description',
+            'address_family', 'protocol', 'result_code',
             'provider_class', 'declaring_class', 'overload_signature'
         ]
 
