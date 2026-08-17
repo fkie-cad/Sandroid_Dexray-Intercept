@@ -1,8 +1,6 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd } from "../utils/android_runtime_requests.js"
-import { Java } from "../utils/javalib.js"
-import { Where } from "../utils/misc.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { safePerform, safeUse, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "CLIPBOARD"
 
@@ -34,14 +32,6 @@ function hook_clipboard() {
         );
         if (!ClipboardManager) return;
 
-        const Thread = safeUse(
-            "java.lang.Thread",
-            "clipboard:hook_clipboard"
-        );
-        if (!Thread) return;
-
-        const threadInstance = Thread.$new();
-
         // Hook setPrimaryClip(ClipData)
         const setPrimaryClipRef = ClipboardManager.setPrimaryClip;
         if (setPrimaryClipRef) {
@@ -49,7 +39,7 @@ function hook_clipboard() {
                 "clipboard:ClipboardManager.setPrimaryClip",
                 setPrimaryClipRef,
                 function (original, clip: any) {
-                    const stack = threadInstance.currentThread().getStackTrace();
+                    const java_stack_trace = collectJavaStackTrace();
 
                     try {
                         const itemCount = clip ? clip.getItemCount() : 0;
@@ -89,7 +79,7 @@ function hook_clipboard() {
                                 content_type: contentType,
                                 content: content,
                                 content_length: content ? content.length : 0,
-                                stack_trace: Where(stack)
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
                     } catch (e) {
@@ -97,7 +87,7 @@ function hook_clipboard() {
                             error_message: (e as Error).toString(),
                             library: "android.content.ClipboardManager",
                             method: "setPrimaryClip",
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -114,7 +104,7 @@ function hook_clipboard() {
                 "clipboard:ClipboardManager.getPrimaryClip",
                 getPrimaryClipRef,
                 function (original) {
-                    const stack = threadInstance.currentThread().getStackTrace();
+                    const java_stack_trace = collectJavaStackTrace();
                     const result = original.call(this);
 
                     createClipboardEvent("clipboard.get_primary_clip", {
@@ -122,7 +112,7 @@ function hook_clipboard() {
                         method: "getPrimaryClip",
                         has_clip: result !== null,
                         item_count: result ? result.getItemCount() : 0,
-                        stack_trace: Where(stack)
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return result;
