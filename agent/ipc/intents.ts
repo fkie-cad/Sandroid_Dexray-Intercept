@@ -1,7 +1,7 @@
 import { log, devlog, am_send } from "../utils/logging.js"
-import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
 import { safePerform, safeUse, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "IPC_INTENT"
 
@@ -16,12 +16,6 @@ function createIntentEvent(eventType: string, data: any): void {
         ...data
     };
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
-}
-
-function getStackTrace() {
-    const threadDef = Java.use('java.lang.Thread');
-    const threadInstance = threadDef.$new();
-    return Where(threadInstance.currentThread().getStackTrace());
 }
 
 function extractIntentData(intent: any): any {
@@ -110,10 +104,11 @@ function hookGetData(this: any, original: any): any {
     _inIntentExtraction = true;
     try {
         const intentData = extractIntentData(this);
+        const java_stack_trace = collectJavaStackTrace();
         createIntentEvent("intent.data_accessed", {
             intent: intentData,
             method: 'getData',
-            stack_trace: getStackTrace()
+            ...(java_stack_trace ? { java_stack_trace } : {})
         });
     } finally {
         _inIntentExtraction = false;
@@ -127,11 +122,12 @@ function hookGetIntent(this: any, original: any): any {
     try {
         intent = original.call(this);
         const intentData = extractIntentData(intent);
+        const java_stack_trace = collectJavaStackTrace();
         createIntentEvent("intent.accessed", {
             intent: intentData,
             source_class: this.$className,
             method: 'getIntent',
-            stack_trace: getStackTrace()
+            ...(java_stack_trace ? { java_stack_trace } : {})
         });
     } finally {
         _inIntentExtraction = false;

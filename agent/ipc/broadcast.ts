@@ -1,7 +1,7 @@
 import { devlog, am_send } from "../utils/logging.js"
-import { Where, toNullableInt, getIdentityHash } from "../utils/misc.js"
-import { Java } from "../utils/javalib.js"
+import { toNullableInt, getIdentityHash } from "../utils/misc.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "IPC_BROADCAST"
 
@@ -12,11 +12,6 @@ function createBroadcastEvent(eventType: string, data: any): void {
         ...data
     };
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
-}
-
-function getStackTrace() {
-    const Thread = Java.use('java.lang.Thread');
-    return Where(Thread.currentThread().getStackTrace());
 }
 
 /*
@@ -105,6 +100,7 @@ function hook_broadcasts() {
             extraData: any = {}
         ): void => {
             const actions = getIntentFilterActions(filter);
+            const java_stack_trace = collectJavaStackTrace();
 
             if (!receiver) {
                 createBroadcastEvent("broadcast.sticky_query", {
@@ -113,7 +109,7 @@ function hook_broadcasts() {
                     actions,
                     sticky_intent: result ? getIntentInfo(result) : null,
                     ...extraData,
-                    stack_trace: getStackTrace()
+                    ...(java_stack_trace ? { java_stack_trace } : {})
                 });
                 return;
             }
@@ -124,7 +120,7 @@ function hook_broadcasts() {
                 ...getReceiverInfo(receiver),
                 actions,
                 ...extraData,
-                stack_trace: getStackTrace()
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
         };
 
@@ -141,11 +137,12 @@ function hook_broadcasts() {
                     sendBroadcast1,
                     function(original, intent: any) {
                         const intentInfo = getIntentInfo(intent);
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("broadcast.sent", {
                             source_class: 'android.content.ContextWrapper',
                             method: 'sendBroadcast',
                             intent: intentInfo,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, intent);
                     }
@@ -163,12 +160,13 @@ function hook_broadcasts() {
                     sendBroadcast2,
                     function(original, intent: any, receiverPermission: string) {
                         const intentInfo = getIntentInfo(intent);
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("broadcast.sent", {
                             source_class: 'android.content.ContextWrapper',
                             method: 'sendBroadcast',
                             intent: intentInfo,
                             receiver_permission: receiverPermission,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, intent, receiverPermission);
                     }
@@ -188,11 +186,12 @@ function hook_broadcasts() {
                     sendSticky,
                     function(original, intent: any) {
                         const intentInfo = getIntentInfo(intent);
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("broadcast.sticky_sent", {
                             source_class: 'android.content.ContextWrapper',
                             method: 'sendStickyBroadcast',
                             intent: intentInfo,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, intent);
                     }
@@ -212,12 +211,13 @@ function hook_broadcasts() {
                     sendOrdered1,
                     function(original, intent: any, receiverPermission: string) {
                         const intentInfo = getIntentInfo(intent);
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("broadcast.ordered_sent", {
                             source_class: 'android.content.ContextWrapper',
                             method: 'sendOrderedBroadcast',
                             intent: intentInfo,
                             receiver_permission: receiverPermission,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, intent, receiverPermission);
                     }
@@ -240,6 +240,7 @@ function hook_broadcasts() {
                             initialCode: number, initialData: string, initialExtras: any) {
                         const intentInfo = getIntentInfo(intent);
                         const normalizedInitialCode = toNullableInt(initialCode);
+                        const java_stack_trace = collectJavaStackTrace();
 
                         createBroadcastEvent("broadcast.ordered_sent", {
                             source_class: 'android.content.ContextWrapper',
@@ -248,7 +249,7 @@ function hook_broadcasts() {
                             receiver_permission: receiverPermission,
                             initial_code: normalizedInitialCode,
                             initial_data: initialData,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return original.call(this, intent, receiverPermission, resultReceiver,
@@ -411,11 +412,12 @@ function hook_broadcasts() {
                     startFgService,
                     function(original, service: any) {
                         const intentInfo = getIntentInfo(service);
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("service.foreground_started", {
                             source_class: 'android.content.ContextWrapper',
                             method: 'startForegroundService',
                             intent: intentInfo,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, service);
                     }
@@ -438,11 +440,12 @@ function hook_broadcasts() {
                     "broadcast:Service.startForeground[int,Notification]",
                     startFg2,
                     function(original, id: number, notification: any) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("service.foreground_promoted", {
                             source_class: 'android.app.Service',
                             method: 'startForeground',
                             notification_id: id,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, id, notification);
                     }
@@ -459,12 +462,13 @@ function hook_broadcasts() {
                     "broadcast:Service.startForeground[int,Notification,int]",
                     startFg3,
                     function(original, id: number, notification: any, fgServiceType: number) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("service.foreground_promoted", {
                             source_class: 'android.app.Service',
                             method: 'startForeground',
                             notification_id: id,
                             foreground_service_type: fgServiceType,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, id, notification, fgServiceType);
                     }
@@ -484,11 +488,12 @@ function hook_broadcasts() {
                     startServiceOverload,
                     function(original, service: any) {
                         const intentInfo = getIntentInfo(service);
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("service.started", {
                             source_class: 'android.content.ContextWrapper',
                             method: 'startService',
                             intent: intentInfo,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, service);
                     }
@@ -508,11 +513,12 @@ function hook_broadcasts() {
                     stopServiceOverload,
                     function(original, name: any) {
                         const intentInfo = getIntentInfo(name);
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("service.stopped", {
                             source_class: 'android.content.ContextWrapper',
                             method: 'stopService',
                             intent: intentInfo,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, name);
                     }
@@ -532,12 +538,13 @@ function hook_broadcasts() {
                     bindServiceOverload,
                     function(original, service: any, conn: any, flags: number) {
                         const intentInfo = getIntentInfo(service);
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("service.bound", {
                             source_class: 'android.content.ContextWrapper',
                             method: 'bindService',
                             intent: intentInfo,
                             flags: flags,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, service, conn, flags);
                     }
@@ -556,10 +563,11 @@ function hook_broadcasts() {
                     "broadcast:ContextWrapper.unbindService[ServiceConnection]",
                     unbindServiceOverload,
                     function(original, conn: any) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("service.unbound", {
                             source_class: 'android.content.ContextWrapper',
                             method: 'unbindService',
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, conn);
                     }
@@ -663,11 +671,12 @@ function hook_broadcasts() {
 
                         const result = original.call(this, receiver);
 
+                        const java_stack_trace = collectJavaStackTrace();
                         createBroadcastEvent("receiver.unregistered", {
                             source_class: 'android.content.ContextWrapper',
                             method: 'unregisterReceiver',
                             ...receiverInfo,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return result;

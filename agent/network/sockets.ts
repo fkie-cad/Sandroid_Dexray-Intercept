@@ -1,8 +1,7 @@
 import { devlog, am_send } from "../utils/logging.js"
-import { Where } from "../utils/misc.js"
-import { Java } from "../utils/javalib.js"
 import { safeDeferred, safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
 import { safeAttachExport } from "../utils/safe_native.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 
 /**
@@ -39,14 +38,6 @@ function createSocketEvent(eventType: string, data: any): void {
 }
 
 // helper functions
-
-function getStackTrace() {
-    const threadDef = Java.use("java.lang.Thread");
-    const threadInstance = threadDef.$new();
-
-    return Where(threadInstance.currentThread().getStackTrace());
-}
-
 function swap16(value) {
     return ((value & 0xFF) << 8) |
         ((value >> 8) & 0xFF);
@@ -474,11 +465,12 @@ function hook_java_socket_communication() {
                     function(original) {
                         const result = original.call(this);
 
+                        const java_stack_trace = collectJavaStackTrace();
                         createSocketEvent("socket.java.server_accept", {
                             class: "java.net.ServerSocket",
                             method: "accept",
                             server_info: this.toString(),
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return result;
@@ -502,13 +494,14 @@ function hook_java_socket_communication() {
                     function(original, host, port) {
                         const result = original.call(this, host, port);
 
+                        const java_stack_trace = collectJavaStackTrace();
                         createSocketEvent("socket.java.init", {
                             class: "java.net.Socket",
                             method: "$init",
                             host: host,
                             port: port,
                             connection_string: `${host}:${port}`,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return result;
@@ -530,12 +523,13 @@ function hook_java_socket_communication() {
                     function(original, endpoint, timeout) {
                         const result = original.call(this, endpoint, timeout);
 
+                        const java_stack_trace = collectJavaStackTrace();
                         createSocketEvent("socket.java.connect", {
                             class: "java.net.Socket",
                             method: "connect",
                             endpoint: endpoint.toString(),
                             timeout: timeout,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return result;
@@ -556,11 +550,12 @@ function hook_java_socket_communication() {
                     function(original, endpoint) {
                         const result = original.call(this, endpoint);
 
+                        const java_stack_trace = collectJavaStackTrace();
                         createSocketEvent("socket.java.connect", {
                             class: "java.net.Socket",
                             method: "connect",
                             endpoint: endpoint.toString(),
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return result;
@@ -582,11 +577,12 @@ function hook_java_socket_communication() {
                     function(original) {
                         const result = original.call(this);
 
+                        const java_stack_trace = collectJavaStackTrace();
                         createSocketEvent("socket.java.local_accept", {
                             class: "android.net.LocalServerSocket",
                             method: "accept",
                             server_info: this.toString(),
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return result;
@@ -610,13 +606,14 @@ function hook_java_socket_communication() {
                     function(original, address, port) {
                         const result = original.call(this, address, port);
 
+                        const java_stack_trace = collectJavaStackTrace();
                         createSocketEvent("socket.java.datagram_connect", {
                             class: "java.net.DatagramSocket",
                             method: "connect",
                             address: address.toString(),
                             port: port,
                             connection_string: `${address}:${port}`,
-                            stack_trace: getStackTrace()
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return result;
