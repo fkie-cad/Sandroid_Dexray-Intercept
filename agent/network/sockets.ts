@@ -260,8 +260,23 @@ function readSocketBuffer(
     }
 }
 
+let nativeSocketOperationCounter = 0;
+
+function createSocketOperationId(socketDescriptor: number): string {
+    nativeSocketOperationCounter += 1;
+
+    return `socket-${socketDescriptor}-${nativeSocketOperationCounter}`;
+}
+
+function getCapturedLength(
+    buffer: ArrayBuffer | undefined
+): number | undefined {
+    return buffer ? buffer.byteLength : undefined;
+}
+
 function sendSocketPayloadEvent(
     eventType: string,
+    operationId: string,
     socketDescriptor: number,
     dataLength: number,
     buffer: ArrayBuffer | undefined
@@ -273,8 +288,11 @@ function sendSocketPayloadEvent(
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
         event_type: eventType,
         timestamp: Date.now(),
+        operation_id: operationId,
         socket_descriptor: socketDescriptor,
-        data_length: dataLength
+        data_length: dataLength,
+        captured_length: getCapturedLength(buffer),
+        has_buffer: true
     }), buffer);
 }
 
@@ -795,9 +813,11 @@ function hook_bionic_socket_communication(){
             if (!buf.isNull()) {
                 buffer = buf.readByteArray(len);
             }
+            const operationId = createSocketOperationId(this.sd);
 
             createSocketEvent("socket.native.write", {
                 method: "write",
+                operation_id: operationId,
                 socket_descriptor: this.sd,
                 socket_type: socketType,
                 local_ip: local.ip,
@@ -805,17 +825,17 @@ function hook_bionic_socket_communication(){
                 remote_ip: remote.ip,
                 remote_port: remote.port,
                 data_length: len,
+                captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined
             });
 
-            if (buffer) {
-                am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
-                    event_type: "socket.native.write_data",
-                    timestamp: Date.now(),
-                    socket_descriptor: this.sd,
-                    data_length: len
-                }), buffer);
-            }
+            sendSocketPayloadEvent(
+                "socket.native.write_data",
+                operationId,
+                this.sd,
+                len,
+                buffer
+            );
         }
     });
 
@@ -861,8 +881,11 @@ function hook_bionic_socket_communication(){
                     buffer = buf.readByteArray(len);
                 }
 
+                const operationId = createSocketOperationId(this.sd);
+
                 createSocketEvent("socket.native.read", {
                     method: "read",
+                    operation_id: operationId,
                     socket_descriptor: this.sd,
                     socket_type: socketType,
                     local_ip: local.ip,
@@ -870,17 +893,17 @@ function hook_bionic_socket_communication(){
                     remote_ip: remote.ip,
                     remote_port: remote.port,
                     data_length: len,
+                    captured_length: getCapturedLength(buffer),
                     has_buffer: buffer !== undefined
                 });
 
-                if (buffer) {
-                    am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
-                        event_type: "socket.native.read_data",
-                        timestamp: Date.now(),
-                        socket_descriptor: this.sd,
-                        data_length: len
-                    }), buffer);
-                }
+                sendSocketPayloadEvent(
+                    "socket.native.read_data",
+                    operationId,
+                    this.sd,
+                    len,
+                    buffer
+                );
             }
         });
     }
@@ -927,15 +950,18 @@ function hook_bionic_socket_communication(){
             }
 
             const buffer = readSocketBuffer(this.addr, len);
+            const operationId = createSocketOperationId(this.sd);
 
             const eventData: any = {
                 method: "sendto",
+                operation_id: operationId,
                 socket_descriptor: this.sd,
                 socket_type: socketState.socketType,
                 address_family: socketState.addressFamily,
                 protocol: socketState.protocol,
                 result_code: len,
                 data_length: len,
+                captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined
             };
 
@@ -953,6 +979,7 @@ function hook_bionic_socket_communication(){
 
             sendSocketPayloadEvent(
                 "socket.native.sendto_data",
+                operationId,
                 this.sd,
                 len,
                 buffer
@@ -1000,15 +1027,18 @@ function hook_bionic_socket_communication(){
             }
 
             const buffer = readSocketBuffer(this.addr, len);
+            const operationId = createSocketOperationId(this.sd);
 
             const eventData: any = {
                 method: "recvfrom",
+                operation_id: operationId,
                 socket_descriptor: this.sd,
                 socket_type: socketState.socketType,
                 address_family: socketState.addressFamily,
                 protocol: socketState.protocol,
                 result_code: len,
                 data_length: len,
+                captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined
             };
 
@@ -1026,6 +1056,7 @@ function hook_bionic_socket_communication(){
 
             sendSocketPayloadEvent(
                 "socket.native.recvfrom_data",
+                operationId,
                 this.sd,
                 len,
                 buffer
@@ -1071,9 +1102,11 @@ function hook_bionic_socket_communication(){
             if (!buf.isNull()) {
                 buffer = buf.readByteArray(len);
             }
+            const operationId = createSocketOperationId(this.sd);
 
             createSocketEvent("socket.native.send", {
                 method: "send",
+                operation_id: operationId,
                 socket_descriptor: this.sd,
                 socket_type: socketState.socketType,
                 address_family: socketState.addressFamily,
@@ -1084,17 +1117,17 @@ function hook_bionic_socket_communication(){
                 remote_ip: remote.ip,
                 remote_port: remote.port,
                 data_length: len,
+                captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined
             });
 
-            if (buffer) {
-                am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
-                    event_type: "socket.native.send_data",
-                    timestamp: Date.now(),
-                    socket_descriptor: this.sd,
-                    data_length: len
-                }), buffer);
-            }
+            sendSocketPayloadEvent(
+                "socket.native.send_data",
+                operationId,
+                this.sd,
+                len,
+                buffer
+            );
         }
     });
 
@@ -1136,9 +1169,11 @@ function hook_bionic_socket_communication(){
             if (!buf.isNull()) {
                 buffer = buf.readByteArray(len);
             }
+            const operationId = createSocketOperationId(this.sd);
 
             createSocketEvent("socket.native.recv", {
                 method: "recv",
+                operation_id: operationId,
                 socket_descriptor: this.sd,
                 socket_type: socketState.socketType,
                 address_family: socketState.addressFamily,
@@ -1149,17 +1184,17 @@ function hook_bionic_socket_communication(){
                 remote_ip: remote.ip,
                 remote_port: remote.port,
                 data_length: len,
+                captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined
             });
 
-            if (buffer) {
-                am_send(PROFILE_HOOKING_TYPE, JSON.stringify({
-                    event_type: "socket.native.recv_data",
-                    timestamp: Date.now(),
-                    socket_descriptor: this.sd,
-                    data_length: len
-                }), buffer);
-            }
+            sendSocketPayloadEvent(
+                "socket.native.recv_data",
+                operationId,
+                this.sd,
+                len,
+                buffer
+            );
         }
     });
 
@@ -1190,15 +1225,18 @@ function hook_bionic_socket_communication(){
                 this.messageHeader,
                 len
             );
+            const operationId = createSocketOperationId(this.sd);
 
             const eventData: any = {
                 method: "sendmsg",
+                operation_id: operationId,
                 socket_descriptor: this.sd,
                 socket_type: socketState.socketType,
                 address_family: socketState.addressFamily,
                 protocol: socketState.protocol,
                 result_code: len,
                 data_length: len,
+                captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined
             };
 
@@ -1216,6 +1254,7 @@ function hook_bionic_socket_communication(){
 
             sendSocketPayloadEvent(
                 "socket.native.sendmsg_data",
+                operationId,
                 this.sd,
                 len,
                 buffer
@@ -1250,15 +1289,18 @@ function hook_bionic_socket_communication(){
                 this.messageHeader,
                 len
             );
+            const operationId = createSocketOperationId(this.sd);
 
             const eventData: any = {
                 method: "recvmsg",
+                operation_id: operationId,
                 socket_descriptor: this.sd,
                 socket_type: socketState.socketType,
                 address_family: socketState.addressFamily,
                 protocol: socketState.protocol,
                 result_code: len,
                 data_length: len,
+                captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined
             };
 
@@ -1276,6 +1318,7 @@ function hook_bionic_socket_communication(){
 
             sendSocketPayloadEvent(
                 "socket.native.recvmsg_data",
+                operationId,
                 this.sd,
                 len,
                 buffer
