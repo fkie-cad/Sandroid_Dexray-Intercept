@@ -41,7 +41,10 @@ class NetworkParser(BaseParser):
             'overload_signature': 'overload_signature',
             'address_family': 'address_family',
             'protocol': 'protocol',
-            'result_code': 'result_code'
+            'result_code': 'result_code',
+            'operation_id': 'operation_id',
+            'captured_length': 'captured_length',
+            'data_hex': 'data_hex',
         }
         
         for json_field, event_field in field_mapping.items():

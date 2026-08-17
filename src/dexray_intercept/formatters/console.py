@@ -270,6 +270,12 @@ class ConsoleFormatter(BaseFormatter):
 
             if event.data_length is not None:
                 lines.append(f"[*] Data Length: {event.data_length} bytes")
+                
+            if event.captured_length is not None:
+                lines.append(f"[*] Captured Length: {event.captured_length} bytes")
+
+            if event.operation_id:
+                lines.append(f"[*] Operation ID: {event.operation_id}")
 
             if event.has_buffer:
                 lines.append("[*] Buffer Data: Available")
