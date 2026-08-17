@@ -1,7 +1,7 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { Java } from "../utils/javalib.js"
-import { Where, bytesToHex } from "../utils/misc.js"
+import { devlog, am_send } from "../utils/logging.js"
+import { bytesToHex } from "../utils/misc.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "BLUETOOTH"
 
@@ -34,9 +34,6 @@ function hook_bluetooth() {
             "android.bluetooth.BluetoothDevice",
             "bluetooth:hook_bluetooth"
         );
-        const threadDef = safeUse('java.lang.Thread', "bluetooth:hook_bluetooth");
-        if (!threadDef) return;
-        const threadInstance = threadDef.$new();
 
         if (BluetoothGatt) {
             const readChar = safeOverload(
@@ -49,7 +46,7 @@ function hook_bluetooth() {
                     "bluetooth:BluetoothGatt.readCharacteristic",
                     readChar,
                     function(original, characteristic: any) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const uuid = characteristic.getUuid().toString();
                         // getValue() removed - value is not available at this point (pre-read)
                         // actual value captured by the getValue hook after onCharacteristicRead fires
@@ -57,7 +54,7 @@ function hook_bluetooth() {
                             library: 'android.bluetooth.BluetoothGatt',
                             method: 'readCharacteristic',
                             characteristic_uuid: uuid,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, characteristic);
                     }
@@ -76,7 +73,7 @@ function hook_bluetooth() {
                     "bluetooth:BluetoothGattCharacteristic.setValue",
                     setValue,
                     function(original, value: any) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const uuid = this.getUuid().toString();
                         createBluetoothEvent("bluetooth.gatt.set_characteristic_value", {
                             library: 'android.bluetooth.BluetoothGattCharacteristic',
@@ -84,7 +81,7 @@ function hook_bluetooth() {
                             characteristic_uuid: uuid,
                             value_hex: value ? bytesToHex(new Uint8Array(value)) : null,
                             value_length: value ? value.length : 0,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, value);
                     }
@@ -103,7 +100,7 @@ function hook_bluetooth() {
                     "bluetooth:BluetoothGattCharacteristic.getValue",
                     getValueRef,
                     function(original) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const result = original.call(this);
                         const uuid = this.getUuid().toString();
                         createBluetoothEvent("bluetooth.gatt.get_characteristic_value", {
@@ -112,7 +109,7 @@ function hook_bluetooth() {
                             characteristic_uuid: uuid,
                             value_hex: result ? bytesToHex(new Uint8Array(result)) : null,
                             value_length: result ? result.length : 0,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return result;
                     }
@@ -132,13 +129,13 @@ function hook_bluetooth() {
                     "bluetooth:BluetoothAdapter.getDefaultAdapter",
                     getDefaultAdapterRef,
                     function(original) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const result = original.call(this);
                         createBluetoothEvent("bluetooth.adapter.get_default", {
                             library: 'android.bluetooth.BluetoothAdapter',
                             method: 'getDefaultAdapter',
                             adapter_available: result !== null,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return result;
                     }
@@ -154,13 +151,13 @@ function hook_bluetooth() {
                     "bluetooth:BluetoothAdapter.enable",
                     enableRef,
                     function(original) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const result = original.call(this);
                         createBluetoothEvent("bluetooth.adapter.enable", {
                             library: 'android.bluetooth.BluetoothAdapter',
                             method: 'enable',
                             success: result,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return result;
                     }
@@ -185,13 +182,13 @@ function hook_bluetooth() {
 
                         _inBluetoothDisable = true;
                         try {
-                            const stack = threadInstance.currentThread().getStackTrace();
+                            const java_stack_trace = collectJavaStackTrace();
                             const result = original.call(this);
                             createBluetoothEvent("bluetooth.adapter.disable", {
                                 library: 'android.bluetooth.BluetoothAdapter',
                                 method: 'disable',
                                 success: result,
-                                stack_trace: Where(stack)
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                             return result;
                         } finally {
@@ -218,14 +215,14 @@ function hook_bluetooth() {
 
                         _inBluetoothDisable = true;
                         try {
-                            const stack = threadInstance.currentThread().getStackTrace();
+                            const java_stack_trace = collectJavaStackTrace();
                             const result = original.call(this, killApps);
                             createBluetoothEvent("bluetooth.adapter.disable", {
                                 library: 'android.bluetooth.BluetoothAdapter',
                                 method: 'disable',
                                 success: result,
                                 kill_apps: killApps,
-                                stack_trace: Where(stack)
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                             return result;
                         } finally {
@@ -244,13 +241,13 @@ function hook_bluetooth() {
                     "bluetooth:BluetoothAdapter.startDiscovery",
                     startDiscoveryRef,
                     function(original) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const result = original.call(this);
                         createBluetoothEvent("bluetooth.adapter.start_discovery", {
                             library: 'android.bluetooth.BluetoothAdapter',
                             method: 'startDiscovery',
                             success: result,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return result;
                     }
@@ -268,13 +265,13 @@ function hook_bluetooth() {
                     "bluetooth:BluetoothAdapter.getAddress",
                     getAddressRef,
                     function(original) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const result = original.call(this);
                         createBluetoothEvent("bluetooth.adapter.get_address", {
                             library: 'android.bluetooth.BluetoothAdapter',
                             method: 'getAddress',
                             mac_address: result,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return result;
                     }
@@ -292,7 +289,7 @@ function hook_bluetooth() {
                     "bluetooth:BluetoothDevice.createBond",
                     createBondRef,
                     function(original) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const deviceAddress = this.getAddress();
                         const deviceName = this.getName();
                         const result = original.call(this);
@@ -302,7 +299,7 @@ function hook_bluetooth() {
                             device_address: deviceAddress,
                             device_name: deviceName,
                             success: result,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return result;
                     }

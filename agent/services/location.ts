@@ -1,8 +1,6 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd } from "../utils/android_runtime_requests.js"
-import { Java } from "../utils/javalib.js"
-import { Where } from "../utils/misc.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "LOCATION_ACCESS"
 
@@ -45,9 +43,6 @@ function hook_location() {
             'android.location.Location',
             "location:hook_location"
         );
-        const threadDef = safeUse('java.lang.Thread', "location:hook_location");
-        if (!threadDef) return;
-        const threadInstance = threadDef.$new();
 
         if (LocationManager) {
             const getLastKnown = safeOverload(
@@ -61,7 +56,7 @@ function hook_location() {
                     getLastKnown,
                     function(original, provider: string) {
                         const result = original.call(this, provider);
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         if (result !== null) {
                             _inLocationExtraction = true;
                             try {
@@ -77,7 +72,7 @@ function hook_location() {
                                     longitude: longitude,
                                     accuracy: accuracy,
                                     has_location: true,
-                                    stack_trace: Where(stack)
+                                    ...(java_stack_trace ? { java_stack_trace } : {})
                                 });
                             } finally {
                                 _inLocationExtraction = false;
@@ -88,7 +83,7 @@ function hook_location() {
                                 method: 'getLastKnownLocation',
                                 provider: provider,
                                 has_location: false,
-                                stack_trace: Where(stack)
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
                         return result;
@@ -112,7 +107,7 @@ function hook_location() {
 
                         _inLocationRequestUpdates = true;
                         try {
-                            const stack = threadInstance.currentThread().getStackTrace();
+                            const java_stack_trace = collectJavaStackTrace();
                             createLocationEvent("location.request_updates", {
                                 library: 'android.location.LocationManager',
                                 method: 'requestLocationUpdates',
@@ -121,7 +116,7 @@ function hook_location() {
                                 min_distance_m: minDistance,
                                 has_listener: listener !== null,
                                 overload: 'basic',
-                                stack_trace: Where(stack)
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                             return original.call(this, provider, minTime, minDistance, listener);
                         } finally {
@@ -149,7 +144,7 @@ function hook_location() {
 
                         _inLocationRequestUpdates = true;
                         try {
-                            const stack = threadInstance.currentThread().getStackTrace();
+                            const java_stack_trace = collectJavaStackTrace();
                             createLocationEvent("location.request_updates", {
                                 library: 'android.location.LocationManager',
                                 method: 'requestLocationUpdates',
@@ -159,7 +154,7 @@ function hook_location() {
                                 has_listener: listener !== null,
                                 has_looper: looper !== null,
                                 overload: 'with_looper',
-                                stack_trace: Where(stack)
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                             return original.call(this, provider, minTime, minDistance, listener, looper);
                         } finally {
@@ -182,13 +177,13 @@ function hook_location() {
                     }
 
                     const latitude = original.call(this);
-                    const stack = threadInstance.currentThread().getStackTrace();
+                    const java_stack_trace = collectJavaStackTrace();
 
                     createLocationEvent("location.get_latitude", {
                         library: 'android.location.Location',
                         method: 'getLatitude',
                         latitude: latitude,
-                        stack_trace: Where(stack)
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return latitude;
@@ -205,13 +200,13 @@ function hook_location() {
                     }
 
                     const longitude = original.call(this);
-                    const stack = threadInstance.currentThread().getStackTrace();
+                    const java_stack_trace = collectJavaStackTrace();
 
                     createLocationEvent("location.get_longitude", {
                         library: 'android.location.Location',
                         method: 'getLongitude',
                         longitude: longitude,
-                        stack_trace: Where(stack)
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return longitude;
@@ -224,12 +219,6 @@ function hook_location() {
 
 function hook_playstore_location_api() {
     safePerform("location:hook_playstore_location_api", () => {
-        const threadDef = safeUse(
-            "java.lang.Thread",
-            "location:hook_playstore_location_api"
-        );
-        if (!threadDef) return;
-        const threadInstance = threadDef.$new();
 
         /**
          * Hooks getLastLocation overloads on a concrete GMS client class.
@@ -273,7 +262,7 @@ function hook_playstore_location_api() {
 
                         _inFusedGetLastLocation = true;
                         try {
-                            const stack = threadInstance.currentThread().getStackTrace();
+                            const java_stack_trace = collectJavaStackTrace();
                             const result = original.call(this);
 
                             createLocationEvent("location.fused_provider.get_last_location", {
@@ -281,7 +270,7 @@ function hook_playstore_location_api() {
                                 method: "getLastLocation",
                                 provider: "google_play_services",
                                 overload: "no_arg",
-                                stack_trace: Where(stack)
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
 
                             return result;
@@ -309,7 +298,7 @@ function hook_playstore_location_api() {
 
                         _inFusedGetLastLocation = true;
                         try {
-                            const stack = threadInstance.currentThread().getStackTrace();
+                            const java_stack_trace = collectJavaStackTrace();
                             const result = original.call(this, request);
 
                             createLocationEvent("location.fused_provider.get_last_location", {
@@ -317,7 +306,7 @@ function hook_playstore_location_api() {
                                 method: "getLastLocation",
                                 provider: "google_play_services",
                                 overload: "last_location_request",
-                                stack_trace: Where(stack)
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
 
                             return result;

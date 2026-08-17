@@ -1,8 +1,6 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd } from "../utils/android_runtime_requests.js"
-import { Java } from "../utils/javalib.js"
-import { Where } from "../utils/misc.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "CAMERA"
 
@@ -29,12 +27,7 @@ function createCameraEvent(eventType: string, data: any): void {
 
 function hook_camera() {
     safePerform("camera:hook_camera", () => {
-        const Thread = safeUse("java.lang.Thread", "camera:hook_camera");
-        if (!Thread) return;
-        const threadInstance = Thread.$new();
-
         // --- Legacy Camera API (android.hardware.Camera) ---
-
         const Camera = safeUse("android.hardware.Camera", "camera:hook_camera");
         if (Camera) {
             // Camera.open() - default camera
@@ -48,7 +41,7 @@ function hook_camera() {
                     "camera:Camera.open[default]",
                     cameraOpenDefault,
                     function (original) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const result = original.call(this);
 
                         createCameraEvent("camera.legacy.open", {
@@ -56,7 +49,7 @@ function hook_camera() {
                             method: "open",
                             camera_id: "default",
                             success: result !== null,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return result;
@@ -75,7 +68,7 @@ function hook_camera() {
                     "camera:Camera.open[int]",
                     cameraOpenWithId,
                     function (original, cameraId: number) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const result = original.call(this, cameraId);
 
                         createCameraEvent("camera.legacy.open", {
@@ -83,7 +76,7 @@ function hook_camera() {
                             method: "open",
                             camera_id: cameraId,
                             success: result !== null,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return result;
@@ -114,7 +107,7 @@ function hook_camera() {
                     "camera:CameraManager.openCamera[handler]",
                     openCameraHandlerRef,
                     function (original, cameraId: string, callback: any, handler: any) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
 
                         createCameraEvent("camera.camera2.open", {
                             library: "android.hardware.camera2.CameraManager",
@@ -123,7 +116,7 @@ function hook_camera() {
                             has_callback: callback !== null,
                             has_handler: handler !== null,
                             overload: "handler",
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return original.call(this, cameraId, callback, handler);
@@ -146,7 +139,7 @@ function hook_camera() {
                     "camera:CameraManager.openCamera[executor]",
                     openCameraExecutorRef,
                     function (original, cameraId: string, executor: any, callback: any) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
 
                         createCameraEvent("camera.camera2.open", {
                             library: "android.hardware.camera2.CameraManager",
@@ -155,7 +148,7 @@ function hook_camera() {
                             has_executor: executor !== null,
                             has_callback: callback !== null,
                             overload: "executor",
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return original.call(this, cameraId, executor, callback);
@@ -173,7 +166,7 @@ function hook_camera() {
                     "camera:CameraManager.getCameraIdList",
                     getCameraIdListRef,
                     function (original) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const result = original.call(this);
 
                         createCameraEvent("camera.camera2.get_camera_list", {
@@ -181,7 +174,7 @@ function hook_camera() {
                             method: "getCameraIdList",
                             camera_count: result ? result.length : 0,
                             camera_ids: result ? result : [],
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return result;
