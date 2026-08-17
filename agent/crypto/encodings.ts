@@ -1,7 +1,7 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { Where, bytesToHexSafe } from "../utils/misc.js"
-import { Java } from "../utils/javalib.js"
+import { devlog, am_send } from "../utils/logging.js"
+import { bytesToHexSafe } from "../utils/misc.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "CRYPTO_ENCODING"
 
@@ -37,10 +37,6 @@ function install_base64_hooks(): void {
         const base64 = safeUse('android.util.Base64', "encodings:install_base64_hooks");
         if (!base64) return;
 
-        const threadDef = safeUse('java.lang.Thread', "encodings:install_base64_hooks");
-        if (!threadDef) return;
-        const threadInstance = threadDef.$new();
-
         // Method references are cached before any .implementation assignment.
         // Re-accessing the method after the first assignment replaces the overload
         // dispatcher on the wrapper, causing subsequent .overload() calls to fail.
@@ -58,7 +54,7 @@ function install_base64_hooks(): void {
                 function(original, str: string, flags: number) {
                     const result = original.call(this, str, flags);
                     if (result.length !== 0) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         createEncodingEvent("crypto.base64.decode", {
                             method: "decode(String, int)",
                             input_string: str,
@@ -67,7 +63,7 @@ function install_base64_hooks(): void {
                             output_length: result.length,
                             output_hex: bytesToHexSafe(result),
                             decoded_content: bytesToStringSafe(result),
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
                     return result;
@@ -85,7 +81,7 @@ function install_base64_hooks(): void {
                 function(original, input: number[], flags: number) {
                     const result = original.call(this, input, flags);
                     if (result.length !== 0) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         createEncodingEvent("crypto.base64.decode", {
                             method: "decode(byte[], int)",
                             flags: flags,
@@ -94,7 +90,7 @@ function install_base64_hooks(): void {
                             output_length: result.length,
                             output_hex: bytesToHexSafe(result),
                             decoded_content: bytesToStringSafe(result),
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
                     return result;
@@ -112,7 +108,7 @@ function install_base64_hooks(): void {
                 function(original, input: number[], offset: number, len: number, flags: number) {
                     const result = original.call(this, input, offset, len, flags);
                     if (result.length !== 0) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         createEncodingEvent("crypto.base64.decode", {
                             method: "decode(byte[], int, int, int)",
                             offset: offset,
@@ -123,7 +119,7 @@ function install_base64_hooks(): void {
                             output_length: result.length,
                             output_hex: bytesToHexSafe(result),
                             decoded_content: bytesToStringSafe(result),
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
                     return result;
@@ -141,7 +137,7 @@ function install_base64_hooks(): void {
                 function(original, input: number[], flags: number) {
                     const result = original.call(this, input, flags);
                     if (input.length !== 0) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         createEncodingEvent("crypto.base64.encode", {
                             method: "encode(byte[], int)",
                             flags: flags,
@@ -150,7 +146,7 @@ function install_base64_hooks(): void {
                             input_content: bytesToStringSafe(input),
                             output_length: result.length,
                             output_hex: bytesToHexSafe(result),
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
                     return result;
@@ -168,7 +164,7 @@ function install_base64_hooks(): void {
                 function(original, input: number[], offset: number, len: number, flags: number) {
                     const result = original.call(this, input, offset, len, flags);
                     if (input.length !== 0) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         createEncodingEvent("crypto.base64.encode", {
                             method: "encode(byte[], int, int, int)",
                             offset: offset,
@@ -179,7 +175,7 @@ function install_base64_hooks(): void {
                             input_content: bytesToStringSafe(Array.from(input).slice(offset, offset + len) as number[]),
                             output_length: result.length,
                             output_hex: bytesToHexSafe(result),
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
                     return result;
@@ -197,7 +193,7 @@ function install_base64_hooks(): void {
                 function(original, input: number[], offset: number, len: number, flags: number) {
                     const result = original.call(this, input, offset, len, flags);
                     if (input.length !== 0) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         createEncodingEvent("crypto.base64.encode_to_string", {
                             method: "encodeToString(byte[], int, int, int)",
                             offset: offset,
@@ -208,7 +204,7 @@ function install_base64_hooks(): void {
                             input_content: bytesToStringSafe(Array.from(input).slice(offset, offset + len) as number[]),
                             output_string: result,
                             output_length: result.length,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
                     return result;
@@ -226,7 +222,7 @@ function install_base64_hooks(): void {
                 function(original, input: number[], flags: number) {
                     const result = original.call(this, input, flags);
                     if (input.length !== 0) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         createEncodingEvent("crypto.base64.encode_to_string", {
                             method: "encodeToString(byte[], int)",
                             flags: flags,
@@ -235,7 +231,7 @@ function install_base64_hooks(): void {
                             input_content: bytesToStringSafe(input),
                             output_string: result,
                             output_length: result.length,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
                     return result;

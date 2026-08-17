@@ -1,7 +1,7 @@
 import { log, devlog, am_send } from "../utils/logging.js"
-import { Where, bytesToHexSafe } from "../utils/misc.js"
-import { Java } from "../utils/javalib.js"
+import { bytesToHexSafe } from "../utils/misc.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "CRYPTO_AES"
 
@@ -175,9 +175,7 @@ export function install_aes_info() {
         const cipher = safeUse("javax.crypto.Cipher", "aes:install_aes_info");
         if (!cipher) return;
 
-        const threadDef = safeUse('java.lang.Thread', "aes:install_aes_info");
-        if (!threadDef) return;
-        const threadInstance = threadDef.$new();
+        // Single [B overload handled separately, logs full input/output detail.
 
         // Single [B overload handled separately, logs full input/output detail.
         // Note: if original.call throws (e.g. BadPaddingException), safeImplementation
@@ -199,7 +197,7 @@ export function install_aes_info() {
                         const iv = this.getIV();
                         const inputHex = bytesToHexSafe(inputBytes);
                         const outputHex = bytesToHexSafe(result);
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         createAESEvent("crypto.cipher.operation", {
                             algorithm: algorithm,
                             operation_mode: session.opmode,
@@ -212,7 +210,7 @@ export function install_aes_info() {
                             plaintext: session.opmode === 1
                                 ? extractPlaintext(inputHex, session.opmode)
                                 : extractPlaintext(outputHex, session.opmode),
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         activeCipherSessions.delete(cipherId);
                     }
@@ -271,7 +269,7 @@ export function install_aes_info() {
                     if (session) {
                         const algorithm = this.getAlgorithm();
                         const iv = this.getIV();
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         // args[2] is the input byte count for overloads that take (byte[], int, int, ...)
                         // index 0 is the no-arg overload - no input array, input_length stays 0
                         const inputLength: number = (index > 0 && args.length >= 3)
@@ -289,7 +287,7 @@ export function install_aes_info() {
                             doFinal_variant: index + 1,
                             input_length: inputLength,
                             output_length: outputLength,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         activeCipherSessions.delete(cipherId);
                     }
