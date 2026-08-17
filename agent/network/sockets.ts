@@ -1,7 +1,7 @@
 import { devlog, am_send } from "../utils/logging.js"
-import { safeDeferred, safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeOverload, safeImplementation, safeDeferred } from "../utils/safe_java.js"
 import { safeAttachExport } from "../utils/safe_native.js"
-import { collectJavaStackTrace } from "../utils/stacktrace.js"
+import { collectJavaStackTrace, collectNativeBacktrace } from "../utils/stacktrace.js"
 
 
 /**
@@ -811,6 +811,7 @@ function hook_bionic_socket_communication(){
                 buffer = buf.readByteArray(len);
             }
             const operationId = createSocketOperationId(this.sd);
+            const native_backtrace = collectNativeBacktrace(this.context);
 
             createSocketEvent("socket.native.write", {
                 method: "write",
@@ -823,7 +824,8 @@ function hook_bionic_socket_communication(){
                 remote_port: remote.port,
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
-                has_buffer: buffer !== undefined
+                has_buffer: buffer !== undefined,
+                ...(native_backtrace ? { native_backtrace } : {})
             });
 
             sendSocketPayloadEvent(
@@ -879,6 +881,7 @@ function hook_bionic_socket_communication(){
                 }
 
                 const operationId = createSocketOperationId(this.sd);
+                const native_backtrace = collectNativeBacktrace(this.context);
 
                 createSocketEvent("socket.native.read", {
                     method: "read",
@@ -891,7 +894,8 @@ function hook_bionic_socket_communication(){
                     remote_port: remote.port,
                     data_length: len,
                     captured_length: getCapturedLength(buffer),
-                    has_buffer: buffer !== undefined
+                    has_buffer: buffer !== undefined,
+                    ...(native_backtrace ? { native_backtrace } : {})
                 });
 
                 sendSocketPayloadEvent(
@@ -948,6 +952,7 @@ function hook_bionic_socket_communication(){
 
             const buffer = readSocketBuffer(this.addr, len);
             const operationId = createSocketOperationId(this.sd);
+            const native_backtrace = collectNativeBacktrace(this.context);
 
             const eventData: any = {
                 method: "sendto",
@@ -970,6 +975,10 @@ function hook_bionic_socket_communication(){
             if (remote) {
                 eventData.remote_ip = remote.ip;
                 eventData.remote_port = remote.port;
+            }
+
+            if (native_backtrace) {
+                eventData.native_backtrace = native_backtrace;
             }
 
             createSocketEvent("socket.native.sendto", eventData);
@@ -1025,6 +1034,7 @@ function hook_bionic_socket_communication(){
 
             const buffer = readSocketBuffer(this.addr, len);
             const operationId = createSocketOperationId(this.sd);
+            const native_backtrace = collectNativeBacktrace(this.context);
 
             const eventData: any = {
                 method: "recvfrom",
@@ -1047,6 +1057,10 @@ function hook_bionic_socket_communication(){
             if (remote) {
                 eventData.remote_ip = remote.ip;
                 eventData.remote_port = remote.port;
+            }
+
+            if (native_backtrace) {
+                eventData.native_backtrace = native_backtrace;
             }
 
             createSocketEvent("socket.native.recvfrom", eventData);
@@ -1100,6 +1114,7 @@ function hook_bionic_socket_communication(){
                 buffer = buf.readByteArray(len);
             }
             const operationId = createSocketOperationId(this.sd);
+            const native_backtrace = collectNativeBacktrace(this.context);
 
             createSocketEvent("socket.native.send", {
                 method: "send",
@@ -1115,7 +1130,8 @@ function hook_bionic_socket_communication(){
                 remote_port: remote.port,
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
-                has_buffer: buffer !== undefined
+                has_buffer: buffer !== undefined,
+                ...(native_backtrace ? { native_backtrace } : {})
             });
 
             sendSocketPayloadEvent(
@@ -1167,6 +1183,7 @@ function hook_bionic_socket_communication(){
                 buffer = buf.readByteArray(len);
             }
             const operationId = createSocketOperationId(this.sd);
+            const native_backtrace = collectNativeBacktrace(this.context);
 
             createSocketEvent("socket.native.recv", {
                 method: "recv",
@@ -1182,7 +1199,8 @@ function hook_bionic_socket_communication(){
                 remote_port: remote.port,
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
-                has_buffer: buffer !== undefined
+                has_buffer: buffer !== undefined,
+                ...(native_backtrace ? { native_backtrace } : {})
             });
 
             sendSocketPayloadEvent(
@@ -1223,6 +1241,7 @@ function hook_bionic_socket_communication(){
                 len
             );
             const operationId = createSocketOperationId(this.sd);
+            const native_backtrace = collectNativeBacktrace(this.context);
 
             const eventData: any = {
                 method: "sendmsg",
@@ -1245,6 +1264,10 @@ function hook_bionic_socket_communication(){
             if (remote) {
                 eventData.remote_ip = remote.ip;
                 eventData.remote_port = remote.port;
+            }
+
+            if (native_backtrace) {
+                eventData.native_backtrace = native_backtrace;
             }
 
             createSocketEvent("socket.native.sendmsg", eventData);
@@ -1287,6 +1310,7 @@ function hook_bionic_socket_communication(){
                 len
             );
             const operationId = createSocketOperationId(this.sd);
+            const native_backtrace = collectNativeBacktrace(this.context);
 
             const eventData: any = {
                 method: "recvmsg",
@@ -1309,6 +1333,10 @@ function hook_bionic_socket_communication(){
             if (remote) {
                 eventData.remote_ip = remote.ip;
                 eventData.remote_port = remote.port;
+            }
+
+            if (native_backtrace) {
+                eventData.native_backtrace = native_backtrace;
             }
 
             createSocketEvent("socket.native.recvmsg", eventData);
