@@ -12,6 +12,7 @@ import {
 
 import { am_send, devlog } from "../utils/logging.js";
 import { bytesToHex } from "../utils/misc.js";
+import { buildBacktrace } from "../utils/stacktrace.js";
 
 const PROFILE_HOOKING_TYPE = "JNI_TRACE";
 
@@ -275,49 +276,6 @@ function safeReadUtf8String(ptr: any): string | null {
         devlog(`[JNI] Failed to read UTF-8 string: ${e}`);
     }
     return null;
-}
-
-function buildBacktrace(bt: any): any[] | undefined {
-    if (!bt || !Array.isArray(bt)) {
-        return undefined;
-    }
-
-    const frames: any[] = [];
-
-    for (const addr of bt) {
-        try {
-            const addressStr = addr.toString();
-            const mod = Process.findModuleByAddress(addr);
-            const sym = DebugSymbol.fromAddress(addr);
-
-            frames.push({
-                address: addressStr,
-                module: mod
-                    ? {
-                        name: mod.name,
-                        base: mod.base.toString(),
-                        path: mod.path
-                    }
-                    : null,
-                symbol: sym
-                    ? {
-                        address: sym.address.toString(),
-                        name: sym.name,
-                        moduleName: sym.moduleName
-                    }
-                    : null
-            });
-        } catch (e) {
-            // If anything fails, at least keep the raw address
-            frames.push({
-                address: addr.toString(),
-                module: null,
-                symbol: null
-            });
-        }
-    }
-
-    return frames.length > 0 ? frames : undefined;
 }
 
 function isObjectLikeNativeType(nativeType: string): boolean {
