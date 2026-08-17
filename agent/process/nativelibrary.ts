@@ -1,8 +1,7 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd } from "../utils/android_runtime_requests.js"
-import { Where } from "../utils/misc.js"
-import { Java } from "../utils/javalib.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { safeResolveExport, safeAttach } from "../utils/safe_native.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
+
 const PROFILE_HOOKING_TYPE: string = "PROCESS_NATIVE_LIB"
 
 function createNativeLibEvent(eventType: string, data: any): void {
@@ -23,16 +22,14 @@ function hook_native_lib_loading(){
         safeAttach(dlopen, "nativelibrary:dlopen", {
             onEnter: function(args){
                 const soName = args[0].readCString();
-                const threadDef = Java.use('java.lang.Thread');
-                const threadInstance = threadDef.$new();
-                const stack = threadInstance.currentThread().getStackTrace();
-                
+                const java_stack_trace = collectJavaStackTrace();
+
                 createNativeLibEvent("native.library.load", {
                     library_name: soName,
                     load_method: "dlopen",
                     library_path: soName,
                     module_base: dlopen.toString(),
-                    stack_trace: Where(stack)
+                    ...(java_stack_trace ? { java_stack_trace } : {})
                 });
 
                 if(soName && soName.indexOf("libc.so") !== -1){
@@ -74,10 +71,8 @@ function hook_native_lib_loading(){
                 const soName = args[0].readCString();
                 const flags = args[1];
                 const extinfo = args[2];
-                const threadDef = Java.use('java.lang.Thread');
-                const threadInstance = threadDef.$new();
-                const stack = threadInstance.currentThread().getStackTrace();
-                
+                const java_stack_trace = collectJavaStackTrace();
+
                 createNativeLibEvent("native.library.load", {
                     library_name: soName,
                     load_method: "android_dlopen_ext",
@@ -85,7 +80,7 @@ function hook_native_lib_loading(){
                     flags: flags ? flags.toInt32() : null,
                     extinfo: extinfo ? extinfo.toString() : null,
                     module_base: android_dlopen_ext.toString(),
-                    stack_trace: Where(stack)
+                    ...(java_stack_trace ? { java_stack_trace } : {})
                 });
 
                 if(soName && soName.indexOf("libc.so") !== -1){

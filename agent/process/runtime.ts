@@ -1,8 +1,8 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd, java_stack_trace } from "../utils/android_runtime_requests.js"
+import { devlog, am_send } from "../utils/logging.js"
+import { java_stack_trace } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
-import { Where } from "../utils/misc.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "RUNTIME_HOOKS"
 
@@ -25,17 +25,13 @@ function hook_runtime() {
         const Runtime = safeUse('java.lang.Runtime', "runtime:hook_runtime");
         if (!Runtime) return;
 
-        const threadDef = safeUse('java.lang.Thread', "runtime:hook_runtime");
-        if (!threadDef) return;
-        const threadInstance = threadDef.$new();
-
         // exec: hook all overloads
         Runtime.exec.overloads.forEach((overload: any, index: number) => {
             overload.implementation = safeImplementation(
                 `runtime:Runtime.exec[${index}]`,
                 overload,
                 function(original, ...args: any[]) {
-                    const stack = threadInstance.currentThread().getStackTrace();
+                    const java_stack_trace = collectJavaStackTrace();
 
                     let commandStr = null;
                     const command = args[0];
@@ -57,7 +53,7 @@ function hook_runtime() {
                         command: commandStr,
                         environment: envp ? envp.toString() : null,
                         working_directory: dir ? dir.toString() : null,
-                        stack_trace: Where(stack)
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return original.apply(this, args);
@@ -71,13 +67,13 @@ function hook_runtime() {
                 `runtime:Runtime.loadLibrary[${index}]`,
                 overload,
                 function(original, libname: any) {
-                    const stack = threadInstance.currentThread().getStackTrace();
+                    const java_stack_trace = collectJavaStackTrace();
                     createRuntimeEvent("runtime.load_library", {
                         library: 'java.lang.Runtime',
                         method: 'loadLibrary',
                         overload_index: index,
                         library_name: libname ? libname.toString() : null,
-                        stack_trace: Where(stack)
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
                     return original.call(this, libname);
                 }
@@ -90,13 +86,13 @@ function hook_runtime() {
                 `runtime:Runtime.load[${index}]`,
                 overload,
                 function(original, filename: any) {
-                    const stack = threadInstance.currentThread().getStackTrace();
+                    const java_stack_trace = collectJavaStackTrace();
                     createRuntimeEvent("runtime.load", {
                         library: 'java.lang.Runtime',
                         method: 'load',
                         overload_index: index,
                         filename: filename ? filename.toString() : null,
-                        stack_trace: Where(stack)
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
                     return original.call(this, filename);
                 }
@@ -108,10 +104,6 @@ function hook_runtime() {
 function trace_reflection() {
     safePerform("runtime:trace_reflection", () => {
         const internalClasses: string[] = ["android.", "com.android", "java.lang", "java.io"];
-
-        const threadDef = safeUse('java.lang.Thread', "runtime:trace_reflection");
-        if (!threadDef) return;
-        const threadInstance = threadDef.$new();
 
         const classDef = safeUse('java.lang.Class', "runtime:trace_reflection");
         const classLoaderDef = safeUse('java.lang.ClassLoader', "runtime:trace_reflection");
@@ -130,7 +122,7 @@ function trace_reflection() {
                     getMethod,
                     function(original, methodName: string, paramTypes: any) {
                         const method = original.call(this, methodName, paramTypes);
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         createRuntimeEvent("reflection.get_method", {
                             library: 'java.lang.Class',
                             method: 'getMethod',
@@ -138,7 +130,7 @@ function trace_reflection() {
                             method_signature: method.toGenericString(),
                             class_name: this.getName(),
                             access_type: 'public',
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return method;
                     }
@@ -157,7 +149,7 @@ function trace_reflection() {
                     getDeclaredMethod,
                     function(original, methodName: string, paramTypes: any) {
                         const method = original.call(this, methodName, paramTypes);
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         createRuntimeEvent("reflection.get_declared_method", {
                             library: 'java.lang.Class',
                             method: 'getDeclaredMethod',
@@ -165,7 +157,7 @@ function trace_reflection() {
                             method_signature: method.toGenericString(),
                             class_name: this.getName(),
                             access_type: 'any',
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return method;
                     }
@@ -191,7 +183,7 @@ function trace_reflection() {
                             }
                         }
                         if (!isInternal) {
-                            const stack = threadInstance.currentThread().getStackTrace();
+                            const java_stack_trace = collectJavaStackTrace();
                             createRuntimeEvent("reflection.class_for_name", {
                                 library: 'java.lang.Class',
                                 method: 'forName',
@@ -199,7 +191,7 @@ function trace_reflection() {
                                 initialize: flag,
                                 class_loader: class_loader ? class_loader.toString() : null,
                                 is_internal: isInternal,
-                                stack_trace: Where(stack)
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
                         return original.call(this, class_name, flag, class_loader);
@@ -228,14 +220,14 @@ function trace_reflection() {
                             }
                         }
                         if (!isInternal) {
-                            const stack = threadInstance.currentThread().getStackTrace();
+                            const java_stack_trace = collectJavaStackTrace();
                             createRuntimeEvent("reflection.load_class", {
                                 library: 'java.lang.ClassLoader',
                                 method: 'loadClass',
                                 class_name: class_name,
                                 resolve: resolve,
                                 is_internal: isInternal,
-                                stack_trace: Where(stack)
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
                         return original.call(this, class_name, resolve);
@@ -256,7 +248,7 @@ function trace_reflection() {
                     "runtime:Method.invoke",
                     invoke,
                     function(original, instance: any, args: any) {
-                        const stack = threadInstance.currentThread().getStackTrace();
+                        const java_stack_trace = collectJavaStackTrace();
                         const result = original.call(this, instance, args);
 
                         let argumentsStr = null;
@@ -276,7 +268,7 @@ function trace_reflection() {
                             target_instance: instance ? instance.toString() : null,
                             arguments: argumentsStr,
                             result: result ? result.toString() : null,
-                            stack_trace: Where(stack)
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return result;

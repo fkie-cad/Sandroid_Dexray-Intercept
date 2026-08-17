@@ -1,9 +1,7 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd } from "../utils/android_runtime_requests.js"
-import { Java } from "../utils/javalib.js"
-import { Where } from "../utils/misc.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { safePerform, safeUse, safeImplementation } from "../utils/safe_java.js"
 import { safeAttachExport } from "../utils/safe_native.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "PROCESS_CREATION"
 
@@ -21,10 +19,6 @@ function hook_java_process_creation() {
         const Process = safeUse('android.os.Process', "process:hook_java_process_creation");
         if (!Process) return;
 
-        const threadDef = safeUse('java.lang.Thread', "process:hook_java_process_creation");
-        if (!threadDef) return;
-        const threadInstance = threadDef.$new();
-
         if (Process.start) {
             const startRef = Process.start;
             startRef.implementation = safeImplementation(
@@ -36,7 +30,7 @@ function hook_java_process_creation() {
                         debugFlags, mountExternal, targetSdkVersion,
                         seInfo, abi, instructionSet, appDataDir, zygoteArgs
                     ] = args;
-                    const stack = threadInstance.currentThread().getStackTrace();
+                    const java_stack_trace = collectJavaStackTrace();
                     createProcessEvent("process.creation", {
                         library: 'android.os.Process',
                         method: 'start',
@@ -53,7 +47,7 @@ function hook_java_process_creation() {
                         instruction_set: instructionSet,
                         app_data_dir: appDataDir,
                         zygote_args: zygoteArgs ? zygoteArgs.toString() : null,
-                        stack_trace: Where(stack)
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
                     return original.apply(this, args);
                 }
