@@ -5,6 +5,7 @@ import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from colorama import Fore
+import json
 
 from ..models.profile import ProfileData
 from ..models.events import Event, DEXEvent
@@ -114,6 +115,12 @@ class ProfileCollector:
                 return self._handle_dex_loading(profile_content, timestamp)
             
             # Process regular events
+            profile_content = self._attach_native_socket_payload(
+                profile_type,
+                profile_content,
+                data
+            )
+
             return self._process_event(profile_type, profile_content, timestamp)
             
         except Exception as e:
@@ -305,6 +312,36 @@ class ProfileCollector:
                     self.orig_file_location = get_orig_path(content)
 
                 return True
+    
+    
+    def _attach_native_socket_payload(self, category: str, content: str, data: Any) -> str:
+        """Attach Frida binary data to native socket companion events."""
+        if category != "NETWORK_SOCKETS" or data is None:
+            return content
+
+        try:
+            event_data = json.loads(content)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return content
+
+        event_type = event_data.get("event_type", "")
+
+        if (
+            not event_type.startswith("socket.native.")
+            or not event_type.endswith("_data")
+        ):
+            return content
+
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            return content
+
+        raw_data = bytes(data)
+
+        event_data["captured_length"] = len(raw_data)
+        event_data["data_hex"] = raw_data.hex()
+        event_data["has_buffer"] = True
+
+        return json.dumps(event_data)
     
     def _process_event(self, category: str, content: str, timestamp: str) -> bool:
         """Process a regular event"""
