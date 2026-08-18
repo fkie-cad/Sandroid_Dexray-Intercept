@@ -1,7 +1,6 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd } from "../utils/android_runtime_requests.js"
-import { Java } from "../utils/javalib.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "IPC_SHARED-PREF"
 
@@ -45,10 +44,12 @@ function hook_shared_preferences() {
                     sharedPrefsInit,
                     function(original, file, mode) {
                         const result = original.call(this, file, mode);
+                        const java_stack_trace = collectJavaStackTrace();
                         createSharedPrefEvent("shared_prefs.init", {
                             method: "SharedPreferencesImpl.$init",
                             file: file.getAbsolutePath(),
-                            mode: mode
+                            mode: mode,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return result;
                     }
@@ -68,10 +69,12 @@ function hook_shared_preferences() {
                     "shared_prefs:SharedPreferencesImpl$EditorImpl.putString",
                     putString,
                     function(original, key, value) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createSharedPrefEvent("shared_prefs.put_string", {
                             method: "putString",
                             key: key,
-                            value: value
+                            value: value,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, key, value);
                     }
@@ -97,10 +100,12 @@ function hook_shared_preferences() {
                         `shared_prefs:SharedPreferencesImpl$EditorImpl.${method}`,
                         overload,
                         function(original, key: string, value: any) {
+                            const java_stack_trace = collectJavaStackTrace();
                             createSharedPrefEvent(`shared_prefs.${method.toLowerCase()}`, {
                                 method: method,
                                 key: key,
-                                value: value.toString()
+                                value: value.toString(),
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                             return original.call(this, key, value);
                         }
@@ -129,8 +134,10 @@ function hook_datastore() {
                     `shared_prefs:DataStore.updateData[${index}]`,
                     overload,
                     function (original, ...args: any[]) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createSharedPrefEvent("datastore.update", {
-                            method: "updateData"
+                            method: "updateData",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.apply(this, args);
                     }
@@ -149,8 +156,10 @@ function hook_datastore() {
                     getData,
                     function (original) {
                         const flow = original.call(this);
+                        const java_stack_trace = collectJavaStackTrace();
                         createSharedPrefEvent("datastore.get", {
-                            method: "getData"
+                            method: "getData",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return flow;
                     }
@@ -174,10 +183,12 @@ function hook_datastore() {
                     prefsGet,
                     function (original, key: any) {
                         const value = original.call(this, key);
+                        const java_stack_trace = collectJavaStackTrace();
                         createSharedPrefEvent("datastore_prefs.get", {
                             method: "get",
                             key: key ? key.toString() : "unknown",
-                            value: value ? value.toString() : null
+                            value: value ? value.toString() : null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return value;
                     }
@@ -201,10 +212,12 @@ function hook_datastore() {
                     mutableGet,
                     function (original, key: any) {
                         const value = original.call(this, key);
+                        const java_stack_trace = collectJavaStackTrace();
                         createSharedPrefEvent("datastore_prefs.get", {
                             method: "get",
                             key: key ? key.toString() : "unknown",
-                            value: value ? value.toString() : null
+                            value: value ? value.toString() : null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return value;
                     }
@@ -227,9 +240,11 @@ function hook_datastore() {
                     "shared_prefs:Preferences$Key.$init",
                     keyInit,
                     function (original, keyName: string) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createSharedPrefEvent("datastore_prefs.key_init", {
                             method: "$init",
-                            key: keyName
+                            key: keyName,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, keyName);
                     }
