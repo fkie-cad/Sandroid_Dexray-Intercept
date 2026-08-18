@@ -15,7 +15,7 @@ import {
     safeNativeFunction,
     safeReplace
 } from "../utils/safe_native.js";
-import { collectJavaStackTrace, collectNativeBacktrace } from "../utils/stacktrace.js";
+import { collectJavaStackTrace } from "../utils/stacktrace.js";
 
 
 /**
@@ -2810,8 +2810,6 @@ function hook_native_sqlite() {
                             );
                         }
 
-                        const native_backtrace = collectNativeBacktrace(this.context);
-
                         createDatabaseEvent("database.native.open", {
                             method: functionName,
                             native_function: functionName,
@@ -2823,8 +2821,7 @@ function hook_native_sqlite() {
                             status: resultCode === 0
                                 ? "success"
                                 : `error code ${resultCode}`,
-                            database_type: "Native SQLite",
-                            ...(native_backtrace ? { native_backtrace } : {})
+                            database_type: "Native SQLite"
                         });
                     }
                 });
@@ -2857,8 +2854,6 @@ function hook_native_sqlite() {
                         );
                     }
 
-                    const native_backtrace = collectNativeBacktrace(this.context);
-
                     createDatabaseEvent("database.native.open", {
                         method: "sqlite3_open16",
                         native_function: "sqlite3_open16",
@@ -2871,8 +2866,7 @@ function hook_native_sqlite() {
                             ? "success"
                             : `error code ${resultCode}`,
                         database_type: "Native SQLite",
-                        sql_encoding: "utf16",
-                        ...(native_backtrace ? { native_backtrace } : {})
+                        sql_encoding: "utf16"
                     });
                 }
             });
@@ -2891,7 +2885,6 @@ function hook_native_sqlite() {
 
                 onLeave(retval) {
                     const resultCode = retval.toInt32();
-                    const native_backtrace = collectNativeBacktrace(this.context);
 
                     createDatabaseEvent("database.native.exec", {
                         method: "sqlite3_exec",
@@ -2905,8 +2898,7 @@ function hook_native_sqlite() {
                         status: resultCode === 0
                             ? "success"
                             : `error code ${resultCode}`,
-                        database_type: "Native SQLite",
-                        ...(native_backtrace ? { native_backtrace } : {})
+                        database_type: "Native SQLite"
                     });
                 }
             });
@@ -2954,8 +2946,6 @@ function hook_native_sqlite() {
                             );
                         }
 
-                        const native_backtrace = collectNativeBacktrace(this.context);
-
                         createDatabaseEvent("database.native.prepare", {
                             method: functionName,
                             native_function: functionName,
@@ -2970,8 +2960,7 @@ function hook_native_sqlite() {
                             status: resultCode === 0
                                 ? "success"
                                 : `error code ${resultCode}`,
-                            database_type: "Native SQLite",
-                            ...(native_backtrace ? { native_backtrace } : {})
+                            database_type: "Native SQLite"
                         });
                     }
                 });
@@ -3020,8 +3009,6 @@ function hook_native_sqlite() {
                             );
                         }
 
-                        const native_backtrace = collectNativeBacktrace(this.context);
-
                         createDatabaseEvent("database.native.prepare", {
                             method: functionName,
                             native_function: functionName,
@@ -3036,8 +3023,7 @@ function hook_native_sqlite() {
                             status: resultCode === 0
                                 ? "success"
                                 : `error code ${resultCode}`,
-                            database_type: "Native SQLite",
-                            ...(native_backtrace ? { native_backtrace } : {})
+                            database_type: "Native SQLite"
                         });
                     }
                 });
@@ -3066,8 +3052,6 @@ function hook_native_sqlite() {
                         status = `error code ${resultCode}`;
                     }
 
-                    const native_backtrace = collectNativeBacktrace(this.context);
-
                     createDatabaseEvent("database.native.step", {
                         method: "sqlite3_step",
                         native_function: "sqlite3_step",
@@ -3083,8 +3067,7 @@ function hook_native_sqlite() {
                         statement_handle: this.statementHandle,
                         result_code: resultCode,
                         status: status,
-                        database_type: "Native SQLite",
-                        ...(native_backtrace ? { native_backtrace } : {})
+                        database_type: "Native SQLite"
                     });
                 }
             });
@@ -3141,7 +3124,6 @@ function hook_native_sqlite() {
 
                     onLeave(retval) {
                         const resultCode = retval.toInt32();
-                        const native_backtrace = collectNativeBacktrace(this.context);
 
                         createDatabaseEvent("database.native.close", {
                             method: functionName,
@@ -3154,8 +3136,7 @@ function hook_native_sqlite() {
                             status: resultCode === 0
                                 ? "success"
                                 : `error code ${resultCode}`,
-                            database_type: "Native SQLite",
-                            ...(native_backtrace ? { native_backtrace } : {})
+                            database_type: "Native SQLite"
                         });
 
                         if (resultCode !== 0) {
@@ -3212,14 +3193,12 @@ function hook_native_sqlite() {
             functionName: string,
             statementHandle: string,
             bindIndex: number,
-            data: Record<string, any>,
-            context?: CpuContext
+            data: Record<string, any>
         ): void {
             const statementContext = getStatementContext(
                 module,
                 statementHandle
             );
-            const native_backtrace = collectNativeBacktrace(context);
 
             createDatabaseEvent("database.native.bind", {
                 method: functionName,
@@ -3236,7 +3215,6 @@ function hook_native_sqlite() {
                 sql_encoding: statementContext?.sql_encoding || null,
                 bind_index: bindIndex,
                 database_type: "Native SQLite",
-                ...(native_backtrace ? { native_backtrace } : {}),
                 ...data
             });
         }
@@ -3244,15 +3222,13 @@ function hook_native_sqlite() {
         function emitBindEvent(
             functionName: string,
             args: InvocationArguments,
-            data: Record<string, any>,
-            context?: CpuContext
+            data: Record<string, any>
         ): void {
             emitBindEventForStatement(
                 functionName,
                 args[0].toString(),
                 args[1].toInt32(),
-                data,
-                context
+                data
             );
         }
 
@@ -3266,7 +3242,7 @@ function hook_native_sqlite() {
                         bind_value: readUtf8(args[2], byteLength),
                         bind_value_length: byteLength >= 0 ? byteLength : null,
                         value_available: true
-                    }, this.context);
+                    });
                 }
             });
         });
@@ -3281,7 +3257,7 @@ function hook_native_sqlite() {
                         bind_value: readUtf16(args[2], byteLength),
                         bind_value_length: byteLength >= 0 ? byteLength : null,
                         value_available: true
-                    }, this.context);
+                    });
                 }
             });
         });
@@ -3299,7 +3275,7 @@ function hook_native_sqlite() {
                         bind_value_preview_length: blob.preview_length,
                         bind_value_truncated: blob.truncated,
                         value_available: blob.value_hex !== null
-                    }, this.context);
+                    });
                 }
             });
         });
@@ -3311,7 +3287,7 @@ function hook_native_sqlite() {
                         bind_type: "int",
                         bind_value: args[2].toInt32(),
                         value_available: true
-                    }, this.context);
+                    });
                 }
             });
         });
@@ -3376,7 +3352,7 @@ function hook_native_sqlite() {
                         bind_type: "int64",
                         bind_value: bindValue.value,
                         value_available: bindValue.value_available
-                    }, this.context);
+                    });
                 }
             });
         });
@@ -3454,7 +3430,7 @@ function hook_native_sqlite() {
                         bind_type: "double",
                         bind_value: bindValue,
                         value_available: valueAvailable
-                    }, this.context);
+                    });
                 }
             });
         });
@@ -3466,7 +3442,7 @@ function hook_native_sqlite() {
                         bind_type: "null",
                         bind_value: null,
                         value_available: true
-                    }, this.context);
+                    });
                 }
             });
         });
