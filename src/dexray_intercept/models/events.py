@@ -138,8 +138,8 @@ class NetworkEvent(Event):
         self.local_address = None
         self.remote_address = None
         self.connection_string = None
-        self.data_length = 0
-        self.has_buffer = False
+        self.data_length = None
+        self.has_buffer = None
         self.operation = None
         self.socket_description = None
         self.provider_class = None
