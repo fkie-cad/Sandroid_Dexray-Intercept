@@ -1,7 +1,8 @@
-import { log, devlog, am_send } from "../utils/logging.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { Java } from "../utils/javalib.js"
 import { bytesToHexSafe } from "../utils/misc.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "CRYPTO_KEYSTORE"
 
@@ -50,11 +51,13 @@ function hookKeystoreConstructor(KeyStore: any): void {
         "keystore:KeyStore.$init",
         ctor,
         function(original, keyStoreSpi: any, provider: any, type: string) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.constructor", {
                 // $className extracts the class name only - toString() includes a run-varying identity hash
                 keystore_spi_class: keyStoreSpi ? keyStoreSpi.$className : null,
                 provider: provider ? provider.toString() : null,
-                type: type
+                type: type,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             return original.call(this, keyStoreSpi, provider, type);
         }
@@ -73,9 +76,11 @@ function hookKeystoreGetInstance(KeyStore: any): void {
         "keystore:KeyStore.getInstance[String]",
         getInstance,
         function(original, type: string) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.get_instance", {
                 method: "getInstance(String)",
-                type: type
+                type: type,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             const tmp = original.call(this, type);
             keystoreList.push(tmp);
@@ -120,10 +125,12 @@ function hookKeystoreGetInstance_Provider2(KeyStore: any): void {
         "keystore:KeyStore.getInstance[String,Provider]",
         getInstance,
         function(original, type: string, provider: any) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.get_instance", {
                 method: "getInstance(String, Provider)",
                 type: type,
-                provider: provider ? provider.toString() : null
+                provider: provider ? provider.toString() : null,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             const tmp = original.call(this, type, provider);
             keystoreList.push(tmp);
@@ -148,10 +155,12 @@ function hookKeystoreLoad(KeyStore: any, dump: boolean): void {
         "keystore:KeyStore.load[LoadStoreParameter]",
         load,
         function(original, param: any) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.load", {
                 method: "load(LoadStoreParameter)",
                 keystore_type: this.getType(),
-                parameter: param ? param.toString() : null
+                parameter: param ? param.toString() : null,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             const res = original.call(this, param);
             if (dump) {
@@ -181,11 +190,13 @@ function hookKeystoreLoadStream(KeyStore: any, dump: boolean): void {
         "keystore:KeyStore.load[InputStream,char[]]",
         loadStream,
         function(original, stream: any, charArray: any) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.load", {
                 method: "load(InputStream, char[])",
                 keystore_type: this.getType(),
                 password: charArrayToString(charArray),
-                input_stream: stream ? stream.toString() : null
+                input_stream: stream ? stream.toString() : null,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             const res = original.call(this, stream, charArray);
             if (dump) {
@@ -213,10 +224,12 @@ function hookKeystoreStore(KeyStore: any): void {
         "keystore:KeyStore.store[LoadStoreParameter]",
         store,
         function(original, param) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.store", {
                 method: "store(LoadStoreParameter)",
                 keystore_type: this.getType(),
-                parameter: param ? param.toString() : null
+                parameter: param ? param.toString() : null,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             return original.call(this, param);
         }
@@ -237,11 +250,13 @@ function hookKeystoreStoreStream(KeyStore: any): void {
         "keystore:KeyStore.store[OutputStream,char[]]",
         storeStream,
         function(original, stream, charArray) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.store", {
                 method: "store(OutputStream, char[])",
                 keystore_type: this.getType(),
                 password: charArrayToString(charArray),
-                output_stream: stream ? stream.toString() : null
+                output_stream: stream ? stream.toString() : null,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             return original.call(this, stream, charArray);
         }
@@ -260,9 +275,11 @@ function hookKeystoreGetKey(KeyStore: any): void {
         "keystore:KeyStore.getKey",
         getKey,
         function(original, alias: string, charArray: any) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.get_key", {
                 alias: alias,
-                password: charArrayToString(charArray)
+                password: charArrayToString(charArray),
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             return original.call(this, alias, charArray);
         }
@@ -284,11 +301,13 @@ function hookKeystoreSetEntry(KeyStore: any): void {
         "keystore:KeyStore.setEntry",
         setEntry,
         function(original, alias, entry, protection) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.set_entry", {
                 method: "setEntry(String, KeyStore$Entry, KeyStore$ProtectionParameter)",
                 alias: alias,
                 entry: dumpKeyStoreEntry(entry),
-                protection: dumpProtectionParameter(protection)
+                protection: dumpProtectionParameter(protection),
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             return original.call(this, alias, entry, protection);
         }
@@ -345,6 +364,7 @@ function hookKeystoreSetKeyEntry(KeyStore: any): void {
                         : null;
                 } catch (_) {}
             }
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.set_key_entry", {
                 method: "setKeyEntry(String, Key, char[], Certificate[])",
                 alias: alias,
@@ -353,7 +373,8 @@ function hookKeystoreSetKeyEntry(KeyStore: any): void {
                 key_format: key ? key.getFormat() : null,
                 key_hex: keyHex,
                 password: charArrayToString(charArray),
-                cert_count: certs ? certs.length : null
+                cert_count: certs ? certs.length : null,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             return original.call(this, alias, key, charArray, certs);
         }
@@ -373,12 +394,14 @@ function hookKeystoreSetKeyEntry2(KeyStore: any): void {
         "keystore:KeyStore.setKeyEntry[String,byte[],Certificate[]]",
         setKeyEntry2,
         function(original, alias, key, certs) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.set_key_entry", {
                 method: "setKeyEntry(String, byte[], Certificate[])",
                 alias: alias,
                 // Array.from converts the Java byte array proxy for hex encoding
                 key_hex: key ? bytesToHexSafe(Array.from(key) as number[]) : null,
-                cert_count: certs ? certs.length : null
+                cert_count: certs ? certs.length : null,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             return original.call(this, alias, key, certs);
         }
@@ -401,8 +424,10 @@ function hookKeystoreGetCertificate(KeyStore: any): void {
         "keystore:KeyStore.getCertificate",
         getCertificate,
         function(original, alias: string) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.get_certificate", {
-                alias: alias
+                alias: alias,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             return original.call(this, alias);
         }
@@ -425,9 +450,11 @@ function hookKeystoreGetCertificateChain(KeyStore: any): void {
         "keystore:KeyStore.getCertificateChain",
         getCertificateChain,
         function(original, alias) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.get_certificate_chain", {
                 method: "getCertificateChain(String)",
-                alias: alias
+                alias: alias,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             return original.call(this, alias);
         }
@@ -447,10 +474,12 @@ function hookKeystoreGetEntry(KeyStore: any): void {
         "keystore:KeyStore.getEntry",
         getEntry,
         function(original, alias, protection) {
+            const java_stack_trace = collectJavaStackTrace();
             createKeystoreEvent("crypto.keystore.get_entry", {
                 method: "getEntry(String, KeyStore$ProtectionParameter)",
                 alias: alias,
-                protection: dumpProtectionParameter(protection)
+                protection: dumpProtectionParameter(protection),
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
             const entry = original.call(this, alias, protection);
             createKeystoreEvent("crypto.keystore.get_entry_result", {
