@@ -16,6 +16,8 @@ export interface NativeBacktraceFrame {
     } | null;
 }
 
+export type NativeBacktraceMode = "accurate" | "fuzzy";
+
 export function collectJavaStackTrace(): string[] | undefined {
     if (!enable_stacktrace) {
         return undefined;
@@ -41,10 +43,20 @@ export function buildBacktrace(bt: any): NativeBacktraceFrame[] | undefined {
     }
 
     const frames: NativeBacktraceFrame[] = [];
+    let previousAddressStr: string | null = null;
 
     for (const addr of bt) {
         try {
             const addressStr = addr.toString();
+
+            // Thread.backtrace(context, Backtracer.ACCURATE) can return the same
+            // address twice in a row when called from an onLeave handler. Skip
+            // immediate duplicates only (backlog item: buildBacktrace() dedup fix).
+            if (addressStr === previousAddressStr) {
+                continue;
+            }
+            previousAddressStr = addressStr;
+
             const mod = Process.findModuleByAddress(addr);
             const sym = DebugSymbol.fromAddress(addr);
 
@@ -72,19 +84,24 @@ export function buildBacktrace(bt: any): NativeBacktraceFrame[] | undefined {
                 module: null,
                 symbol: null
             });
+            previousAddressStr = null;
         }
     }
 
     return frames.length > 0 ? frames : undefined;
 }
 
-export function collectNativeBacktrace(context?: CpuContext): NativeBacktraceFrame[] | undefined {
+export function collectNativeBacktrace(
+    context?: CpuContext,
+    mode: NativeBacktraceMode = "accurate"
+): NativeBacktraceFrame[] | undefined {
     if (!enable_stacktrace || !context) {
         return undefined;
     }
 
     try {
-        return buildBacktrace(Thread.backtrace(context, Backtracer.ACCURATE));
+        const backtracer = mode === "fuzzy" ? Backtracer.FUZZY : Backtracer.ACCURATE;
+        return buildBacktrace(Thread.backtrace(context, backtracer));
     } catch (e) {
         devlog(`[stacktrace] Failed to collect native backtrace: ${e}`);
         return undefined;
