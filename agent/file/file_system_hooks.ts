@@ -1,10 +1,10 @@
-import { log, devlog, am_send } from "../utils/logging.js"
-import { get_path_from_fd } from "../utils/android_runtime_requests.js"
+import { devlog, am_send } from "../utils/logging.js"
 import { buffer2ArrayBuffer, b2s, isPatternPresent, byteArray2JString, bytesToHex } from "../utils/misc.js"
 import { show_verbose } from "../hooking_profile_loader.js"
 import { deactivate_unlink } from "../hooking_profile_loader.js"
 import { Java } from "../utils/javalib.js"
 import { safeResolveExport, safeAttach, safeReplace } from "../utils/safe_native.js"
+import { collectJavaStackTrace, collectNativeBacktrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "FILE_SYSTEM"
 
@@ -131,11 +131,13 @@ function hook_filesystem_accesses() {
             var file_path = a0;
             if (!createdFiles.has(file_path)) {
                 if (file_path.length > 2 && !shouldSkipFile(file_path)) {
+                    const java_stack_trace = collectJavaStackTrace();
                     createFileSystemEvent("file.create", {
                         operation: "File.new",
                         variant: 1,
                         file_path: file_path,
-                        method: "java.io.File.init(String)"
+                        method: "java.io.File.init(String)",
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
                     createdFiles.add(file_path);
                 }
@@ -146,16 +148,19 @@ function hook_filesystem_accesses() {
 
             return ret;
         }
+
         File.new[2].implementation = function (a0, a1) {
             var file_path = a0 + "/" + a1;
             if (!createdFiles.has(file_path) && file_path.length > 3 && !shouldSkipFile(file_path)) {
+                const java_stack_trace = collectJavaStackTrace();
                 createFileSystemEvent("file.create", {
                     operation: "File.new",
                     variant: 2,
                     file_path: file_path,
                     parent_path: a0,
                     child_path: a1,
-                    method: "java.io.File.init(String, String)"
+                    method: "java.io.File.init(String, String)",
+                    ...(java_stack_trace ? { java_stack_trace } : {})
                 });
                 createdFiles.add(file_path);
             }
@@ -188,12 +193,14 @@ function hook_filesystem_accesses() {
 
             if (!shouldSkipFile(fname)) {
                 if (!createdFileStreams.has(fname)) {
+                    const java_stack_trace = collectJavaStackTrace();
                     createFileSystemEvent("file.stream.create", {
                         operation: "FileInputStream.new",
                         variant: 0,
                         file_path: fname,
                         stream_type: "input",
-                        method: "java.io.FileInputStream.init(File)"
+                        method: "java.io.FileInputStream.init(File)",
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
                     createdFileStreams.add(fname)
                 }
@@ -228,6 +235,7 @@ function hook_filesystem_accesses() {
                 // Determine content type for proper processing
                 const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
                 const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
+                const java_stack_trace = collectJavaStackTrace();
 
                 // Send full buffer hex (NO slicing here - Python will truncate using bytes_read)
                 // We avoid slice() because it causes app freezing on Java arrays in Frida
@@ -240,7 +248,8 @@ function hook_filesystem_accesses() {
                     data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(b) : null,
                     should_dump_ascii: shouldDumpAscii,
                     should_dump_hex: shouldDumpHex,
-                    method: "java.io.FileInputStream.read(byte[])"
+                    method: "java.io.FileInputStream.read(byte[])",
+                    ...(java_stack_trace ? { java_stack_trace } : {})
                 });
             }
 
@@ -265,6 +274,7 @@ function hook_filesystem_accesses() {
                 // Determine content type for proper processing
                 const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
                 const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
+                const java_stack_trace = collectJavaStackTrace();
 
                 // Send full buffer hex (NO slicing here - Python will truncate using offset+bytes_read)
                 // We avoid slice() because it causes app freezing on Java arrays in Frida
@@ -279,7 +289,8 @@ function hook_filesystem_accesses() {
                     data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(b) : null,
                     should_dump_ascii: shouldDumpAscii,
                     should_dump_hex: shouldDumpHex,
-                    method: "java.io.FileInputStream.read(byte[], int, int)"
+                    method: "java.io.FileInputStream.read(byte[], int, int)",
+                    ...(java_stack_trace ? { java_stack_trace } : {})
                 });
             }
 
@@ -307,6 +318,7 @@ function hook_filesystem_accesses() {
                 const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
                 const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
                 const isLargeData = a2 > CONFIG.max_output_length;
+                const java_stack_trace = collectJavaStackTrace();
 
                 // Special handling for different file types
                 const isApkDexJar = fname.endsWith(".apk") || fname.endsWith(".dex") || fname.endsWith(".jar");
@@ -327,7 +339,8 @@ function hook_filesystem_accesses() {
                     is_large_data: isLargeData,
                     max_display_length: CONFIG.max_output_length,
                     file_type: isApkDexJar ? "binary" : (isXmlFile ? "xml" : "other"),
-                    method: "java.io.FileOutputStream.write(byte[], int, int)"
+                    method: "java.io.FileOutputStream.write(byte[], int, int)",
+                    ...(java_stack_trace ? { java_stack_trace } : {})
                 });
             }
 
@@ -345,7 +358,11 @@ function hook_filesystem_deletes(): void {
         File.delete.implementation = function () {
             const path = this.getAbsolutePath();
             if (path.includes("jar") || path.endsWith("dex")) {
-                createFileSystemEvent("file.delete.java", { file_path: path });
+                const java_stack_trace = collectJavaStackTrace();
+                createFileSystemEvent("file.delete.java", {
+                    file_path: path,
+                    ...(java_stack_trace ? { java_stack_trace } : {})
+                });
                 printedPaths.add(path); // ensures that we don't print the same path multiple times
             }
             return true;
@@ -363,8 +380,10 @@ function hook_filesystem_deletes(): void {
             onLeave() {
                 if (!this.file_path.endsWith("flock")) {
                     if (!printedPaths.has(this.file_path)) {
+                        const native_backtrace = collectNativeBacktrace(this.context);
                         createFileSystemEvent("file.delete.native", {
-                                        file_path: this.file_path
+                                        file_path: this.file_path,
+                                        ...(native_backtrace ? { native_backtrace } : {})
                                     });
                     }
                 }
