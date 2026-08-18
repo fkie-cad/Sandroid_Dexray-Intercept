@@ -1,5 +1,5 @@
 import { devlog, am_send } from "../utils/logging.js"
-import { safePerform, safeUse, safeOverload, safeImplementation, safeDeferred } from "../utils/safe_java.js"
+import { PropagateException, safeDeferred, safeImplementation, safeOverload, safePerform, safeUse } from "../utils/safe_java.js"
 import { safeAttachExport } from "../utils/safe_native.js"
 import { collectJavaStackTrace, collectNativeBacktrace } from "../utils/stacktrace.js"
 
@@ -433,6 +433,187 @@ function getMessageHeaderEndpoint(
     }
 }
 
+function callJavaOriginal(
+    original: any,
+    receiver: any,
+    ...args: any[]
+): any {
+    try {
+        return original.call(receiver, ...args);
+    } catch (error) {
+        throw new PropagateException(error);
+    }
+}
+
+function createSocketEventSafely(
+    eventType: string,
+    data: any
+): void {
+    try {
+        createSocketEvent(eventType, data);
+    } catch (error) {
+        devlog(`[HOOK] Failed to create ${eventType} event: ${error}`);
+    }
+}
+
+function getJavaInetAddressString(address: any): string | undefined {
+    try {
+        if (!address) {
+            return undefined;
+        }
+
+        const value = address.getHostAddress();
+
+        return value ? value.toString() : undefined;
+    } catch (_) {
+        return undefined;
+    }
+}
+
+function getJavaSocketType(address: string | undefined): string {
+    return address && address.includes(":") ? "tcp6" : "tcp";
+}
+
+function getJavaDatagramSocketType(address: string | undefined): string {
+    return address && address.includes(":") ? "udp6" : "udp";
+}
+
+function formatSocketAddress(
+    address: string | undefined,
+    port: number | undefined
+): string | undefined {
+    if (!address || port === undefined || port === null || port < 0) {
+        return undefined;
+    }
+
+    return address.includes(":")
+        ? `[${address}]:${port}`
+        : `${address}:${port}`;
+}
+
+function getJavaSocketEndpointData(socket: any): any {
+    const data: any = {};
+
+    try {
+        const localAddress = getJavaInetAddressString(socket.getLocalAddress());
+        const localPort = socket.getLocalPort();
+
+        if (localAddress !== undefined && localPort >= 0) {
+            data.local_ip = localAddress;
+            data.local_port = localPort;
+            data.local_address = formatSocketAddress(
+                localAddress,
+                localPort
+            );
+        }
+    } catch (_) {
+        // Endpoint information is optional.
+    }
+
+    try {
+        const remoteAddress = getJavaInetAddressString(socket.getInetAddress());
+        const remotePort = socket.getPort();
+
+        if (remoteAddress !== undefined && remotePort >= 0) {
+            data.remote_ip = remoteAddress;
+            data.remote_port = remotePort;
+            data.remote_address = formatSocketAddress(
+                remoteAddress,
+                remotePort
+            );
+            data.connection_string = data.remote_address;
+        }
+    } catch (_) {
+        // Endpoint information is optional.
+    }
+
+    return data;
+}
+
+function getJavaDatagramEndpointData(socket: any): any {
+    const data: any = {};
+
+    try {
+        const localAddress = getJavaInetAddressString(socket.getLocalAddress());
+        const localPort = socket.getLocalPort();
+
+        if (localAddress !== undefined && localPort >= 0) {
+            data.local_ip = localAddress;
+            data.local_port = localPort;
+            data.local_address = formatSocketAddress(
+                localAddress,
+                localPort
+            );
+        }
+    } catch (_) {
+        // Endpoint information is optional.
+    }
+
+    try {
+        const remoteAddress = getJavaInetAddressString(socket.getInetAddress());
+        const remotePort = socket.getPort();
+
+        if (remoteAddress !== undefined && remotePort >= 0) {
+            data.remote_ip = remoteAddress;
+            data.remote_port = remotePort;
+            data.remote_address = formatSocketAddress(
+                remoteAddress,
+                remotePort
+            );
+            data.connection_string = data.remote_address;
+        }
+    } catch (_) {
+        // Endpoint information is optional.
+    }
+
+    return data;
+}
+
+function getJavaLocalSocketAddressString(
+    address: any
+): string | undefined {
+    try {
+        if (!address) {
+            return undefined;
+        }
+
+        const name = address.getName();
+
+        if (!name) {
+            return undefined;
+        }
+
+        const namespace = address.getNamespace();
+        const namespaceName = namespace
+            ? namespace.toString().toLowerCase()
+            : "unknown";
+
+        return `${namespaceName}:${name.toString()}`;
+    } catch (_) {
+        return undefined;
+    }
+}
+
+function getJavaLocalServerSocketEndpointData(
+    serverSocket: any
+): any {
+    const data: any = {};
+
+    try {
+        const address = serverSocket.getLocalSocketAddress();
+        const localAddress = getJavaLocalSocketAddressString(address);
+
+        if (localAddress !== undefined) {
+            data.local_address = localAddress;
+            data.endpoint = localAddress;
+        }
+    } catch (_) {
+        // LocalServerSocket endpoint information is optional.
+    }
+
+    return data;
+}
+
 function hook_java_socket_communication() {
     safePerform("sockets:hook_java_socket_communication", () => {
         const ServerSocket = safeUse(
@@ -445,6 +626,10 @@ function hook_java_socket_communication() {
         );
         const LocalServerSocket = safeUse(
             "android.net.LocalServerSocket",
+            "sockets:hook_java_socket_communication"
+        );
+        const LocalSocket = safeUse(
+            "android.net.LocalSocket",
             "sockets:hook_java_socket_communication"
         );
         const DatagramSocket = safeUse(
@@ -463,14 +648,23 @@ function hook_java_socket_communication() {
                     "sockets:ServerSocket.accept",
                     accept,
                     function(original) {
-                        const result = original.call(this);
+                        const result = callJavaOriginal(original, this);
+                        const endpointData = getJavaSocketEndpointData(result);
+                        const javaStackTrace = collectJavaStackTrace();
 
-                        const java_stack_trace = collectJavaStackTrace();
-                        createSocketEvent("socket.java.server_accept", {
-                            class: "java.net.ServerSocket",
+                        createSocketEventSafely("socket.java.server_accept", {
+                            class_name: "java.net.ServerSocket",
                             method: "accept",
+                            overload_signature: "accept()",
+                            socket_type: getJavaSocketType(
+                                endpointData.remote_ip
+                            ),
                             server_info: this.toString(),
-                            ...(java_stack_trace ? { java_stack_trace } : {})
+                            result_code: 0,
+                            ...endpointData,
+                            ...(javaStackTrace
+                                ? { java_stack_trace: javaStackTrace }
+                                : {})
                         });
 
                         return result;
@@ -492,16 +686,31 @@ function hook_java_socket_communication() {
                     "sockets:Socket.$init",
                     socketInit,
                     function(original, host, port) {
-                        const result = original.call(this, host, port);
+                        const result = callJavaOriginal(
+                            original,
+                            this,
+                            host,
+                            port
+                        );
+                        const endpointData = getJavaSocketEndpointData(this);
+                        const javaStackTrace = collectJavaStackTrace();
 
-                        const java_stack_trace = collectJavaStackTrace();
-                        createSocketEvent("socket.java.init", {
-                            class: "java.net.Socket",
+                        createSocketEventSafely("socket.java.init", {
+                            class_name: "java.net.Socket",
                             method: "$init",
+                            overload_signature:
+                                "$init(java.lang.String,int)",
+                            socket_type: getJavaSocketType(
+                                endpointData.remote_ip
+                            ),
                             host: host,
                             port: port,
-                            connection_string: `${host}:${port}`,
-                            ...(java_stack_trace ? { java_stack_trace } : {})
+                            endpoint: `${host}:${port}`,
+                            result_code: 0,
+                            ...endpointData,
+                            ...(javaStackTrace
+                                ? { java_stack_trace: javaStackTrace }
+                                : {})
                         });
 
                         return result;
@@ -521,15 +730,30 @@ function hook_java_socket_communication() {
                     "sockets:Socket.connect[SocketAddress,int]",
                     connectWithTimeout,
                     function(original, endpoint, timeout) {
-                        const result = original.call(this, endpoint, timeout);
+                        const result = callJavaOriginal(
+                            original,
+                            this,
+                            endpoint,
+                            timeout
+                        );
+                        const endpointData = getJavaSocketEndpointData(this);
+                        const javaStackTrace = collectJavaStackTrace();
 
-                        const java_stack_trace = collectJavaStackTrace();
-                        createSocketEvent("socket.java.connect", {
-                            class: "java.net.Socket",
+                        createSocketEventSafely("socket.java.connect", {
+                            class_name: "java.net.Socket",
                             method: "connect",
+                            overload_signature:
+                                "connect(java.net.SocketAddress,int)",
+                            socket_type: getJavaSocketType(
+                                endpointData.remote_ip
+                            ),
                             endpoint: endpoint.toString(),
                             timeout: timeout,
-                            ...(java_stack_trace ? { java_stack_trace } : {})
+                            result_code: 0,
+                            ...endpointData,
+                            ...(javaStackTrace
+                                ? { java_stack_trace: javaStackTrace }
+                                : {})
                         });
 
                         return result;
@@ -548,14 +772,28 @@ function hook_java_socket_communication() {
                     "sockets:Socket.connect[SocketAddress]",
                     connectBasic,
                     function(original, endpoint) {
-                        const result = original.call(this, endpoint);
+                        const result = callJavaOriginal(
+                            original,
+                            this,
+                            endpoint
+                        );
+                        const endpointData = getJavaSocketEndpointData(this);
+                        const javaStackTrace = collectJavaStackTrace();
 
-                        const java_stack_trace = collectJavaStackTrace();
-                        createSocketEvent("socket.java.connect", {
-                            class: "java.net.Socket",
+                        createSocketEventSafely("socket.java.connect", {
+                            class_name: "java.net.Socket",
                             method: "connect",
+                            overload_signature:
+                                "connect(java.net.SocketAddress)",
+                            socket_type: getJavaSocketType(
+                                endpointData.remote_ip
+                            ),
                             endpoint: endpoint.toString(),
-                            ...(java_stack_trace ? { java_stack_trace } : {})
+                            result_code: 0,
+                            ...endpointData,
+                            ...(javaStackTrace
+                                ? { java_stack_trace: javaStackTrace }
+                                : {})
                         });
 
                         return result;
@@ -575,14 +813,69 @@ function hook_java_socket_communication() {
                     "sockets:LocalServerSocket.accept",
                     localAccept,
                     function(original) {
-                        const result = original.call(this);
+                        const result = callJavaOriginal(original, this);
+                        const endpointData =
+                            getJavaLocalServerSocketEndpointData(this);
+                        const javaStackTrace = collectJavaStackTrace();
 
-                        const java_stack_trace = collectJavaStackTrace();
-                        createSocketEvent("socket.java.local_accept", {
-                            class: "android.net.LocalServerSocket",
+                        createSocketEventSafely("socket.java.local_accept", {
+                            class_name: "android.net.LocalServerSocket",
                             method: "accept",
+                            overload_signature: "accept()",
+                            socket_type: "local",
                             server_info: this.toString(),
-                            ...(java_stack_trace ? { java_stack_trace } : {})
+                            result_code: 0,
+                            ...endpointData,
+                            ...(javaStackTrace
+                                ? { java_stack_trace: javaStackTrace }
+                                : {})
+                        });
+
+                        return result;
+                    }
+                );
+            }
+        }
+
+        if (LocalSocket) {
+            const localConnect = safeOverload(
+                LocalSocket.connect,
+                "sockets:LocalSocket.connect",
+                "android.net.LocalSocketAddress"
+            );
+
+            if (localConnect) {
+                localConnect.implementation = safeImplementation(
+                    "sockets:LocalSocket.connect[LocalSocketAddress]",
+                    localConnect,
+                    function(original, endpoint) {
+                        const result = callJavaOriginal(
+                            original,
+                            this,
+                            endpoint
+                        );
+                        const remoteAddress =
+                            getJavaLocalSocketAddressString(endpoint);
+                        const javaStackTrace = collectJavaStackTrace();
+                        const endpointData: any = {};
+
+                        if (remoteAddress !== undefined) {
+                            endpointData.endpoint = remoteAddress;
+                            endpointData.remote_address = remoteAddress;
+                            endpointData.connection_string = remoteAddress;
+                        }
+
+                        createSocketEventSafely("socket.java.local_connect", {
+                            class_name: "android.net.LocalSocket",
+                            method: "connect",
+                            overload_signature:
+                                "connect(android.net.LocalSocketAddress)",
+                            socket_type: "local",
+                            result_code: 0,
+                            ...endpointData,
+                            ...(javaStackTrace
+                                ? { java_stack_trace: javaStackTrace }
+                                : {})
                         });
 
                         return result;
@@ -604,17 +897,38 @@ function hook_java_socket_communication() {
                     "sockets:DatagramSocket.connect",
                     datagramConnect,
                     function(original, address, port) {
-                        const result = original.call(this, address, port);
+                        const result = callJavaOriginal(
+                            original,
+                            this,
+                            address,
+                            port
+                        );
+                        const endpointData =
+                            getJavaDatagramEndpointData(this);
+                        const javaStackTrace = collectJavaStackTrace();
 
-                        const java_stack_trace = collectJavaStackTrace();
-                        createSocketEvent("socket.java.datagram_connect", {
-                            class: "java.net.DatagramSocket",
-                            method: "connect",
-                            address: address.toString(),
-                            port: port,
-                            connection_string: `${address}:${port}`,
-                            ...(java_stack_trace ? { java_stack_trace } : {})
-                        });
+                        createSocketEventSafely(
+                            "socket.java.datagram_connect",
+                            {
+                                class_name: "java.net.DatagramSocket",
+                                method: "connect",
+                                overload_signature:
+                                    "connect(java.net.InetAddress,int)",
+                                socket_type: getJavaDatagramSocketType(
+                                    endpointData.remote_ip
+                                ),
+                                host: getJavaInetAddressString(address),
+                                port: port,
+                                endpoint: `${address}:${port}`,
+                                result_code: 0,
+                                ...endpointData,
+                                ...(javaStackTrace
+                                    ? {
+                                        java_stack_trace: javaStackTrace
+                                    }
+                                    : {})
+                            }
+                        );
 
                         return result;
                     }
