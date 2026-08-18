@@ -15,6 +15,8 @@ import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -761,6 +763,12 @@ public class MainActivity extends Activity {
             Log.e(TAG, "runLocalSocketTests failed", t);
         }
         try {
+            runFilesystemLocalSocketTests();
+            Log.i(TAG, "runFilesystemLocalSocketTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runFilesystemLocalSocketTests failed", t);
+        }
+        try {
             runUdpSocketTests();
             Log.i(TAG, "runUdpSocketTests completed");
         } catch (Throwable t) {
@@ -826,6 +834,19 @@ public class MainActivity extends Activity {
         // socket.java.local_accept - LocalServerSocket.accept
         final String SOCKET_NAME = "networke2e_local";
         LocalServerSocket serverSocket = new LocalServerSocket(SOCKET_NAME);
+
+        try {
+            LocalSocketAddress serverAddress = serverSocket.getLocalSocketAddress();
+            Log.i(
+                    TAG,
+                    "LocalServerSocket endpoint: namespace=" +
+                    serverAddress.getNamespace() +
+                    ", name=" +
+                    serverAddress.getName()
+            );
+        } catch (Throwable t) {
+            Log.w(TAG, "Unable to inspect LocalServerSocket endpoint", t);
+        }
         CountDownLatch serverLatch = new CountDownLatch(1);
 
         Thread serverThread = new Thread(() -> {
@@ -852,6 +873,60 @@ public class MainActivity extends Activity {
         client.close();
 
         serverLatch.await(5, TimeUnit.SECONDS);
+    }
+
+    private void runFilesystemLocalSocketTests() throws Exception {
+        Log.i(TAG, "runFilesystemLocalSocketTests started");
+
+        File socketFile = new File(
+                getFilesDir(),
+                "networke2e_filesystem.sock"
+        );
+        String socketPath = socketFile.getAbsolutePath();
+
+        if (!NativeSocketTests.startFilesystemLocalSocketServer(socketPath)) {
+            throw new IOException(
+                    "Failed to start filesystem LocalSocket server: " +
+                    socketPath
+            );
+        }
+
+        LocalSocket client = new LocalSocket();
+
+        try {
+            LocalSocketAddress address = new LocalSocketAddress(
+                    socketPath,
+                    LocalSocketAddress.Namespace.FILESYSTEM
+            );
+
+            Log.i(
+                    TAG,
+                    "LocalSocket.connect(FILESYSTEM) - trigger: " +
+                    socketPath
+            );
+
+            client.connect(address);
+
+            OutputStream output = client.getOutputStream();
+            output.write("filesystem-local".getBytes("UTF-8"));
+            output.flush();
+        } finally {
+            try {
+                client.close();
+            } catch (Throwable ignored) {}
+        }
+
+        if (!NativeSocketTests.waitForFilesystemLocalSocketServer()) {
+            throw new IOException(
+                    "Filesystem LocalSocket server did not receive client data"
+            );
+        }
+
+        Log.i(
+                TAG,
+                "runFilesystemLocalSocketTests completed: " +
+                socketPath
+        );
     }
 
     private void runUdpSocketTests() throws Exception {

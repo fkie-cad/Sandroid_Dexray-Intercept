@@ -25,4 +25,18 @@ public class NativeSocketTests {
     }
 
     public static native void runTests();
+
+    /**
+     * Starts one AF_UNIX filesystem-namespace server in a native thread.
+     * The Java test connects through LocalSocket using Namespace.FILESYSTEM.
+     */
+    public static native boolean startFilesystemLocalSocketServer(
+            String socketPath
+    );
+
+    /**
+     * Waits for the native filesystem local-socket server to accept and read
+     * the deterministic Java LocalSocket client payload.
+     */
+    public static native boolean waitForFilesystemLocalSocketServer();
 }

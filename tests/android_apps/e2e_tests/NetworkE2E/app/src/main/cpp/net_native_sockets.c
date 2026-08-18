@@ -8,6 +8,9 @@
 #include <jni.h>
 #include <android/log.h>
 #include <dlfcn.h>
+#include <pthread.h>
+#include <poll.h>
+#include <sys/un.h>
 
 #define LOG_TAG "NET_NATIVE_SOCKETS"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
@@ -54,6 +57,82 @@ typedef ssize_t (*direct_recv_fn)(
     size_t len,
     int flags
 );
+
+/* ------------------------------------------------------------------ */
+/* Filesystem-namespace LocalSocket test server                       */
+/*                                                                    */
+/* LocalServerSocket(String) creates an abstract-namespace listener.  */
+/* This native helper provides a realistic AF_UNIX filesystem server  */
+/* so Java LocalSocket.connect(..., Namespace.FILESYSTEM) can be      */
+/* exercised deterministically.                                      */
+/* ------------------------------------------------------------------ */
+
+static pthread_t filesystem_local_server_thread;
+static int filesystem_local_server_started = 0;
+static int filesystem_local_server_listener = -1;
+static int filesystem_local_server_result = -1;
+static char filesystem_local_server_path[
+    sizeof(((struct sockaddr_un *)0)->sun_path)
+];
+
+static void *filesystem_local_server_main(void *unused) {
+    (void)unused;
+
+    struct pollfd poll_fd;
+    poll_fd.fd = filesystem_local_server_listener;
+    poll_fd.events = POLLIN;
+    poll_fd.revents = 0;
+
+    int poll_result = poll(&poll_fd, 1, 5000);
+    if (poll_result <= 0) {
+        LOGE(
+            "filesystem LocalSocket server: poll failed or timed out, result=%d errno=%d",
+            poll_result,
+            errno
+        );
+        goto cleanup;
+    }
+
+    int client_fd = accept(filesystem_local_server_listener, NULL, NULL);
+    if (client_fd < 0) {
+        LOGE(
+            "filesystem LocalSocket server: accept failed, errno=%d",
+            errno
+        );
+        goto cleanup;
+    }
+
+    char buffer[64];
+    ssize_t received = read(client_fd, buffer, sizeof(buffer));
+
+    if (received > 0) {
+        filesystem_local_server_result = 0;
+        LOGI(
+            "filesystem LocalSocket server received %zd bytes",
+            received
+        );
+    } else {
+        LOGE(
+            "filesystem LocalSocket server read failed, result=%zd errno=%d",
+            received,
+            errno
+        );
+    }
+
+    close(client_fd);
+
+cleanup:
+    if (filesystem_local_server_listener >= 0) {
+        close(filesystem_local_server_listener);
+        filesystem_local_server_listener = -1;
+    }
+
+    if (filesystem_local_server_path[0] != '\0') {
+        unlink(filesystem_local_server_path);
+    }
+
+    return NULL;
+}
 
 /* ------------------------------------------------------------------ */
 /* Helper: create a connected loopback TCP pair in one thread.         */
@@ -647,6 +726,166 @@ static void test_sendto_recvfrom(void) {
 
     close(send_fd);
     close(recv_fd);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_test_networke2e_NativeSocketTests_startFilesystemLocalSocketServer(
+        JNIEnv *env,
+        jclass clazz,
+        jstring socket_path
+) {
+    (void)clazz;
+
+    if (filesystem_local_server_started) {
+        LOGE("filesystem LocalSocket server is already active");
+        return JNI_FALSE;
+    }
+
+    if (socket_path == NULL) {
+        LOGE("filesystem LocalSocket server received null path");
+        return JNI_FALSE;
+    }
+
+    const char *path_chars = (*env)->GetStringUTFChars(
+        env,
+        socket_path,
+        NULL
+    );
+    if (path_chars == NULL) {
+        LOGE("filesystem LocalSocket server failed to read path");
+        return JNI_FALSE;
+    }
+
+    size_t path_length = strlen(path_chars);
+
+    if (
+        path_length == 0 ||
+        path_length >= sizeof(filesystem_local_server_path)
+    ) {
+        LOGE(
+            "filesystem LocalSocket path length invalid: %zu",
+            path_length
+        );
+        (*env)->ReleaseStringUTFChars(env, socket_path, path_chars);
+        return JNI_FALSE;
+    }
+
+    memset(
+        filesystem_local_server_path,
+        0,
+        sizeof(filesystem_local_server_path)
+    );
+    memcpy(
+        filesystem_local_server_path,
+        path_chars,
+        path_length
+    );
+    (*env)->ReleaseStringUTFChars(env, socket_path, path_chars);
+
+    int listener_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (listener_fd < 0) {
+        LOGE(
+            "filesystem LocalSocket server socket() failed, errno=%d",
+            errno
+        );
+        return JNI_FALSE;
+    }
+
+    struct sockaddr_un address;
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    memcpy(address.sun_path, filesystem_local_server_path, path_length);
+
+    unlink(filesystem_local_server_path);
+
+    if (
+        bind(
+            listener_fd,
+            (struct sockaddr *)&address,
+            sizeof(address)
+        ) < 0
+    ) {
+        LOGE(
+            "filesystem LocalSocket server bind() failed, errno=%d",
+            errno
+        );
+        close(listener_fd);
+        unlink(filesystem_local_server_path);
+        return JNI_FALSE;
+    }
+
+    if (listen(listener_fd, 1) < 0) {
+        LOGE(
+            "filesystem LocalSocket server listen() failed, errno=%d",
+            errno
+        );
+        close(listener_fd);
+        unlink(filesystem_local_server_path);
+        return JNI_FALSE;
+    }
+
+    filesystem_local_server_listener = listener_fd;
+    filesystem_local_server_result = -1;
+    filesystem_local_server_started = 1;
+
+    int thread_result = pthread_create(
+        &filesystem_local_server_thread,
+        NULL,
+        filesystem_local_server_main,
+        NULL
+    );
+
+    if (thread_result != 0) {
+        LOGE(
+            "filesystem LocalSocket server pthread_create() failed, result=%d",
+            thread_result
+        );
+        close(filesystem_local_server_listener);
+        filesystem_local_server_listener = -1;
+        unlink(filesystem_local_server_path);
+        filesystem_local_server_started = 0;
+        return JNI_FALSE;
+    }
+
+    LOGI(
+        "filesystem LocalSocket server listening at %s",
+        filesystem_local_server_path
+    );
+
+    return JNI_TRUE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_test_networke2e_NativeSocketTests_waitForFilesystemLocalSocketServer(
+        JNIEnv *env,
+        jclass clazz
+) {
+    (void)env;
+    (void)clazz;
+
+    if (!filesystem_local_server_started) {
+        LOGE("filesystem LocalSocket server was not started");
+        return JNI_FALSE;
+    }
+
+    int join_result = pthread_join(
+        filesystem_local_server_thread,
+        NULL
+    );
+
+    filesystem_local_server_started = 0;
+
+    if (join_result != 0) {
+        LOGE(
+            "filesystem LocalSocket server pthread_join() failed, result=%d",
+            join_result
+        );
+        return JNI_FALSE;
+    }
+
+    return filesystem_local_server_result == 0
+        ? JNI_TRUE
+        : JNI_FALSE;
 }
 
 /* ------------------------------------------------------------------ */
