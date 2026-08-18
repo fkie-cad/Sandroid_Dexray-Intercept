@@ -15,6 +15,7 @@ import {
     safeNativeFunction,
     safeReplace
 } from "../utils/safe_native.js";
+import { collectJavaStackTrace, collectNativeBacktrace } from "../utils/stacktrace.js";
 
 
 /**
@@ -377,9 +378,11 @@ function hook_java_sql() {
                 "database:SQLiteDatabase.execSQL[String]",
                 execSQL_String,
                 function (original, sql: string) {
+                    const java_stack_trace = collectJavaStackTrace();
                     emitSqliteDatabaseEvent(this, "database.sqlite.exec", {
                         method: "SQLiteDatabase.execSQL(String)",
-                        sql: sql
+                        sql: sql,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return original.call(this, sql);
@@ -398,10 +401,12 @@ function hook_java_sql() {
                 "database:SQLiteDatabase.execSQL[String,Object[]]",
                 execSQL_String_ObjectArray,
                 function (original, sql: string, bindArgsArray: any) {
+                    const java_stack_trace = collectJavaStackTrace();
                     emitSqliteDatabaseEvent(this, "database.sqlite.exec", {
                         method: "SQLiteDatabase.execSQL(String, Object[])",
                         sql: sql,
-                        bind_args: serializeJavaArray(bindArgsArray)
+                        bind_args: serializeJavaArray(bindArgsArray),
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return original.call(this, sql, bindArgsArray);
@@ -443,6 +448,7 @@ function hook_java_sql() {
                     limit: string
                 ) {
                     if (!isNestedQueryOperation()) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.query", {
                             method: "SQLiteDatabase.query(boolean, String, String[], String, String[], String, String, String, String)",
                             table: table,
@@ -453,7 +459,8 @@ function hook_java_sql() {
                             having: having,
                             order_by: orderBy,
                             limit: limit,
-                            distinct: distinct
+                            distinct: distinct,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
                     return callWithOperationGuard(
@@ -503,6 +510,7 @@ function hook_java_sql() {
                     limit: string
                 ) {
                     if (!isNestedQueryOperation()) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.query", {
                             method: "SQLiteDatabase.query(String, String[], String, String[], String, String, String, String)",
                             table: table,
@@ -512,7 +520,8 @@ function hook_java_sql() {
                             group_by: groupBy,
                             having: having,
                             order_by: orderBy,
-                            limit: limit
+                            limit: limit,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -566,6 +575,7 @@ function hook_java_sql() {
                     cancellationSignal: any
                 ) {
                     if (!isNestedQueryOperation()) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.query", {
                             method: "SQLiteDatabase.query(boolean, String, String[], String, String[], String, String, String, String, CancellationSignal)",
                             table: table,
@@ -577,7 +587,8 @@ function hook_java_sql() {
                             order_by: orderBy,
                             limit: limit,
                             distinct: distinct,
-                            cancellation_signal: cancellationSignal !== null
+                            cancellation_signal: cancellationSignal !== null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -627,6 +638,7 @@ function hook_java_sql() {
                     orderBy: string
                 ) {
                     if (!isNestedQueryOperation()) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.query", {
                             method: "SQLiteDatabase.query(String, String[], String, String[], String, String, String)",
                             table: table,
@@ -635,7 +647,8 @@ function hook_java_sql() {
                             where_args: serializeJavaArray(selectionArgs),
                             group_by: groupBy,
                             having: having,
-                            order_by: orderBy
+                            order_by: orderBy,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -692,6 +705,7 @@ function hook_java_sql() {
                     limit: string
                 ) {
                     if (!isNestedQueryOperation()) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.query", {
                             method: "SQLiteDatabase.queryWithFactory(CursorFactory, boolean, String, String[], String, String[], String, String, String, String)",
                             table: table,
@@ -703,7 +717,8 @@ function hook_java_sql() {
                             order_by: orderBy,
                             limit: limit,
                             distinct: distinct,
-                            has_factory: factory !== null
+                            has_factory: factory !== null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -761,6 +776,7 @@ function hook_java_sql() {
                     cancellationSignal: any
                 ) {
                     if (!isNestedQueryOperation()) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.query", {
                             method: "SQLiteDatabase.queryWithFactory(CursorFactory, boolean, String, String[], String, String[], String, String, String, String, CancellationSignal)",
                             table: table,
@@ -773,7 +789,8 @@ function hook_java_sql() {
                             limit: limit,
                             distinct: distinct,
                             has_factory: factory !== null,
-                            cancellation_signal: cancellationSignal !== null
+                            cancellation_signal: cancellationSignal !== null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -820,13 +837,15 @@ function hook_java_sql() {
                     cancellationSignal: any
                 ) {
                     if (!isNestedQueryOperation()) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.query", {
                             method: "SQLiteDatabase.rawQueryWithFactory(CursorFactory, String, String[], String, CancellationSignal)",
                             sql: sql,
                             where_args: serializeJavaArray(selectionArgs),
                             edit_table: editTable,
                             has_factory: factory !== null,
-                            cancellation_signal: cancellationSignal !== null
+                            cancellation_signal: cancellationSignal !== null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -865,12 +884,14 @@ function hook_java_sql() {
                     editTable: string
                 ) {
                     if (!isNestedQueryOperation()) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.query", {
                             method: "SQLiteDatabase.rawQueryWithFactory(CursorFactory, String, String[], String)",
                             sql: sql,
                             where_args: serializeJavaArray(selectionArgs),
                             edit_table: editTable,
-                            has_factory: factory !== null
+                            has_factory: factory !== null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -898,10 +919,12 @@ function hook_java_sql() {
                 rawQuery_String_StringArray,
                 function (original, sql: string, selectionArgs: any) {
                     if (!isNestedQueryOperation()) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.query", {
                             method: "SQLiteDatabase.rawQuery(String, String[])",
                             sql: sql,
-                            where_args: serializeJavaArray(selectionArgs)
+                            where_args: serializeJavaArray(selectionArgs),
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -931,11 +954,13 @@ function hook_java_sql() {
                     cancellationSignal: any
                 ) {
                     if (!isNestedQueryOperation()) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.query", {
                             method: "SQLiteDatabase.rawQuery(String, String[], CancellationSignal)",
                             sql: sql,
                             where_args: serializeJavaArray(selectionArgs),
-                            cancellation_signal: cancellationSignal !== null
+                            cancellation_signal: cancellationSignal !== null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -963,11 +988,13 @@ function hook_java_sql() {
                 "database:SQLiteDatabase.insert[String,String,ContentValues]",
                 insert_String_String_ContentValues,
                 function (original, table: string, nullColumnHack: string, values: any) {
+                    const java_stack_trace = collectJavaStackTrace();
                     emitSqliteDatabaseEvent(this, "database.sqlite.insert", {
                         method: "SQLiteDatabase.insert(String, String, ContentValues)",
                         table: table,
                         null_column_hack: nullColumnHack,
-                        content_values: serializeContentValues(values)
+                        content_values: serializeContentValues(values),
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return callWithOperationGuard(
@@ -990,12 +1017,14 @@ function hook_java_sql() {
                 "database:SQLiteDatabase.insertOrThrow[String,String,ContentValues]",
                 insertOrThrow_String_String_ContentValues,
                 function (original, table: string, nullColumnHack: string, values: any) {
+                    const java_stack_trace = collectJavaStackTrace();
                     emitSqliteDatabaseEvent(this, "database.sqlite.insert", {
                         method: "SQLiteDatabase.insertOrThrow(String, String, ContentValues)",
                         table: table,
                         null_column_hack: nullColumnHack,
                         content_values: serializeContentValues(values),
-                        throw_on_error: true
+                        throw_on_error: true,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return callWithOperationGuard(
@@ -1026,12 +1055,14 @@ function hook_java_sql() {
                     conflictAlgorithm: number
                 ) {
                     if (!isNestedOperation("sqlite.insert")) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.insert", {
                             method: "SQLiteDatabase.insertWithOnConflict(String, String, ContentValues, int)",
                             table: table,
                             null_column_hack: nullColumnHack,
                             content_values: serializeContentValues(values),
-                            conflict_algorithm: conflictAlgorithm
+                            conflict_algorithm: conflictAlgorithm,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -1063,12 +1094,14 @@ function hook_java_sql() {
                 openDatabase_String_CursorFactory_int,
                 function (original, path: string, factory: any, flags: number) {
                     if (shouldLogDatabasePath(path)) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createDatabaseEvent("database.sqlite.open", {
                             method: "SQLiteDatabase.openDatabase(String, CursorFactory, int)",
                             database_path: path,
                             flags: flags,
                             flags_description: interpretDatabaseFlags(flags),
-                            has_factory: factory !== null
+                            has_factory: factory !== null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -1097,13 +1130,15 @@ function hook_java_sql() {
                     errorHandler: any
                 ) {
                     if (shouldLogDatabasePath(path)) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createDatabaseEvent("database.sqlite.open", {
                             method: "SQLiteDatabase.openDatabase(String, CursorFactory, int, DatabaseErrorHandler)",
                             database_path: path,
                             flags: flags,
                             flags_description: interpretDatabaseFlags(flags),
                             has_factory: factory !== null,
-                            has_error_handler: errorHandler !== null
+                            has_error_handler: errorHandler !== null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -1124,11 +1159,13 @@ function hook_java_sql() {
                 openOrCreateDatabase_String_CursorFactory,
                 function (original, path: string, factory: any) {
                     if (shouldLogDatabasePath(path)) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createDatabaseEvent("database.sqlite.open", {
                             method: "SQLiteDatabase.openOrCreateDatabase(String, CursorFactory)",
                             database_path: path,
                             has_factory: factory !== null,
-                            create_if_necessary: true
+                            create_if_necessary: true,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -1150,12 +1187,14 @@ function hook_java_sql() {
                 openOrCreateDatabase_String_CursorFactory_ErrorHandler,
                 function (original, path: string, factory: any, errorHandler: any) {
                     if (shouldLogDatabasePath(path)) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createDatabaseEvent("database.sqlite.open", {
                             method: "SQLiteDatabase.openOrCreateDatabase(String, CursorFactory, DatabaseErrorHandler)",
                             database_path: path,
                             has_factory: factory !== null,
                             has_error_handler: errorHandler !== null,
-                            create_if_necessary: true
+                            create_if_necessary: true,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -1186,13 +1225,15 @@ function hook_java_sql() {
                     values: any,
                     whereClause: string,
                     whereArgs: any
-                ) {
+                                ) {
+                    const java_stack_trace = collectJavaStackTrace();
                     emitSqliteDatabaseEvent(this, "database.sqlite.update", {
                         method: "SQLiteDatabase.update(String, ContentValues, String, String[])",
                         table: table,
                         content_values: serializeContentValues(values),
                         where_clause: whereClause,
-                        where_args: serializeJavaArray(whereArgs)
+                        where_args: serializeJavaArray(whereArgs),
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return callWithOperationGuard(
@@ -1225,13 +1266,15 @@ function hook_java_sql() {
                     conflictAlgorithm: number
                 ) {
                     if (!isNestedOperation("sqlite.update")) {
+                        const java_stack_trace = collectJavaStackTrace();
                         emitSqliteDatabaseEvent(this, "database.sqlite.update", {
                             method: "SQLiteDatabase.updateWithOnConflict(String, ContentValues, String, String[], int)",
                             table: table,
                             content_values: serializeContentValues(values),
                             where_clause: whereClause,
                             where_args: serializeJavaArray(whereArgs),
-                            conflict_algorithm: conflictAlgorithm
+                            conflict_algorithm: conflictAlgorithm,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -1265,6 +1308,7 @@ function hook_java_sql() {
                     whereArgs: any
                 ) {
                     const databasePath = getDatabasePath(this);
+                    const java_stack_trace = collectJavaStackTrace();
 
                     if (shouldLogDatabasePath(databasePath)) {
                         createDatabaseEvent("database.sqlite.delete", {
@@ -1272,7 +1316,8 @@ function hook_java_sql() {
                             database_path: databasePath,
                             table: table,
                             where_clause: whereClause,
-                            where_args: serializeJavaArray(whereArgs)
+                            where_args: serializeJavaArray(whereArgs),
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -1288,7 +1333,8 @@ function hook_java_sql() {
                             method: "SQLiteDatabase.delete(String, String, String[])",
                             database_path: databasePath,
                             table: table,
-                            rows_affected: rowsAffected
+                            rows_affected: rowsAffected,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -1481,6 +1527,7 @@ function hook_SQLCipher() {
                     function (original, ...args: any[]) {
                         if (!isNestedSqlCipherOpen()) {
                             const password = serializePassword(args[0], passwordType);
+                            const java_stack_trace = collectJavaStackTrace();
 
                             createDatabaseEvent("database.sqlcipher.open", {
                                 method: `SQLiteOpenHelper.${methodName}(${signature})`,
@@ -1488,7 +1535,8 @@ function hook_SQLCipher() {
                                 password_type: password.type,
                                 database_type: "SQLCipher",
                                 access_type: accessType,
-                                overload_signature: signature
+                                overload_signature: signature,
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
 
@@ -1542,6 +1590,7 @@ function hook_SQLCipher() {
                                         arg.className.includes("DatabaseErrorHandler") &&
                                         args[argIndex] !== null
                                 );
+                                const java_stack_trace = collectJavaStackTrace();
 
                                 createDatabaseEvent("database.sqlcipher.open", {
                                     method: `SQLiteDatabase.openOrCreateDatabase(${signature})`,
@@ -1553,7 +1602,8 @@ function hook_SQLCipher() {
                                     has_factory: hasFactory,
                                     has_database_hook: hasDatabaseHook,
                                     has_error_handler: hasErrorHandler,
-                                    overload_signature: signature
+                                    overload_signature: signature,
+                                    ...(java_stack_trace ? { java_stack_trace } : {})
                                 });
                             }
 
@@ -1587,6 +1637,7 @@ function hook_SQLCipher() {
                     const isPragmaKey =
                         sql !== null &&
                         sql.toLowerCase().includes("pragma key");
+                    const java_stack_trace = collectJavaStackTrace();
 
                     createDatabaseEvent(
                         isPragmaKey
@@ -1596,7 +1647,8 @@ function hook_SQLCipher() {
                             method: "SQLiteDatabase.execSQL(String)",
                             sql: sql,
                             pragma_type: isPragmaKey ? "key" : null,
-                            database_type: "SQLCipher"
+                            database_type: "SQLCipher",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         }
                     );
 
@@ -1621,10 +1673,12 @@ function hook_SQLCipher() {
                 "database:SQLiteDatabase.rawExecSQL[String]",
                 rawExecSQL,
                 function (original, sql: string) {
+                    const java_stack_trace = collectJavaStackTrace();
                     createDatabaseEvent("database.sqlcipher.exec", {
                         method: "SQLiteDatabase.rawExecSQL(String)",
                         sql: sql,
-                        database_type: "SQLCipher"
+                        database_type: "SQLCipher",
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return original.call(this, sql);
@@ -1653,10 +1707,12 @@ function hook_SQLCipher() {
                         // Path is optional for close events.
                     }
 
+                    const java_stack_trace = collectJavaStackTrace();
                     createDatabaseEvent("database.sqlcipher.close", {
                         method: "SQLiteDatabase.close()",
                         database_path: databasePath,
-                        database_type: "SQLCipher"
+                        database_type: "SQLCipher",
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return original.call(this);
@@ -1688,11 +1744,13 @@ function hook_SQLCipher() {
                         // Path is optional for transaction events.
                     }
 
+                    const java_stack_trace = collectJavaStackTrace();
                     createDatabaseEvent("database.sqlcipher.transaction", {
                         method: `SQLiteDatabase.${methodName}()`,
                         database_path: databasePath,
                         database_type: "SQLCipher",
-                        transaction_action: transactionAction
+                        transaction_action: transactionAction,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
                     return original.call(this);
@@ -1999,13 +2057,15 @@ function hook_room_library() {
                             const databaseName = args.length > 2 && args[2]
                                 ? args[2].toString()
                                 : null;
+                            const java_stack_trace = collectJavaStackTrace();
 
                             createDatabaseEvent("database.room.builder", {
                                 method: `Room.databaseBuilder(${signature})`,
                                 database_name: databaseName,
                                 database_class: databaseClass,
                                 database_type: "Room",
-                                overload_signature: signature
+                                overload_signature: signature,
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
 
                             return original.apply(this, args);
@@ -2059,6 +2119,8 @@ function hook_room_library() {
                                     sql = `<error extracting Room query: ${error}>`;
                                 }
 
+                                const java_stack_trace = collectJavaStackTrace();
+
                                 createDatabaseEvent("database.room.query", {
                                     method: `RoomDatabase.query(${signature})`,
                                     database_path: getRoomDatabasePath(this),
@@ -2071,7 +2133,8 @@ function hook_room_library() {
                                         "androidx.sqlite.db.SupportSQLiteQuery"
                                         ? "SupportSQLiteQuery"
                                         : "String,Object[]",
-                                    overload_signature: signature
+                                    overload_signature: signature,
+                                    ...(java_stack_trace ? { java_stack_trace } : {})
                                 });
                             }
 
@@ -2104,12 +2167,14 @@ function hook_room_library() {
                         `database:RoomDatabase.${methodName}[${index}]`,
                         overload,
                         function (original, ...args: any[]) {
+                            const java_stack_trace = collectJavaStackTrace();
                             createDatabaseEvent("database.room.transaction", {
                                 method: `RoomDatabase.${methodName}(${signature})`,
                                 database_path: getRoomDatabasePath(this),
                                 database_type: "Room",
                                 transaction_action: transactionAction,
-                                overload_signature: signature
+                                overload_signature: signature,
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
 
                             return original.apply(this, args);
@@ -2142,6 +2207,7 @@ function hook_room_library() {
                             tableNames: any,
                             callable: any
                         ) {
+                            const java_stack_trace = collectJavaStackTrace();
                             createDatabaseEvent("database.room.flow_created", {
                                 method: `CoroutinesRoom.createFlow(${signature})`,
                                 database_path: getRoomDatabasePath(roomDatabase),
@@ -2149,7 +2215,8 @@ function hook_room_library() {
                                 table_names: serializeTableNames(tableNames),
                                 in_transaction: inTransaction,
                                 has_callable: callable !== null,
-                                overload_signature: signature
+                                overload_signature: signature,
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
 
                             return original.call(
@@ -2196,13 +2263,15 @@ function hook_room_library() {
                         function (original, owner: any, observer: any) {
                             const ownerClass = getRuntimeClassName(owner);
                             const observerClass = getRuntimeClassName(observer);
+                            const java_stack_trace = collectJavaStackTrace();
 
                             createDatabaseEvent("database.room.observe", {
                                 method: `LiveData.observe(${signature})`,
                                 database_type: "Room",
                                 owner_class: ownerClass,
                                 observer_class: observerClass,
-                                overload_signature: signature
+                                overload_signature: signature,
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
 
                             return original.call(this, owner, observer);
@@ -2239,6 +2308,7 @@ function hook_room_library() {
                             const newVersion = methodName === "onUpgrade"
                                 ? args[2]
                                 : null;
+                            const java_stack_trace = collectJavaStackTrace();
 
                             createDatabaseEvent("database.room.callback", {
                                 method: `RoomOpenHelper.${methodName}(${signature})`,
@@ -2247,7 +2317,8 @@ function hook_room_library() {
                                 callback_type: callbackType,
                                 old_version: oldVersion,
                                 new_version: newVersion,
-                                overload_signature: signature
+                                overload_signature: signature,
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
 
                             return original.apply(this, args);
@@ -2739,6 +2810,8 @@ function hook_native_sqlite() {
                             );
                         }
 
+                        const native_backtrace = collectNativeBacktrace(this.context);
+
                         createDatabaseEvent("database.native.open", {
                             method: functionName,
                             native_function: functionName,
@@ -2750,7 +2823,8 @@ function hook_native_sqlite() {
                             status: resultCode === 0
                                 ? "success"
                                 : `error code ${resultCode}`,
-                            database_type: "Native SQLite"
+                            database_type: "Native SQLite",
+                            ...(native_backtrace ? { native_backtrace } : {})
                         });
                     }
                 });
@@ -2783,6 +2857,8 @@ function hook_native_sqlite() {
                         );
                     }
 
+                    const native_backtrace = collectNativeBacktrace(this.context);
+
                     createDatabaseEvent("database.native.open", {
                         method: "sqlite3_open16",
                         native_function: "sqlite3_open16",
@@ -2795,7 +2871,8 @@ function hook_native_sqlite() {
                             ? "success"
                             : `error code ${resultCode}`,
                         database_type: "Native SQLite",
-                        sql_encoding: "utf16"
+                        sql_encoding: "utf16",
+                        ...(native_backtrace ? { native_backtrace } : {})
                     });
                 }
             });
@@ -2814,6 +2891,7 @@ function hook_native_sqlite() {
 
                 onLeave(retval) {
                     const resultCode = retval.toInt32();
+                    const native_backtrace = collectNativeBacktrace(this.context);
 
                     createDatabaseEvent("database.native.exec", {
                         method: "sqlite3_exec",
@@ -2827,7 +2905,8 @@ function hook_native_sqlite() {
                         status: resultCode === 0
                             ? "success"
                             : `error code ${resultCode}`,
-                        database_type: "Native SQLite"
+                        database_type: "Native SQLite",
+                        ...(native_backtrace ? { native_backtrace } : {})
                     });
                 }
             });
@@ -2875,6 +2954,8 @@ function hook_native_sqlite() {
                             );
                         }
 
+                        const native_backtrace = collectNativeBacktrace(this.context);
+
                         createDatabaseEvent("database.native.prepare", {
                             method: functionName,
                             native_function: functionName,
@@ -2889,7 +2970,8 @@ function hook_native_sqlite() {
                             status: resultCode === 0
                                 ? "success"
                                 : `error code ${resultCode}`,
-                            database_type: "Native SQLite"
+                            database_type: "Native SQLite",
+                            ...(native_backtrace ? { native_backtrace } : {})
                         });
                     }
                 });
@@ -2938,6 +3020,8 @@ function hook_native_sqlite() {
                             );
                         }
 
+                        const native_backtrace = collectNativeBacktrace(this.context);
+
                         createDatabaseEvent("database.native.prepare", {
                             method: functionName,
                             native_function: functionName,
@@ -2952,7 +3036,8 @@ function hook_native_sqlite() {
                             status: resultCode === 0
                                 ? "success"
                                 : `error code ${resultCode}`,
-                            database_type: "Native SQLite"
+                            database_type: "Native SQLite",
+                            ...(native_backtrace ? { native_backtrace } : {})
                         });
                     }
                 });
@@ -2981,6 +3066,8 @@ function hook_native_sqlite() {
                         status = `error code ${resultCode}`;
                     }
 
+                    const native_backtrace = collectNativeBacktrace(this.context);
+
                     createDatabaseEvent("database.native.step", {
                         method: "sqlite3_step",
                         native_function: "sqlite3_step",
@@ -2996,7 +3083,8 @@ function hook_native_sqlite() {
                         statement_handle: this.statementHandle,
                         result_code: resultCode,
                         status: status,
-                        database_type: "Native SQLite"
+                        database_type: "Native SQLite",
+                        ...(native_backtrace ? { native_backtrace } : {})
                     });
                 }
             });
@@ -3053,6 +3141,7 @@ function hook_native_sqlite() {
 
                     onLeave(retval) {
                         const resultCode = retval.toInt32();
+                        const native_backtrace = collectNativeBacktrace(this.context);
 
                         createDatabaseEvent("database.native.close", {
                             method: functionName,
@@ -3065,7 +3154,8 @@ function hook_native_sqlite() {
                             status: resultCode === 0
                                 ? "success"
                                 : `error code ${resultCode}`,
-                            database_type: "Native SQLite"
+                            database_type: "Native SQLite",
+                            ...(native_backtrace ? { native_backtrace } : {})
                         });
 
                         if (resultCode !== 0) {
@@ -3122,12 +3212,14 @@ function hook_native_sqlite() {
             functionName: string,
             statementHandle: string,
             bindIndex: number,
-            data: Record<string, any>
+            data: Record<string, any>,
+            context?: CpuContext
         ): void {
             const statementContext = getStatementContext(
                 module,
                 statementHandle
             );
+            const native_backtrace = collectNativeBacktrace(context);
 
             createDatabaseEvent("database.native.bind", {
                 method: functionName,
@@ -3144,6 +3236,7 @@ function hook_native_sqlite() {
                 sql_encoding: statementContext?.sql_encoding || null,
                 bind_index: bindIndex,
                 database_type: "Native SQLite",
+                ...(native_backtrace ? { native_backtrace } : {}),
                 ...data
             });
         }
@@ -3151,13 +3244,15 @@ function hook_native_sqlite() {
         function emitBindEvent(
             functionName: string,
             args: InvocationArguments,
-            data: Record<string, any>
+            data: Record<string, any>,
+            context?: CpuContext
         ): void {
             emitBindEventForStatement(
                 functionName,
                 args[0].toString(),
                 args[1].toInt32(),
-                data
+                data,
+                context
             );
         }
 
@@ -3171,7 +3266,7 @@ function hook_native_sqlite() {
                         bind_value: readUtf8(args[2], byteLength),
                         bind_value_length: byteLength >= 0 ? byteLength : null,
                         value_available: true
-                    });
+                    }, this.context);
                 }
             });
         });
@@ -3186,7 +3281,7 @@ function hook_native_sqlite() {
                         bind_value: readUtf16(args[2], byteLength),
                         bind_value_length: byteLength >= 0 ? byteLength : null,
                         value_available: true
-                    });
+                    }, this.context);
                 }
             });
         });
@@ -3204,7 +3299,7 @@ function hook_native_sqlite() {
                         bind_value_preview_length: blob.preview_length,
                         bind_value_truncated: blob.truncated,
                         value_available: blob.value_hex !== null
-                    });
+                    }, this.context);
                 }
             });
         });
@@ -3216,7 +3311,7 @@ function hook_native_sqlite() {
                         bind_type: "int",
                         bind_value: args[2].toInt32(),
                         value_available: true
-                    });
+                    }, this.context);
                 }
             });
         });
@@ -3281,7 +3376,7 @@ function hook_native_sqlite() {
                         bind_type: "int64",
                         bind_value: bindValue.value,
                         value_available: bindValue.value_available
-                    });
+                    }, this.context);
                 }
             });
         });
@@ -3359,7 +3454,7 @@ function hook_native_sqlite() {
                         bind_type: "double",
                         bind_value: bindValue,
                         value_available: valueAvailable
-                    });
+                    }, this.context);
                 }
             });
         });
@@ -3371,7 +3466,7 @@ function hook_native_sqlite() {
                         bind_type: "null",
                         bind_value: null,
                         value_available: true
-                    });
+                    }, this.context);
                 }
             });
         });
@@ -3864,6 +3959,7 @@ function hook_wcdb() {
                                     argument.className.includes("SQLiteCipherSpec") &&
                                     args[argumentIndex] !== null
                             );
+                            const java_stack_trace = collectJavaStackTrace();
 
                             createDatabaseEvent("database.wcdb.open", {
                                 method: `WCDB.SQLiteDatabase.${methodName}(${signature})`,
@@ -3879,7 +3975,8 @@ function hook_wcdb() {
                                 has_factory: hasFactory,
                                 has_error_handler: hasErrorHandler,
                                 has_cipher_spec: hasCipherSpec,
-                                overload_signature: signature
+                                overload_signature: signature,
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
 
@@ -3922,6 +4019,7 @@ function hook_wcdb() {
                             (argument: any) =>
                                 argument.className.includes("CancellationSignal")
                         );
+                        const java_stack_trace = collectJavaStackTrace();
 
                         createDatabaseEvent(eventType, {
                             method: `WCDB.SQLiteDatabase.${methodName}(${signature})`,
@@ -3936,7 +4034,8 @@ function hook_wcdb() {
                                 : undefined,
                             cancellation_signal: cancellationIndex >= 0 &&
                                 args[cancellationIndex] !== null,
-                            overload_signature: signature
+                            overload_signature: signature,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return original.apply(this, args);
@@ -3967,6 +4066,7 @@ function hook_wcdb() {
                     function (original, ...args: any[]) {
                         const table = args[0] ? args[0].toString() : null;
                         const databasePath = getDatabasePath(this);
+                        const java_stack_trace = collectJavaStackTrace();
 
                         if (methodName === "insert") {
                             createDatabaseEvent(eventType, {
@@ -3977,7 +4077,8 @@ function hook_wcdb() {
                                 null_column_hack: args[1]
                                     ? args[1].toString()
                                     : null,
-                                content_values: serializeContentValues(args[2])
+                                content_values: serializeContentValues(args[2]),
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         } else if (methodName === "update") {
                             createDatabaseEvent(eventType, {
@@ -3989,7 +4090,8 @@ function hook_wcdb() {
                                 where_clause: args[2]
                                     ? args[2].toString()
                                     : null,
-                                where_args: serializeArray(args[3])
+                                where_args: serializeArray(args[3]),
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         } else if (methodName === "delete") {
                             createDatabaseEvent(eventType, {
@@ -4000,7 +4102,8 @@ function hook_wcdb() {
                                 where_clause: args[1]
                                     ? args[1].toString()
                                     : null,
-                                where_args: serializeArray(args[2])
+                                where_args: serializeArray(args[2]),
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
 
@@ -4012,7 +4115,8 @@ function hook_wcdb() {
                                 database_path: databasePath,
                                 database_type: "WCDB",
                                 table: table,
-                                rows_affected: result
+                                rows_affected: result,
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
 
@@ -4052,6 +4156,7 @@ function hook_wcdb() {
                             const exclusiveIndex = argumentTypes.findIndex(
                                 (argument: any) => argument.className === "boolean"
                             );
+                            const java_stack_trace = collectJavaStackTrace();
 
                             createDatabaseEvent("database.wcdb.transaction", {
                                 method: `WCDB.SQLiteDatabase.${methodName}(${signature})`,
@@ -4063,7 +4168,8 @@ function hook_wcdb() {
                                 exclusive: exclusiveIndex >= 0
                                     ? args[exclusiveIndex]
                                     : null,
-                                overload_signature: signature
+                                overload_signature: signature,
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
 
