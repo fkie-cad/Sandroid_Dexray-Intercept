@@ -8,6 +8,7 @@ import {
     safeOverload,
     safeImplementation
 } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "WEB"
 
@@ -18,7 +19,7 @@ interface WebEvent {
     method?: string;
     headers?: Record<string, any> | string;
     body?: string;
-    stack_trace?: string;
+    java_stack_trace?: string[];
     class?: string;
     uri?: string;
     req_method?: string;
@@ -398,13 +399,16 @@ function installConnectionMethodHook(
                 target.overloadSignature
             );
             const suppressEvent = shouldSuppressConnectionEvent(eventPrefix);
+            const java_stack_trace = collectJavaStackTrace();
+            const stackTraceMetadata = java_stack_trace ? { java_stack_trace } : {};
 
             if (target.methodName === "setRequestMethod") {
                 if (eventPrefix && !suppressEvent) {
                     createWebEventSafely(`${eventPrefix}.request_method`, {
                         url: getConnectionUrl(this),
                         method: args[0],
-                        ...metadata
+                        ...metadata,
+                        ...stackTraceMetadata
                     });
                 }
 
@@ -420,7 +424,8 @@ function installConnectionMethodHook(
                         url: getConnectionUrl(this),
                         method: "setRequestProperty",
                         data: `${args[0]}: ${args[1]}`,
-                        ...metadata
+                        ...metadata,
+                        ...stackTraceMetadata
                     });
                 }
 
@@ -435,7 +440,8 @@ function installConnectionMethodHook(
                     createWebEventSafely("url.connection", {
                         url: getConnectionUrl(this),
                         req_method: getConnectionMethod(this),
-                        ...metadata
+                        ...metadata,
+                        ...stackTraceMetadata
                     });
                 }
 
@@ -448,7 +454,8 @@ function installConnectionMethodHook(
                     createWebEventSafely(`${eventPrefix}.connect`, {
                         url: getConnectionUrl(this),
                         method: getConnectionMethod(this),
-                        ...metadata
+                        ...metadata,
+                        ...stackTraceMetadata
                     });
                 }
 
@@ -465,7 +472,8 @@ function installConnectionMethodHook(
                     createWebEventSafely(`${eventPrefix}.input_stream`, {
                         url: getConnectionUrl(this),
                         method: getConnectionMethod(this),
-                        ...metadata
+                        ...metadata,
+                        ...stackTraceMetadata
                     });
                 }
 
@@ -482,7 +490,8 @@ function installConnectionMethodHook(
                     createWebEventSafely(`${eventPrefix}.output_stream`, {
                         url: getConnectionUrl(this),
                         method: getConnectionMethod(this),
-                        ...metadata
+                        ...metadata,
+                        ...stackTraceMetadata
                     });
                 }
 
@@ -500,7 +509,8 @@ function installConnectionMethodHook(
                         url: getConnectionUrl(this),
                         method: getConnectionMethod(this),
                         status_code: responseCode,
-                        ...metadata
+                        ...metadata,
+                        ...stackTraceMetadata
                     });
                 }
 
@@ -563,13 +573,15 @@ function hookUrlOpenConnection(
         openConnection,
         function (original, ...args: any[]) {
             const result = callOriginal(original, this, ...args);
+            const java_stack_trace = collectJavaStackTrace();
 
             createWebEventSafely("url.open_connection", {
                 url: getConnectionUrl(result),
                 req_method: getConnectionMethod(result),
                 provider_class: getRuntimeProviderClass(result),
                 declaring_class: "java.net.URL",
-                overload_signature: overloadSignature
+                overload_signature: overloadSignature,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
 
             // Provider inspection occurs after the original returns.
@@ -600,9 +612,11 @@ function install_url_hooks() {
                     function(original, urlString: string) {
                         const result = original.call(this, urlString);
                         if (!urlString.startsWith("null")) {
+                            const java_stack_trace = collectJavaStackTrace();
                             createWebEvent("url.creation", {
                                 url: urlString,
-                                req_method: "GET"
+                                req_method: "GET",
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
                         return result;
@@ -638,10 +652,12 @@ function install_url_hooks() {
                     uriInit,
                     function(original, uriString: string) {
                         const result = original.call(this, uriString);
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEvent("uri.creation", {
                             class: "java.net.URI",
                             method: "URI(String)",
-                            uri: uriString
+                            uri: uriString,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return result;
                     }
@@ -689,11 +705,13 @@ function install_okhttp_hooks() {
                         } catch (e) {
                             devlog(`Error reading OkHttp headers: ${e}`);
                         }
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEvent("okhttp.request", {
                             url: request.url().toString(),
                             method: request.method(),
                             headers: headers,
-                            body: request.body() ? request.body().toString() : null
+                            body: request.body() ? request.body().toString() : null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, request);
                     }
@@ -717,9 +735,11 @@ function install_okhttp_hooks() {
                     "web:com.squareup.okhttp.OkHttpClient.newCall",
                     newCallOld,
                     function(original, request: any) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEventSafely("okhttp_old.request", {
                             url: request.url().toString(),
-                            method: request.method()
+                            method: request.method(),
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return callOriginal(original, this, request);
@@ -796,6 +816,7 @@ function installWebSocketSendHook(webSocket: any): void {
                     context,
                     sendText,
                     function(original, text: string) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEventSafely("websocket.send_text", {
                             url: getWebSocketUrl(this),
                             data: text.length > 200
@@ -804,7 +825,8 @@ function installWebSocketSendHook(webSocket: any): void {
                             method: "send",
                             provider_class: getRuntimeProviderClass(this),
                             declaring_class: className,
-                            overload_signature: target.overloadSignature
+                            overload_signature: target.overloadSignature,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         return callOriginal(original, this, text);
@@ -959,6 +981,7 @@ function installWebSocketOpenedListenerHook(listener: any): void {
         context,
         onOpen,
         function(original, webSocket: any, response: any) {
+            const java_stack_trace = collectJavaStackTrace();
             createWebEventSafely("websocket.opened", {
                 url: getWebSocketUrl(webSocket, response),
                 status_code: getWebSocketResponseCode(response),
@@ -967,7 +990,8 @@ function installWebSocketOpenedListenerHook(listener: any): void {
                     webSocket,
                     location.declaringClassName,
                     location.target.overloadSignature
-                )
+                ),
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
 
             return callOriginal(original, this, webSocket, response);
@@ -1031,6 +1055,7 @@ function installWebSocketMessageListenerHook(listener: any): void {
         context,
         onMessage,
         function(original, webSocket: any, text: string) {
+            const java_stack_trace = collectJavaStackTrace();
             createWebEventSafely("websocket.message_received", {
                 url: getWebSocketUrl(webSocket),
                 data: text.length > 200
@@ -1041,7 +1066,8 @@ function installWebSocketMessageListenerHook(listener: any): void {
                     webSocket,
                     location.declaringClassName,
                     location.target.overloadSignature
-                )
+                ),
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
 
             return callOriginal(original, this, webSocket, text);
@@ -1181,9 +1207,11 @@ function install_webview_hooks() {
                     "web:WebView.loadUrl[String]",
                     loadUrlBasic,
                     function(original, url: string) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEvent("webview.load_url", {
                             url: url,
-                            method: "loadUrl"
+                            method: "loadUrl",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, url);
                     }
@@ -1202,10 +1230,12 @@ function install_webview_hooks() {
                     "web:WebView.loadUrl[String,Map]",
                     loadUrlWithHeaders,
                     function(original, url: string, additionalHttpHeaders: any) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEvent("webview.load_url_with_headers", {
                             url: url,
                             headers: additionalHttpHeaders || {},
-                            method: "loadUrl"
+                            method: "loadUrl",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, url, additionalHttpHeaders);
                     }
@@ -1218,11 +1248,13 @@ function install_webview_hooks() {
                 "web:WebView.loadData",
                 loadDataRef,
                 function(original, data: string, mimeType: string, encoding: string) {
+                    const java_stack_trace = collectJavaStackTrace();
                     createWebEvent("webview.load_data", {
                         data: data.length > 100 ? data.substring(0, 100) + "..." : data,
                         mime_type: mimeType,
                         encoding: encoding,
-                        method: "loadData"
+                        method: "loadData",
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
                     return original.call(this, data, mimeType, encoding);
                 }
@@ -1235,10 +1267,12 @@ function install_webview_hooks() {
                     "web:WebView.postUrl",
                     postUrlRef,
                     function(original, url: string, postData: any) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEvent("webview.post_url", {
                             url: url,
                             method: "postUrl",
-                            data: postData ? `[Binary data: ${postData.length} bytes]` : null
+                            data: postData ? `[Binary data: ${postData.length} bytes]` : null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, url, postData);
                     }
@@ -1257,9 +1291,11 @@ function install_webview_hooks() {
                 "web:WebViewClient.onPageStarted",
                 onPageStartedRef,
                 function(original, view: any, url: string, favicon: any) {
+                    const java_stack_trace = collectJavaStackTrace();
                     createWebEvent("webview.page_started", {
                         url: url,
-                        method: "onPageStarted"
+                        method: "onPageStarted",
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
                     return original.call(this, view, url, favicon);
                 }
@@ -1270,9 +1306,11 @@ function install_webview_hooks() {
                 "web:WebViewClient.onPageFinished",
                 onPageFinishedRef,
                 function(original, view: any, url: string) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEvent("webview.page_finished", {
                             url: url,
-                            method: "onPageFinished"
+                            method: "onPageFinished",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, view, url);
                 }
@@ -1288,9 +1326,11 @@ function install_webview_hooks() {
                     "web:WebViewClient.shouldOverrideUrlLoading",
                     shouldOverride,
                     function(original, view: any, url: string) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEvent("webview.url_override", {
                             url: url,
-                            method: "shouldOverrideUrlLoading"
+                            method: "shouldOverrideUrlLoading",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, view, url);
                     }
@@ -1322,11 +1362,13 @@ function install_retrofit_hooks() {
                 execute,
                 function(original) {
                     const request = this.request();
+                    const java_stack_trace = collectJavaStackTrace();
 
                     if (request) {
                         createWebEventSafely("retrofit.request", {
                             url: request.url().toString(),
-                            method: request.method()
+                            method: request.method(),
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -1335,7 +1377,8 @@ function install_retrofit_hooks() {
                     if (response) {
                         createWebEventSafely("retrofit.response", {
                             url: request ? request.url().toString() : "unknown",
-                            status_code: response.code()
+                            status_code: response.code(),
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -1357,9 +1400,11 @@ function install_retrofit_hooks() {
                     const request = this.request();
 
                     if (request) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEventSafely("retrofit.async_request", {
                             url: request.url().toString(),
-                            method: request.method()
+                            method: request.method(),
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
 
@@ -1391,10 +1436,12 @@ function install_volley_hooks() {
                     "web:StringRequest.$init",
                     volleyInit,
                     function(original, method: number, url: string, listener: any, errorListener: any) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEvent("volley.string_request", {
                             url: url,
                             method: method === 0 ? "GET" : method === 1 ? "POST" :
-                                method === 2 ? "PUT" : method === 3 ? "DELETE" : "UNKNOWN"
+                                method === 2 ? "PUT" : method === 3 ? "DELETE" : "UNKNOWN",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         return original.call(this, method, url, listener, errorListener);
                     }
@@ -1413,9 +1460,11 @@ function install_volley_hooks() {
                 addRef,
                 function(original, request: any) {
                     if (request.getUrl) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createWebEvent("volley.queue_request", {
                             url: request.getUrl(),
-                            method: request.getMethod ? request.getMethod().toString() : "UNKNOWN"
+                            method: request.getMethod ? request.getMethod().toString() : "UNKNOWN",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                     }
                     return original.call(this, request);
