@@ -3,6 +3,7 @@ import { getAndroidVersion, copy_file, removeLeadingColon } from "../utils/andro
 import { Java } from "../utils/javalib.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
 import { safeResolveExport, safeNativeFunction, safeAttach, safeEnumerateMatches, stripModulePrefix } from "../utils/safe_native.js"
+import { collectJavaStackTrace, collectNativeBacktrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "DEX_LOADING"
 
@@ -219,7 +220,8 @@ function dumpDexToFile(
     dexInfo: any,
     processName: string,
     location: string,
-    hooked_fct: string
+    hooked_fct: string,
+    context?: CpuContext
 ): void {
     const dexSize = begin.add(dexInfo.sizeOffset).readInt();
 
@@ -227,6 +229,7 @@ function dumpDexToFile(
 
     let dexPath = `/data/data/${processName}/${dexSize}.${dexInfo.ext}`;
     let dexFile: File;
+    const native_backtrace = collectNativeBacktrace(context);
 
     try {
         dexFile = new File(dexPath, "wb");
@@ -241,7 +244,8 @@ function dumpDexToFile(
         if (g_package_name.length > 4) {
             createDEXEvent("dex.unpacking.file_creation", {
                 attempted_path: dexPath,
-                package_name: g_package_name
+                package_name: g_package_name,
+                ...(native_backtrace ? { native_backtrace } : {})
             });
         }
         dexFile = new File(dexPath, "wb");
@@ -264,7 +268,8 @@ function dumpDexToFile(
         size: dexSize,
         original_location: location,
         dumped_path: dexPath,
-        file_type: dexInfo.ext
+        file_type: dexInfo.ext,
+        ...(native_backtrace ? { native_backtrace } : {})
     });
 
     devlog(`[DEX] Unpacking event sent for ${dexInfo.magicString} (${dexSize} bytes)`);
@@ -330,7 +335,7 @@ function dumpDex(moduleFuncName: string, g_processName: string, g_AndroidOSVersi
                 }
             }
 
-            dumpDexToFile(begin, dexInfo, g_processName, location, hooked_fct);
+            dumpDexToFile(begin, dexInfo, g_processName, location, hooked_fct, this.context);
         }
     });
 
@@ -339,9 +344,11 @@ function dumpDex(moduleFuncName: string, g_processName: string, g_AndroidOSVersi
 
 function dump(file_path: string, dst_path: string): void {
     const location = removeLeadingColon(file_path);
+    const java_stack_trace = collectJavaStackTrace();
     createDEXEvent("dex.file_copy", {
         original_location: location,
-        destination_path: dst_path
+        destination_path: dst_path,
+        ...(java_stack_trace ? { java_stack_trace } : {})
     });
     copy_file(PROFILE_HOOKING_TYPE, location, dst_path);
 }
@@ -364,10 +371,12 @@ function dex_api_unpacking(g_processName: string): void {
                     "dex:DexClassLoader.$init",
                     dexInit,
                     function (original, filepath: string, b: any, c: any, d: any) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createDEXEvent("dex.classloader.creation", {
                             class_loader_type: "DexClassLoader",
                             file_path: filepath,
-                            method: "$init(String, String, String, ClassLoader)"
+                            method: "$init(String, String, String, ClassLoader)",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         dump(filepath, dst_path);
                         return original.call(this, filepath, b, c, d);
@@ -392,10 +401,12 @@ function dex_api_unpacking(g_processName: string): void {
                     "dex:PathClassLoader.$init(String,ClassLoader)",
                     pathInit2,
                     function (original, file_path: string, parent: any) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createDEXEvent("dex.classloader.creation", {
                             class_loader_type: "PathClassLoader",
                             file_path: file_path,
-                            method: "$init(String, ClassLoader)"
+                            method: "$init(String, ClassLoader)",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         dump(file_path, dst_path);
                         return original.call(this, file_path, parent);
@@ -413,11 +424,13 @@ function dex_api_unpacking(g_processName: string): void {
                     "dex:PathClassLoader.$init(String,String,ClassLoader)",
                     pathInit3,
                     function (original, file_path: string, librarySearchPath: string, parent: any) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createDEXEvent("dex.classloader.creation", {
                             class_loader_type: "PathClassLoader",
                             file_path: file_path,
                             library_search_path: librarySearchPath,
-                            method: "$init(String, String, ClassLoader)"
+                            method: "$init(String, String, ClassLoader)",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         dump(file_path, dst_path);
                         return original.call(this, file_path, librarySearchPath, parent);
@@ -442,10 +455,12 @@ function dex_api_unpacking(g_processName: string): void {
                     "dex:DelegateLastClassLoader.$init(String,ClassLoader)",
                     delegateInit2,
                     function (original, file_path: string, parent: any) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createDEXEvent("dex.classloader.creation", {
                             class_loader_type: "DelegateLastClassLoader",
                             file_path: file_path,
-                            method: "$init(String, ClassLoader)"
+                            method: "$init(String, ClassLoader)",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         dump(file_path, dst_path);
                         return original.call(this, file_path, parent);
@@ -463,11 +478,13 @@ function dex_api_unpacking(g_processName: string): void {
                     "dex:DelegateLastClassLoader.$init(String,String,ClassLoader)",
                     delegateInit3,
                     function (original, file_path: string, librarySearchPath: string, parent: any) {
+                        const java_stack_trace = collectJavaStackTrace();
                         createDEXEvent("dex.classloader.creation", {
                             class_loader_type: "DelegateLastClassLoader",
                             file_path: file_path,
                             library_search_path: librarySearchPath,
-                            method: "$init(String, String, ClassLoader)"
+                            method: "$init(String, String, ClassLoader)",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         dump(file_path, dst_path);
                         return original.call(this, file_path, librarySearchPath, parent);
@@ -495,12 +512,14 @@ function dex_api_unpacking(g_processName: string): void {
                             parent: any,
                             resourceLoading: boolean
                         ) {
+                            const java_stack_trace = collectJavaStackTrace();
                             createDEXEvent("dex.classloader.creation", {
                                 class_loader_type: "DelegateLastClassLoader",
                                 file_path: file_path,
                                 library_search_path: librarySearchPath,
                                 resource_loading: resourceLoading,
-                                method: "$init(String, String, ClassLoader, boolean)"
+                                method: "$init(String, String, ClassLoader, boolean)",
+                                ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                             dump(file_path, dst_path);
                             return original.call(this, file_path, librarySearchPath, parent, resourceLoading);
@@ -527,11 +546,13 @@ function dex_api_unpacking(g_processName: string): void {
                     memInit,
                     function (original, dexbuffer: any, loader: any) {
                         const remaining = dexbuffer.remaining();
+                        const java_stack_trace = collectJavaStackTrace();
 
                         createDEXEvent("dex.in_memory_loader", {
                             class_loader_type: "InMemoryDexClassLoader",
                             buffer_size: remaining,
-                            method: "$init(ByteBuffer, ClassLoader)"
+                            method: "$init(ByteBuffer, ClassLoader)",
+                            ...(java_stack_trace ? { java_stack_trace } : {})
                         });
 
                         const object = original.call(this, dexbuffer, loader);
