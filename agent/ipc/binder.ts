@@ -1,6 +1,7 @@
 import { bytesToHexSafe } from "../utils/misc.js"
 import { devlog, am_send } from "../utils/logging.js"
 import { safeAttachExport } from "../utils/safe_native.js"
+import { collectNativeBacktrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "IPC_BINDER"
 
@@ -120,7 +121,7 @@ function parse_binder_transaction_data(binder_transaction_data) {
 }
 
 // http://androidxref.com/kernel_3.18/xref/drivers/staging/android/binder.c#1754
-function handle_write(write_buffer, write_size, write_consumed) { // binder_thread_write
+function handle_write(write_buffer, write_size, write_consumed, context?: CpuContext) { // binder_thread_write
     var cmd = write_buffer.readU32() & 0xff;
     var ptr = write_buffer.add(write_consumed + 4); // 4 = sizeof(uint32_t), the first 4 bytes contain "cmd"
     // var end = write_buffer.add(write_size);
@@ -141,6 +142,7 @@ function handle_write(write_buffer, write_size, write_consumed) { // binder_thre
 
             const txn_code = binder_transaction_data.code;
             const reserved_desc = (binder_reserved_transaction_codes as any)[txn_code];
+            const native_backtrace = collectNativeBacktrace(context);
 
             createBinderEvent("binder.transaction", {
                 transaction_type: cmd === binder_driver_command_protocol.BC_TRANSACTION ? "BC_TRANSACTION" : "BC_REPLY",
@@ -153,7 +155,8 @@ function handle_write(write_buffer, write_size, write_consumed) { // binder_thre
                 sender_euid: binder_transaction_data.sender_euid,
                 data_size: dataSize,
                 offsets_size: Number(binder_transaction_data.offsets_size),
-                payload_hex: payload_hex
+                payload_hex: payload_hex,
+                ...(native_backtrace ? { native_backtrace } : {})
             });
             break;
         default:
@@ -223,7 +226,7 @@ function hook_binder(){
             var binder_write_read = parse_struct_binder_write_read(data);
 
             if(binder_write_read.write_size > 0) {
-                handle_write(binder_write_read.write_buffer, binder_write_read.write_size, binder_write_read.write_consumed);
+                handle_write(binder_write_read.write_buffer, binder_write_read.write_size, binder_write_read.write_consumed, this.context);
             }
         }
     });
