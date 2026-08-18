@@ -16,14 +16,34 @@ class BaseParser(ABC):
             # First, try to parse as JSON (new format)
             try:
                 data = json.loads(raw_data)
-                return self.parse_json_data(data, timestamp)
             except (json.JSONDecodeError, ValueError):
                 # Fall back to legacy string parsing
                 return self.parse_legacy_data(raw_data, timestamp)
-                
+
+            event = self.parse_json_data(data, timestamp)
+            self._attach_stack_trace_metadata(event, data)
+            return event
+
         except Exception as e:
             return self.handle_parse_error(raw_data, timestamp, str(e))
-    
+
+    def _attach_stack_trace_metadata(self, event: Optional[Event], data: dict) -> None:
+        """Uniformly attach stack trace fields present in the raw event payload.
+
+        Applies to all categories regardless of individual parser implementation,
+        so java_stack_trace and native_backtrace are never silently dropped.
+        """
+        if event is None:
+            return
+
+        java_stack_trace = data.get('java_stack_trace')
+        if java_stack_trace is not None:
+            event.add_metadata('java_stack_trace', java_stack_trace)
+
+        native_backtrace = data.get('native_backtrace')
+        if native_backtrace is not None:
+            event.add_metadata('native_backtrace', native_backtrace)
+
     @abstractmethod
     def parse_json_data(self, data: dict, timestamp: str) -> Optional[Event]:
         """Parse JSON data into an Event object"""

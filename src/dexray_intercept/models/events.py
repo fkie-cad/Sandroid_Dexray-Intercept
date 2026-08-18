@@ -151,6 +151,12 @@ class NetworkEvent(Event):
         self.operation_id = None
         self.captured_length = None
         self.data_hex = None
+        self.class_name = None
+        self.host = None
+        self.port = None
+        self.endpoint = None
+        self.timeout = None
+        self.server_info = None
 
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
@@ -164,6 +170,8 @@ class NetworkEvent(Event):
             'address_family', 'protocol', 'result_code',
             'provider_class', 'declaring_class', 'overload_signature',
             'operation_id', 'captured_length', 'data_hex',
+            'class_name', 'host', 'port', 'endpoint', 'timeout',
+            'server_info',
         ]
 
         for field in fields:
@@ -234,7 +242,6 @@ class IPCEvent(Event):
         self.receiver_identity = None
         self.thread_id = None
         self.thread_name = None
-        self.stack_trace = None
 
         self.intent_name = None
         self.intent = None

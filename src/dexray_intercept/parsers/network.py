@@ -45,6 +45,12 @@ class NetworkParser(BaseParser):
             'operation_id': 'operation_id',
             'captured_length': 'captured_length',
             'data_hex': 'data_hex',
+            'class_name': 'class_name',
+            'host': 'host',
+            'port': 'port',
+            'endpoint': 'endpoint',
+            'timeout': 'timeout',
+            'server_info': 'server_info',
         }
         
         for json_field, event_field in field_mapping.items():

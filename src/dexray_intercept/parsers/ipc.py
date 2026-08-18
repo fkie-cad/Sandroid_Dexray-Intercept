@@ -32,7 +32,6 @@ class IPCParser(BaseParser):
             'receiver_identity': 'receiver_identity',
             'thread_id': 'thread_id',
             'thread_name': 'thread_name',
-            'stack_trace': 'stack_trace',
 
             'intent_name': 'intent_name',
             'intent': 'intent',
