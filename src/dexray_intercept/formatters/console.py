@@ -16,6 +16,8 @@ from ..utils.string_utils import truncate_string
 class ConsoleFormatter(BaseFormatter):
     """Console formatter for human-readable output"""
 
+    MAX_CONSOLE_FRAMES = 16
+
     def __init__(self, verbose_mode: bool = False):
         self.verbose_mode = verbose_mode
 
@@ -26,25 +28,72 @@ class ConsoleFormatter(BaseFormatter):
 
         # Route to specific formatter based on event type
         if isinstance(event, FileSystemEvent):
-            return self._format_filesystem_event(event)
+            formatted = self._format_filesystem_event(event)
         elif isinstance(event, CryptoEvent):
-            return self._format_crypto_event(event)
+            formatted = self._format_crypto_event(event)
         elif isinstance(event, NetworkEvent):
-            return self._format_network_event(event)
+            formatted = self._format_network_event(event)
         elif isinstance(event, ProcessEvent):
-            return self._format_process_event(event)
+            formatted = self._format_process_event(event)
         elif isinstance(event, IPCEvent):
-            return self._format_ipc_event(event)
+            formatted = self._format_ipc_event(event)
         elif isinstance(event, ServiceEvent):
-            return self._format_service_event(event)
+            formatted = self._format_service_event(event)
         elif isinstance(event, DatabaseEvent):
-            return self._format_database_event(event)
+            formatted = self._format_database_event(event)
         elif isinstance(event, DEXEvent):
-            return self._format_dex_event(event)
+            formatted = self._format_dex_event(event)
         elif isinstance(event,JNIEvent):
-            return self._format_jni_event(event)
+            formatted = self._format_jni_event(event)
         else:
-            return self._format_generic_event(event)
+            formatted = self._format_generic_event(event)
+
+        if formatted is None:
+            return None
+
+        return self._append_stack_trace_blocks(formatted, event)
+
+    def _append_stack_trace_blocks(self, formatted: str, event: Event) -> str:
+        """Append java_stack_trace/native_backtrace blocks uniformly across all categories.
+
+        These fields are only present when -st was enabled and the originating hook
+        supports stack trace collection, so absence of the key means nothing to display.
+        JNI events use a separate 'backtrace' metadata key handled in _format_jni_event
+        and are unaffected by this uniform block.
+        """
+        md = event.metadata or {}
+        extra_lines: list = []
+        self._append_java_stack_trace(md, extra_lines)
+        self._append_native_backtrace(md, extra_lines)
+
+        if not extra_lines:
+            return formatted
+
+        return formatted.rstrip('\n') + '\n' + '\n'.join(extra_lines) + '\n\n'
+
+    def _append_java_stack_trace(self, md, lines):
+        frames = md.get("java_stack_trace")
+        if not frames:
+            return
+
+        lines.append("[*] Java Stack Trace:")
+        max_frames = None if self.verbose_mode else self.MAX_CONSOLE_FRAMES
+        display_frames = frames if max_frames is None else frames[:max_frames]
+
+        for frame in display_frames:
+            lines.append(f"    {frame}")
+
+        if max_frames is not None and len(frames) > max_frames:
+            remaining = len(frames) - max_frames
+            lines.append(f"    ... ({remaining} more frame(s), use -v for full trace)")
+
+    def _append_native_backtrace(self, md, lines):
+        frames = md.get("native_backtrace")
+        if not frames:
+            return
+
+        lines.append("[*] Native Backtrace:")
+        lines.extend(self._format_native_frame_lines(frames, self.verbose_mode))
 
     def _format_filesystem_event(self, event: FileSystemEvent) -> str:
         """Format file system events"""
@@ -291,6 +340,29 @@ class ConsoleFormatter(BaseFormatter):
 
             if event.result_code is not None:
                 lines.append(f"[*] Result: {event.result_code}")
+            
+            if event.endpoint:
+                lines.append(f"[*] Endpoint: {event.endpoint}")
+
+            if event.host:
+                host_port = (
+                    f"{event.host}:{event.port}"
+                    if event.port is not None
+                    else event.host
+                )
+                lines.append(f"[*] Host: {host_port}")
+
+            if event.timeout is not None:
+                lines.append(f"[*] Timeout: {event.timeout} ms")
+
+            if event.server_info:
+                lines.append(f"[*] Server: {event.server_info}")
+
+            if event.class_name:
+                lines.append(f"[*] Class: {event.class_name}")
+
+            if event.overload_signature:
+                lines.append(f"[*] Overload: {event.overload_signature}")
 
         else:
             lines.append(f"[*] [Network] {event.event_type}: {getattr(event, 'url', '') or getattr(event, 'uri', '') or 'Unknown'}")
@@ -1041,10 +1113,21 @@ class ConsoleFormatter(BaseFormatter):
             return
 
         lines.append("[*] Backtrace:")
-        max_frames = 16
+        lines.extend(self._format_native_frame_lines(bt, self.verbose_mode))
+
+    def _format_native_frame_lines(self, frames, verbose: bool) -> list:
+        """Render a structured native backtrace (address/module/symbol frames).
+
+        Shared by JNI's 'backtrace' field and the framework-wide 'native_backtrace'
+        field - both are produced by the same underlying frame-building logic and
+        therefore share this rendering.
+        """
+        lines: list = []
+        max_frames = None if verbose else self.MAX_CONSOLE_FRAMES
         count = 0
-        for frame in bt:
-            if count >= max_frames:
+
+        for frame in frames:
+            if max_frames is not None and count >= max_frames:
                 break
 
             if isinstance(frame, str):
@@ -1075,6 +1158,8 @@ class ConsoleFormatter(BaseFormatter):
                     lines.append(f"    {addr}")
 
                 count += 1
+
+        return lines
 
     def _format_generic_event(self, event: Event) -> str:
         """Format generic events"""
