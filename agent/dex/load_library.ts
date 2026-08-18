@@ -1,5 +1,6 @@
 import { devlog, am_send } from "../utils/logging.js"
 import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "DYNAMIC_LIB_LOADING"
 
@@ -38,10 +39,12 @@ function install_system_library_hooks(): void {
                 "load_library:System.load",
                 SystemLoad_1,
                 function (original, library: string) {
+                    const java_stack_trace = collectJavaStackTrace();
                     createLibraryEvent("library.system.load", {
                         method: "System.load(String)",
                         library_path: library,
-                        loader_type: "System"
+                        loader_type: "System",
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
                     return original.call(this, library);
                 }
@@ -53,10 +56,12 @@ function install_system_library_hooks(): void {
                 "load_library:System.loadLibrary",
                 SystemLoad_2,
                 function (original, library: string) {
+                    const java_stack_trace = collectJavaStackTrace();
                     createLibraryEvent("library.system.load_library", {
                         method: "System.loadLibrary(String)",
                         library_name: library,
-                        loader_type: "System"
+                        loader_type: "System",
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
                     original.call(this, library);
                 }
@@ -91,10 +96,12 @@ function install_runtime_library_hooks(): void {
                 "load_library:Runtime.load",
                 RuntimeLoad_1,
                 function (original, library: string) {
+                    const java_stack_trace = collectJavaStackTrace();
                     createLibraryEvent("library.runtime.load", {
                         method: "Runtime.load(String)",
                         library_path: library,
-                        loader_type: "Runtime"
+                        loader_type: "Runtime",
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
                     original.call(this, library);
                 }
@@ -106,10 +113,12 @@ function install_runtime_library_hooks(): void {
                 "load_library:Runtime.loadLibrary",
                 RuntimeLoad_2,
                 function (original, library: string) {
+                    const java_stack_trace = collectJavaStackTrace();
                     createLibraryEvent("library.runtime.load_library", {
                         method: "Runtime.loadLibrary(String)",
                         library_name: library,
-                        loader_type: "Runtime"
+                        loader_type: "Runtime",
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
                     original.call(this, library);
                 }
