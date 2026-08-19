@@ -757,6 +757,12 @@ public class MainActivity extends Activity {
             Log.e(TAG, "runTcpSocketTests failed", t);
         }
         try {
+            runTcpSocketIpv6Tests();
+            Log.i(TAG, "runTcpSocketIpv6Tests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runTcpSocketIpv6Tests failed", t);
+        }
+        try {
             runLocalSocketTests();
             Log.i(TAG, "runLocalSocketTests completed");
         } catch (Throwable t) {
@@ -773,6 +779,12 @@ public class MainActivity extends Activity {
             Log.i(TAG, "runUdpSocketTests completed");
         } catch (Throwable t) {
             Log.e(TAG, "runUdpSocketTests failed", t);
+        }
+        try {
+            runUdpSocketIpv6Tests();
+            Log.i(TAG, "runUdpSocketIpv6Tests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runUdpSocketIpv6Tests failed", t);
         }
     }
 
@@ -824,6 +836,42 @@ public class MainActivity extends Activity {
         s3.connect(new InetSocketAddress("127.0.0.1", port), 2000);
         s3.getOutputStream().write("hello3".getBytes());
         s3.close();
+
+        serverLatch.await(5, TimeUnit.SECONDS);
+    }
+
+    private void runTcpSocketIpv6Tests() throws Exception {
+        Log.i(TAG, "runTcpSocketIpv6Tests started");
+
+        InetAddress loopbackV6 = InetAddress.getByName("::1");
+
+        ServerSocket serverSocket = new ServerSocket(0, 1, loopbackV6);
+        final int port = serverSocket.getLocalPort();
+        CountDownLatch serverLatch = new CountDownLatch(1);
+
+        Thread serverThread = new Thread(() -> {
+            try {
+                Socket client = serverSocket.accept();
+                Log.i(TAG, "ServerSocket.accept() (IPv6) - connection received");
+                InputStream in = client.getInputStream();
+                byte[] buf = new byte[64];
+                in.read(buf);
+                client.close();
+            } catch (Throwable e) {
+                Log.e(TAG, "TCP IPv6 server error", e);
+            } finally {
+                try { serverSocket.close(); } catch (Throwable ignored) {}
+                serverLatch.countDown();
+            }
+        }, "tcp-server-ipv6");
+        serverThread.start();
+
+        // socket.java.connect - Socket.connect(SocketAddress) over IPv6 loopback
+        Log.i(TAG, "Socket.connect(SocketAddress) IPv6 - trigger");
+        Socket client = new Socket();
+        client.connect(new InetSocketAddress(loopbackV6, port));
+        client.getOutputStream().write("hello-ipv6".getBytes());
+        client.close();
 
         serverLatch.await(5, TimeUnit.SECONDS);
     }
@@ -948,6 +996,32 @@ public class MainActivity extends Activity {
         byte[] inBuf = new byte[64];
         receiver.receive(new DatagramPacket(inBuf, inBuf.length));
         Log.i(TAG, "DatagramSocket.receive - received packet");
+
+        sender.close();
+        receiver.close();
+    }
+
+    private void runUdpSocketIpv6Tests() throws Exception {
+        Log.i(TAG, "runUdpSocketIpv6Tests started");
+
+        InetAddress loopbackV6 = InetAddress.getByName("::1");
+
+        DatagramSocket receiver = new DatagramSocket(0, loopbackV6);
+        int port = receiver.getLocalPort();
+
+        DatagramSocket sender = new DatagramSocket();
+
+        // socket.java.datagram_connect - DatagramSocket.connect(InetAddress, int) over IPv6 loopback
+        Log.i(TAG, "DatagramSocket.connect(InetAddress,int) IPv6 - trigger");
+        sender.connect(loopbackV6, port);
+
+        byte[] outBuf = "udp-test-ipv6".getBytes("UTF-8");
+        sender.send(new DatagramPacket(outBuf, outBuf.length));
+        Log.i(TAG, "DatagramSocket.send (IPv6) - sent " + outBuf.length + " bytes");
+
+        byte[] inBuf = new byte[64];
+        receiver.receive(new DatagramPacket(inBuf, inBuf.length));
+        Log.i(TAG, "DatagramSocket.receive (IPv6) - received packet");
 
         sender.close();
         receiver.close();
