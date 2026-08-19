@@ -848,6 +848,46 @@ function isDatagramSocketConstructorOverloadSkipped(
     );
 }
 
+function isLocalSocketConstructorOverloadSkipped(
+    argumentTypes: any[]
+): boolean {
+    return (
+        argumentTypes.length === 2 &&
+        argumentTypes[0].className === "android.net.LocalSocketImpl"
+    );
+}
+
+function getJavaLocalSocketEndpointData(localSocket: any): any {
+    const data: any = {};
+
+    try {
+        const address = localSocket.getLocalSocketAddress();
+        const localAddress = getJavaLocalSocketAddressString(address);
+
+        if (localAddress !== undefined) {
+            data.local_address = localAddress;
+            data.endpoint = localAddress;
+        }
+    } catch (_) {
+        // Endpoint information is optional.
+    }
+
+    return data;
+}
+
+function getLocalSocketBindExtraFields(args: any[]): any {
+    const extra: any = {};
+    const address = getJavaLocalSocketAddressString(args[0]);
+
+    if (address !== undefined) {
+        extra.local_address = address;
+        extra.endpoint = address;
+    }
+
+    return extra;
+}
+
+
 function hook_java_socket_communication() {
     safePerform("sockets:hook_java_socket_communication", () => {
         const ServerSocket = safeUse(
@@ -1039,6 +1079,14 @@ function hook_java_socket_communication() {
         }
 
         if (LocalServerSocket) {
+            hookSocketOverloads(LocalServerSocket, {
+                classLabel: "android.net.LocalServerSocket",
+                methodName: "$init",
+                eventType: "socket.java.local_server_init",
+                getEndpointData: getJavaLocalServerSocketEndpointData,
+                getSocketType: () => "local"
+            });
+
             const localAccept = safeOverload(
                 LocalServerSocket.accept,
                 "sockets:LocalServerSocket.accept"
@@ -1074,6 +1122,25 @@ function hook_java_socket_communication() {
         }
 
         if (LocalSocket) {
+            hookSocketOverloads(LocalSocket, {
+                classLabel: "android.net.LocalSocket",
+                methodName: "$init",
+                eventType: "socket.java.local_init",
+                shouldHook: (argumentTypes) =>
+                    !isLocalSocketConstructorOverloadSkipped(argumentTypes),
+                getEndpointData: getJavaLocalSocketEndpointData,
+                getSocketType: () => "local"
+            });
+
+            hookSocketOverloads(LocalSocket, {
+                classLabel: "android.net.LocalSocket",
+                methodName: "bind",
+                eventType: "socket.java.local_bind",
+                getEndpointData: getJavaLocalSocketEndpointData,
+                getSocketType: () => "local",
+                getExtraFields: (args) => getLocalSocketBindExtraFields(args)
+            });
+
             const localConnect = safeOverload(
                 LocalSocket.connect,
                 "sockets:LocalSocket.connect",
