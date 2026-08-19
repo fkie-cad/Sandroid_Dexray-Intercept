@@ -57,6 +57,7 @@ class NetworkParser(BaseParser):
             'server_info': 'server_info',
             'proxy': 'proxy',
             'backlog': 'backlog',
+            'payload_truncated': 'payload_truncated',
             'local_address': 'local_address',
             'remote_address': 'remote_address',
             'connection_string': 'connection_string',

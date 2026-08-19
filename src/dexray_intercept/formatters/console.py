@@ -323,6 +323,9 @@ class ConsoleFormatter(BaseFormatter):
                 f"[*] Payload: {'available' if event.has_buffer else 'unavailable'}"
             )
 
+            if event.payload_truncated:
+                lines.append("[*] Payload Truncated: True")
+
             if self.verbose_mode and event.data_hex:
                 lines.append("[*] Data:")
                 data_dump = hexdump(event.data_hex, header=True, ansi=True, truncate=True, max_bytes=0x50)
@@ -351,6 +354,9 @@ class ConsoleFormatter(BaseFormatter):
                 
             if event.captured_length is not None:
                 lines.append(f"[*] Captured Length: {event.captured_length} bytes")
+
+            if event.payload_truncated:
+                lines.append("[*] Payload Truncated: True")
 
             if event.operation_id:
                 lines.append(f"[*] Operation ID: {event.operation_id}")
