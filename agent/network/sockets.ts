@@ -614,6 +614,231 @@ function getJavaLocalServerSocketEndpointData(
     return data;
 }
 
+interface SocketOverloadHookConfig {
+    classLabel: string;
+    methodName: string;
+    eventType: string;
+    shouldHook?: (argumentTypes: any[]) => boolean;
+    getEndpointData: (instance: any) => any;
+    getSocketType: (endpointData: any) => string;
+    getExtraFields?: (args: any[], argumentTypes: any[]) => any;
+}
+
+function buildOverloadSignature(
+    methodName: string,
+    argumentTypes: any[]
+): string {
+    const argsList = argumentTypes
+        .map((argumentType: any) => argumentType.className)
+        .join(",");
+
+    return `${methodName}(${argsList})`;
+}
+
+const socketOperationGuardDepth = new Map<string, number>();
+
+function getSocketOperationGuardKey(classLabel: string): string {
+    return `${classLabel}:${Process.getCurrentThreadId()}`;
+}
+
+function isNestedSocketOperation(groupKey: string): boolean {
+    return (socketOperationGuardDepth.get(groupKey) || 0) > 0;
+}
+
+function withSocketOperationGuard<T>(groupKey: string, fn: () => T): T {
+    const depth = socketOperationGuardDepth.get(groupKey) || 0;
+    socketOperationGuardDepth.set(groupKey, depth + 1);
+
+    try {
+        return fn();
+    } finally {
+        if (depth === 0) {
+            socketOperationGuardDepth.delete(groupKey);
+        } else {
+            socketOperationGuardDepth.set(groupKey, depth);
+        }
+    }
+}
+
+function hookSocketOverloads(
+    javaClass: any,
+    config: SocketOverloadHookConfig
+): void {
+    const method = javaClass[config.methodName];
+
+    if (!method || !method.overloads) {
+        return;
+    }
+
+    method.overloads.forEach((overload: any, index: number) => {
+        const argumentTypes = overload.argumentTypes;
+
+        if (config.shouldHook && !config.shouldHook(argumentTypes)) {
+            return;
+        }
+
+        const signature = buildOverloadSignature(
+            config.methodName,
+            argumentTypes
+        );
+        const hookContext =
+            `sockets:${config.classLabel}.${config.methodName}[${index}]`;
+
+        overload.implementation = safeImplementation(
+            hookContext,
+            overload,
+            function(original: any, ...args: any[]) {
+                const groupKey = getSocketOperationGuardKey(
+                    config.classLabel
+                );
+                const alreadyNested = isNestedSocketOperation(groupKey);
+
+                const result = withSocketOperationGuard(groupKey, () =>
+                    callJavaOriginal(original, this, ...args)
+                );
+
+                if (alreadyNested) {
+                    return result;
+                }
+
+                const endpointData = config.getEndpointData(this);
+                const socketType = config.getSocketType(endpointData);
+                const extraFields = config.getExtraFields
+                    ? config.getExtraFields(args, argumentTypes)
+                    : {};
+                const javaStackTrace = collectJavaStackTrace();
+
+                createSocketEventSafely(config.eventType, {
+                    class_name: config.classLabel,
+                    method: config.methodName,
+                    overload_signature: signature,
+                    socket_type: socketType,
+                    result_code: 0,
+                    ...endpointData,
+                    ...extraFields,
+                    ...(javaStackTrace
+                        ? { java_stack_trace: javaStackTrace }
+                        : {})
+                });
+
+                return result;
+            }
+        );
+    });
+}
+
+function getJavaServerSocketEndpointData(serverSocket: any): any {
+    const data: any = {};
+
+    try {
+        const localAddress = getJavaInetAddressString(
+            serverSocket.getInetAddress()
+        );
+        const localPort = serverSocket.getLocalPort();
+
+        if (localAddress !== undefined && localPort >= 0) {
+            data.local_ip = localAddress;
+            data.local_port = localPort;
+            data.local_address = formatSocketAddress(
+                localAddress,
+                localPort
+            );
+            data.endpoint = data.local_address;
+        }
+    } catch (_) {
+        // Endpoint information is optional.
+    }
+
+    return data;
+}
+
+function isSocketConstructorOverloadSkipped(
+    argumentTypes: any[]
+): boolean {
+    const classNames = argumentTypes.map(
+        (argumentType: any) => argumentType.className
+    );
+
+    if (
+        classNames.length === 3 &&
+        classNames[2] === "boolean"
+    ) {
+        return true; // deprecated stream-mode constructors
+    }
+
+    if (
+        classNames.length === 1 &&
+        classNames[0] === "java.net.SocketImpl"
+    ) {
+        return true; // protected, not reachable from arbitrary app code
+    }
+
+    if (
+        classNames.length === 4 &&
+        classNames[0] === "[Ljava.net.InetAddress;"
+    ) {
+        return true; // internal JDK happy-eyeballs helper
+    }
+
+    return false;
+}
+
+function getSocketConstructorExtraFields(
+    args: any[],
+    argumentTypes: any[]
+): any {
+    const classNames = argumentTypes.map(
+        (argumentType: any) => argumentType.className
+    );
+    const extra: any = {};
+
+    if (
+        classNames[0] === "java.lang.String" &&
+        classNames[1] === "int"
+    ) {
+        extra.host = args[0];
+        extra.port = args[1];
+        extra.endpoint = `${args[0]}:${args[1]}`;
+    } else if (
+        classNames[0] === "java.net.InetAddress" &&
+        classNames[1] === "int"
+    ) {
+        const host = getJavaInetAddressString(args[0]);
+
+        if (host !== undefined) {
+            extra.host = host;
+            extra.port = args[1];
+            extra.endpoint = `${host}:${args[1]}`;
+        }
+    } else if (
+        classNames.length === 1 &&
+        classNames[0] === "java.net.Proxy"
+    ) {
+        try {
+            if (args[0]) {
+                extra.proxy = args[0].toString();
+            }
+        } catch (_) {
+            // Proxy stringification is optional.
+        }
+    }
+
+    return extra;
+}
+
+function getBindExtraFields(
+    args: any[],
+    argumentTypes: any[]
+): any {
+    const extra: any = {};
+
+    if (argumentTypes.length === 2) {
+        extra.backlog = args[1];
+    }
+
+    return extra;
+}
+
 function hook_java_socket_communication() {
     safePerform("sockets:hook_java_socket_communication", () => {
         const ServerSocket = safeUse(
@@ -638,6 +863,27 @@ function hook_java_socket_communication() {
         );
 
         if (ServerSocket) {
+            hookSocketOverloads(ServerSocket, {
+                classLabel: "java.net.ServerSocket",
+                methodName: "$init",
+                eventType: "socket.java.server_init",
+                shouldHook: (argumentTypes) =>
+                    !isSocketConstructorOverloadSkipped(argumentTypes),
+                getEndpointData: getJavaServerSocketEndpointData,
+                getSocketType: (endpointData) =>
+                    getJavaSocketType(endpointData.local_ip)
+            });
+
+            hookSocketOverloads(ServerSocket, {
+                classLabel: "java.net.ServerSocket",
+                methodName: "bind",
+                eventType: "socket.java.bind",
+                getEndpointData: getJavaServerSocketEndpointData,
+                getSocketType: (endpointData) =>
+                    getJavaSocketType(endpointData.local_ip),
+                getExtraFields: getBindExtraFields
+            });
+
             const accept = safeOverload(
                 ServerSocket.accept,
                 "sockets:ServerSocket.accept"
@@ -674,49 +920,30 @@ function hook_java_socket_communication() {
         }
 
         if (Socket) {
-            const socketInit = safeOverload(
-                Socket.$init,
-                "sockets:Socket.$init",
-                "java.lang.String",
-                "int"
-            );
+            hookSocketOverloads(Socket, {
+                classLabel: "java.net.Socket",
+                methodName: "$init",
+                eventType: "socket.java.init",
+                shouldHook: (argumentTypes) =>
+                    !isSocketConstructorOverloadSkipped(argumentTypes),
+                getEndpointData: getJavaSocketEndpointData,
+                getSocketType: (endpointData) =>
+                    getJavaSocketType(
+                        endpointData.remote_ip || endpointData.local_ip
+                    ),
+                getExtraFields: getSocketConstructorExtraFields
+            });
 
-            if (socketInit) {
-                socketInit.implementation = safeImplementation(
-                    "sockets:Socket.$init",
-                    socketInit,
-                    function(original, host, port) {
-                        const result = callJavaOriginal(
-                            original,
-                            this,
-                            host,
-                            port
-                        );
-                        const endpointData = getJavaSocketEndpointData(this);
-                        const javaStackTrace = collectJavaStackTrace();
-
-                        createSocketEventSafely("socket.java.init", {
-                            class_name: "java.net.Socket",
-                            method: "$init",
-                            overload_signature:
-                                "$init(java.lang.String,int)",
-                            socket_type: getJavaSocketType(
-                                endpointData.remote_ip
-                            ),
-                            host: host,
-                            port: port,
-                            endpoint: `${host}:${port}`,
-                            result_code: 0,
-                            ...endpointData,
-                            ...(javaStackTrace
-                                ? { java_stack_trace: javaStackTrace }
-                                : {})
-                        });
-
-                        return result;
-                    }
-                );
-            }
+            hookSocketOverloads(Socket, {
+                classLabel: "java.net.Socket",
+                methodName: "bind",
+                eventType: "socket.java.bind",
+                getEndpointData: getJavaSocketEndpointData,
+                getSocketType: (endpointData) =>
+                    getJavaSocketType(
+                        endpointData.remote_ip || endpointData.local_ip
+                    )
+            });
 
             const connectWithTimeout = safeOverload(
                 Socket.connect,
