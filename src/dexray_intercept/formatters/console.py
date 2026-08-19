@@ -300,6 +300,35 @@ class ConsoleFormatter(BaseFormatter):
             if event.mime_type:
                 lines.append(f"[*] [{event.event_type}] MIME Type: {event.mime_type}")
 
+        elif (
+            event.event_type.startswith('socket.native.')
+            and event.event_type.endswith('_data')
+        ):
+            payload_label = event.event_type.rsplit('.', 1)[-1]
+            lines.append(f"\n[*] [Socket Payload] {payload_label}:")
+
+            if event.socket_descriptor is not None:
+                lines.append(f"[*] Socket FD: {event.socket_descriptor}")
+
+            if event.operation_id:
+                lines.append(f"[*] Operation ID: {event.operation_id}")
+
+            if event.data_length is not None:
+                lines.append(f"[*] Data Length: {event.data_length} bytes")
+
+            if event.captured_length is not None:
+                lines.append(f"[*] Captured Length: {event.captured_length} bytes")
+
+            lines.append(
+                f"[*] Payload: {'available' if event.has_buffer else 'unavailable'}"
+            )
+
+            if self.verbose_mode and event.data_hex:
+                lines.append("[*] Data:")
+                data_dump = hexdump(event.data_hex, header=True, ansi=True, truncate=True, max_bytes=0x50)
+                for line in data_dump.split('\n'):
+                    lines.append(f"    {line}")
+
         elif event.event_type.startswith('socket.'):
             operation = event.operation or 'Socket Operation'
             socket_desc = event.socket_description or 'Unknown Socket'
