@@ -776,6 +776,12 @@ public class MainActivity extends Activity {
             Log.e(TAG, "runLocalSocketTests failed", t);
         }
         try {
+            runLocalSocketConstructorOverloadTests();
+            Log.i(TAG, "runLocalSocketConstructorOverloadTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runLocalSocketConstructorOverloadTests failed", t);
+        }
+        try {
             runFilesystemLocalSocketTests();
             Log.i(TAG, "runFilesystemLocalSocketTests completed");
         } catch (Throwable t) {
@@ -1030,6 +1036,27 @@ public class MainActivity extends Activity {
         client.close();
 
         serverLatch.await(5, TimeUnit.SECONDS);
+    }
+
+    private void runLocalSocketConstructorOverloadTests() throws Exception {
+        Log.i(TAG, "runLocalSocketConstructorOverloadTests started");
+
+        // socket.java.local_init - LocalSocket()
+        LocalSocket defaultSocket = new LocalSocket();
+        Log.i(TAG, "LocalSocket() - trigger");
+        defaultSocket.close();
+
+        // socket.java.local_init - LocalSocket(int)
+        LocalSocket datagramSocket = new LocalSocket(LocalSocket.SOCKET_DGRAM);
+        Log.i(TAG, "LocalSocket(int) - trigger");
+        datagramSocket.close();
+
+        // socket.java.local_init - LocalSocket()
+        // socket.java.local_bind - LocalSocket.bind(LocalSocketAddress)
+        LocalSocket bindableSocket = new LocalSocket();
+        bindableSocket.bind(new LocalSocketAddress("networke2e_local_bind_test"));
+        Log.i(TAG, "LocalSocket.bind(LocalSocketAddress) - trigger");
+        bindableSocket.close();
     }
 
     private void runFilesystemLocalSocketTests() throws Exception {
