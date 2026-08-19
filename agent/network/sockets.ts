@@ -234,20 +234,36 @@ function getIpv4EndpointFromSockaddr(
     }
 }
 
-function readSocketBuffer(
+interface CapturedSocketPayload {
+    buffer: ArrayBuffer | undefined;
+    truncated: boolean;
+}
+
+function readSocketBufferCapped(
     address: any,
     length: number
-): ArrayBuffer | undefined {
-    try {
-        const buffer = ptr(address);
+): CapturedSocketPayload {
+    if (length <= 0) {
+        return { buffer: undefined, truncated: false };
+    }
 
-        if (buffer.isNull()) {
-            return undefined;
+    const captureLength = Math.min(length, MAX_SOCKET_PAYLOAD_CAPTURE);
+
+    try {
+        const pointer = ptr(address);
+
+        if (pointer.isNull()) {
+            return { buffer: undefined, truncated: false };
         }
 
-        return buffer.readByteArray(length) || undefined;
+        const buffer = pointer.readByteArray(captureLength) || undefined;
+
+        return {
+            buffer,
+            truncated: buffer !== undefined && captureLength < length
+        };
     } catch (_) {
-        return undefined;
+        return { buffer: undefined, truncated: false };
     }
 }
 
@@ -270,7 +286,8 @@ function sendSocketPayloadEvent(
     operationId: string,
     socketDescriptor: number,
     dataLength: number,
-    buffer: ArrayBuffer | undefined
+    buffer: ArrayBuffer | undefined,
+    truncated: boolean
 ): void {
     if (!buffer) {
         return;
@@ -283,7 +300,8 @@ function sendSocketPayloadEvent(
         socket_descriptor: socketDescriptor,
         data_length: dataLength,
         captured_length: getCapturedLength(buffer),
-        has_buffer: true
+        has_buffer: true,
+        payload_truncated: truncated
     }), buffer);
 }
 
@@ -311,19 +329,18 @@ function getNativeSize(address: NativePointer): number | undefined {
 function captureIovecPayload(
     messageHeaderAddress: any,
     resultLength: number
-): ArrayBuffer | undefined {
-    if (
-        resultLength <= 0 ||
-        resultLength > MAX_SOCKET_PAYLOAD_CAPTURE
-    ) {
-        return undefined;
+): CapturedSocketPayload {
+    if (resultLength <= 0) {
+        return { buffer: undefined, truncated: false };
     }
+
+    const captureLength = Math.min(resultLength, MAX_SOCKET_PAYLOAD_CAPTURE);
 
     try {
         const messageHeader = ptr(messageHeaderAddress);
 
         if (messageHeader.isNull()) {
-            return undefined;
+            return { buffer: undefined, truncated: false };
         }
 
         const pointerSize = Process.pointerSize;
@@ -355,11 +372,11 @@ function captureIovecPayload(
             iovecCount === 0 ||
             iovecCount > MAX_SOCKET_IOVEC_COUNT
         ) {
-            return undefined;
+            return { buffer: undefined, truncated: false };
         }
 
-        const captured = new Uint8Array(resultLength);
-        let remaining = resultLength;
+        const captured = new Uint8Array(captureLength);
+        let remaining = captureLength;
         let destinationOffset = 0;
 
         for (let index = 0; index < iovecCount && remaining > 0; index++) {
@@ -373,7 +390,7 @@ function captureIovecPayload(
                 bufferAddress.isNull() ||
                 bufferLength === undefined
             ) {
-                return undefined;
+                return { buffer: undefined, truncated: false };
             }
 
             const bytesToRead = Math.min(bufferLength, remaining);
@@ -385,7 +402,7 @@ function captureIovecPayload(
             const part = bufferAddress.readByteArray(bytesToRead);
 
             if (!part) {
-                return undefined;
+                return { buffer: undefined, truncated: false };
             }
 
             captured.set(
@@ -398,10 +415,13 @@ function captureIovecPayload(
         }
 
         return remaining === 0
-            ? captured.buffer
-            : undefined;
+            ? {
+                buffer: captured.buffer,
+                truncated: captureLength < resultLength
+            }
+            : { buffer: undefined, truncated: false };
     } catch (_) {
-        return undefined;
+        return { buffer: undefined, truncated: false };
     }
 }
 
@@ -1745,12 +1765,10 @@ function hook_bionic_socket_communication(){
 
             trackSocketFromRuntime(this.sd);
 
-            let buffer;
-            const buf = ptr(this.addr);
-
-            if (!buf.isNull()) {
-                buffer = buf.readByteArray(len);
-            }
+            const { buffer, truncated } = readSocketBufferCapped(
+                this.addr,
+                len
+            );
             const operationId = createSocketOperationId(this.sd);
             const native_backtrace = collectNativeBacktrace(this.context);
 
@@ -1766,6 +1784,7 @@ function hook_bionic_socket_communication(){
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined,
+                payload_truncated: truncated,
                 ...(native_backtrace ? { native_backtrace } : {})
             });
 
@@ -1774,7 +1793,8 @@ function hook_bionic_socket_communication(){
                 operationId,
                 this.sd,
                 len,
-                buffer
+                buffer,
+                truncated
             );
         }
     });
@@ -1814,12 +1834,10 @@ function hook_bionic_socket_communication(){
 
                 trackSocketFromRuntime(this.sd);
 
-                let buffer;
-                const buf = ptr(this.addr);
-
-                if (!buf.isNull()) {
-                    buffer = buf.readByteArray(len);
-                }
+                const { buffer, truncated } = readSocketBufferCapped(
+                    this.addr,
+                    len
+                );
 
                 const operationId = createSocketOperationId(this.sd);
                 const native_backtrace = collectNativeBacktrace(this.context);
@@ -1836,6 +1854,7 @@ function hook_bionic_socket_communication(){
                     data_length: len,
                     captured_length: getCapturedLength(buffer),
                     has_buffer: buffer !== undefined,
+                    payload_truncated: truncated,
                     ...(native_backtrace ? { native_backtrace } : {})
                 });
 
@@ -1844,7 +1863,8 @@ function hook_bionic_socket_communication(){
                     operationId,
                     this.sd,
                     len,
-                    buffer
+                    buffer,
+                    truncated
                 );
             }
         });
@@ -1891,7 +1911,10 @@ function hook_bionic_socket_communication(){
                 );
             }
 
-            const buffer = readSocketBuffer(this.addr, len);
+            const { buffer, truncated } = readSocketBufferCapped(
+                this.addr,
+                len
+            );
             const operationId = createSocketOperationId(this.sd);
             const native_backtrace = collectNativeBacktrace(this.context);
 
@@ -1905,7 +1928,8 @@ function hook_bionic_socket_communication(){
                 result_code: len,
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
-                has_buffer: buffer !== undefined
+                has_buffer: buffer !== undefined,
+                payload_truncated: truncated
             };
 
             if (local) {
@@ -1929,7 +1953,8 @@ function hook_bionic_socket_communication(){
                 operationId,
                 this.sd,
                 len,
-                buffer
+                buffer,
+                truncated
             );
         }
     });
@@ -1973,7 +1998,10 @@ function hook_bionic_socket_communication(){
                 }
             }
 
-            const buffer = readSocketBuffer(this.addr, len);
+            const { buffer, truncated } = readSocketBufferCapped(
+                this.addr,
+                len
+            );
             const operationId = createSocketOperationId(this.sd);
             const native_backtrace = collectNativeBacktrace(this.context);
 
@@ -1987,7 +2015,8 @@ function hook_bionic_socket_communication(){
                 result_code: len,
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
-                has_buffer: buffer !== undefined
+                has_buffer: buffer !== undefined,
+                payload_truncated: truncated
             };
 
             if (local) {
@@ -2011,7 +2040,8 @@ function hook_bionic_socket_communication(){
                 operationId,
                 this.sd,
                 len,
-                buffer
+                buffer,
+                truncated
             );
         }
     });
@@ -2048,12 +2078,10 @@ function hook_bionic_socket_communication(){
                 return;
             }
 
-            let buffer;
-            const buf = ptr(this.addr);
-
-            if (!buf.isNull()) {
-                buffer = buf.readByteArray(len);
-            }
+            const { buffer, truncated } = readSocketBufferCapped(
+                this.addr,
+                len
+            );
             const operationId = createSocketOperationId(this.sd);
             const native_backtrace = collectNativeBacktrace(this.context);
 
@@ -2072,6 +2100,7 @@ function hook_bionic_socket_communication(){
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined,
+                payload_truncated: truncated,
                 ...(native_backtrace ? { native_backtrace } : {})
             });
 
@@ -2080,7 +2109,8 @@ function hook_bionic_socket_communication(){
                 operationId,
                 this.sd,
                 len,
-                buffer
+                buffer,
+                truncated
             );
         }
     });
@@ -2117,12 +2147,10 @@ function hook_bionic_socket_communication(){
                 return;
             }
 
-            let buffer;
-            const buf = ptr(this.addr);
-
-            if (!buf.isNull()) {
-                buffer = buf.readByteArray(len);
-            }
+            const { buffer, truncated } = readSocketBufferCapped(
+                this.addr,
+                len
+            );
             const operationId = createSocketOperationId(this.sd);
             const native_backtrace = collectNativeBacktrace(this.context);
 
@@ -2141,6 +2169,7 @@ function hook_bionic_socket_communication(){
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined,
+                payload_truncated: truncated,
                 ...(native_backtrace ? { native_backtrace } : {})
             });
 
@@ -2149,7 +2178,8 @@ function hook_bionic_socket_communication(){
                 operationId,
                 this.sd,
                 len,
-                buffer
+                buffer,
+                truncated
             );
         }
     });
@@ -2177,7 +2207,7 @@ function hook_bionic_socket_communication(){
                 getMessageHeaderEndpoint(this.messageHeader) ||
                 getSocketEndpoint(this.sd, true);
 
-            const buffer = captureIovecPayload(
+            const { buffer, truncated } = captureIovecPayload(
                 this.messageHeader,
                 len
             );
@@ -2194,7 +2224,8 @@ function hook_bionic_socket_communication(){
                 result_code: len,
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
-                has_buffer: buffer !== undefined
+                has_buffer: buffer !== undefined,
+                payload_truncated: truncated
             };
 
             if (local) {
@@ -2218,7 +2249,8 @@ function hook_bionic_socket_communication(){
                 operationId,
                 this.sd,
                 len,
-                buffer
+                buffer,
+                truncated
             );
         }
     });
@@ -2246,7 +2278,7 @@ function hook_bionic_socket_communication(){
                 getMessageHeaderEndpoint(this.messageHeader) ||
                 getSocketEndpoint(this.sd, true);
 
-            const buffer = captureIovecPayload(
+            const { buffer, truncated } = captureIovecPayload(
                 this.messageHeader,
                 len
             );
@@ -2263,7 +2295,8 @@ function hook_bionic_socket_communication(){
                 result_code: len,
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
-                has_buffer: buffer !== undefined
+                has_buffer: buffer !== undefined,
+                payload_truncated: truncated
             };
 
             if (local) {
@@ -2287,7 +2320,8 @@ function hook_bionic_socket_communication(){
                 operationId,
                 this.sd,
                 len,
-                buffer
+                buffer,
+                truncated
             );
         }
     });
