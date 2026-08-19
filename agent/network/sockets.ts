@@ -17,6 +17,7 @@ const PROFILE_HOOKING_TYPE: string = "NETWORK_SOCKETS"
 
 const AF_INET = 2;
 const AF_INET6 = 10;
+const AF_UNIX = 1;
 
 const SOCK_STREAM = 1;
 const SOCK_DGRAM = 2;
@@ -25,6 +26,8 @@ interface NativeSocketState {
     socketType: string;
     addressFamily?: number;
     protocol?: number;
+    localPath?: string;
+    remotePath?: string;
 }
 
 const nativeSocketStates = new Map<number, NativeSocketState>();
@@ -65,6 +68,11 @@ function getSocketTypeFromArguments(
     if (addressFamily === AF_INET6) {
         if (baseType === SOCK_STREAM) return "tcp6";
         if (baseType === SOCK_DGRAM) return "udp6";
+    }
+
+    if (addressFamily === AF_UNIX) {
+        if (baseType === SOCK_STREAM) return "unix:stream";
+        if (baseType === SOCK_DGRAM) return "unix:dgram";
     }
 
     return null;
@@ -132,7 +140,7 @@ function trackSocketFromRuntime(
     try {
         const socketType = Socket.type(socketDescriptor);
 
-        if (!socketType || !isInetSocketType(socketType)) {
+        if (!socketType || !isTrackableSocketType(socketType)) {
             return null;
         }
 
@@ -166,7 +174,11 @@ function trackAcceptedSocket(
         nativeSocketStates.set(acceptedDescriptor, {
             socketType: listeningState.socketType,
             addressFamily: listeningState.addressFamily,
-            protocol: listeningState.protocol
+            protocol: listeningState.protocol,
+            // Unix accepted sockets share the listener's bound path; the
+            // client's own address is not exposed the same way a connect()
+            // peer's remote path is, so remotePath is intentionally omitted.
+            localPath: listeningState.localPath
         });
 
         return;
@@ -245,6 +257,126 @@ function getIpv4EndpointFromSockaddr(
     } catch (_) {
         return undefined;
     }
+}
+
+interface UnixSocketAddress {
+    path: string;
+    namespace: "abstract" | "filesystem";
+}
+
+/*
+ * struct sockaddr_un:
+ *   sa_family_t sun_family;   // 2 bytes on Linux/Android
+ *   char        sun_path[108];
+ *
+ * A leading NUL byte in sun_path indicates the abstract namespace (a Linux
+ * extension also used by Android's LocalSocket abstract addressing): the
+ * name is the remaining bytes up to addressLength, and is not itself
+ * NUL-terminated. Anything else is a filesystem-namespace path, which is
+ * a NUL-terminated string starting at sun_path[0].
+ */
+function parseSockaddrUn(
+    address: any,
+    addressLength: number
+): UnixSocketAddress | undefined {
+    if (addressLength < 3) {
+        return undefined;
+    }
+
+    try {
+        const sockaddr = ptr(address);
+
+        if (sockaddr.isNull() || sockaddr.readU16() !== AF_UNIX) {
+            return undefined;
+        }
+
+        const pathPointer = sockaddr.add(2);
+        const firstByte = pathPointer.readU8();
+
+        if (firstByte === 0) {
+            const nameLength = addressLength - 3;
+
+            if (nameLength <= 0) {
+                return undefined;
+            }
+
+            const nameBytes = pathPointer.add(1).readByteArray(nameLength);
+
+            if (!nameBytes) {
+                return undefined;
+            }
+
+            const name = Array.from(new Uint8Array(nameBytes))
+                .map((byte) => String.fromCharCode(byte))
+                .join("");
+
+            return { path: name, namespace: "abstract" };
+        }
+
+        const path = pathPointer.readCString();
+
+        if (!path) {
+            return undefined;
+        }
+
+        return { path, namespace: "filesystem" };
+    } catch (_) {
+        return undefined;
+    }
+}
+
+function formatUnixSocketEndpoint(
+    address: UnixSocketAddress | undefined
+): string | undefined {
+    return address ? `${address.namespace}:${address.path}` : undefined;
+}
+
+/*
+ * Generic endpoint-field lookup shared by the payload-bearing syscall hooks
+ * (send/recv/write/read). AF_UNIX sockets carry no per-call address argument
+ * for these syscalls, so their endpoints come from state cached at bind()/
+ * connect() time rather than a live Frida Socket.* lookup, which returns an
+ * empty/useless path for AF_UNIX (see NativeSocketState.localPath/remotePath).
+ */
+function getNativeSocketEndpointFields(
+    socketDescriptor: number,
+    socketState: NativeSocketState
+): any {
+    const fields: any = {};
+
+    if (isUnixSocketType(socketState.socketType)) {
+        if (socketState.localPath) {
+            fields.local_address = socketState.localPath;
+        }
+
+        if (socketState.remotePath) {
+            fields.remote_address = socketState.remotePath;
+        }
+
+        return fields;
+    }
+
+    const socketLocal = Socket.localAddress(socketDescriptor);
+    const local = socketLocal && isTcpEndpointAddress(socketLocal)
+        ? socketLocal
+        : undefined;
+
+    const socketRemote = Socket.peerAddress(socketDescriptor);
+    const remote = socketRemote && isTcpEndpointAddress(socketRemote)
+        ? socketRemote
+        : undefined;
+
+    if (local) {
+        fields.local_ip = local.ip;
+        fields.local_port = local.port;
+    }
+
+    if (remote) {
+        fields.remote_ip = remote.ip;
+        fields.remote_port = remote.port;
+    }
+
+    return fields;
 }
 
 interface CapturedSocketPayload {
@@ -461,6 +593,31 @@ function getMessageHeaderEndpoint(
             address,
             addressLength
         );
+    } catch (_) {
+        return undefined;
+    }
+}
+
+function getMessageHeaderUnixEndpoint(
+    messageHeaderAddress: any
+): UnixSocketAddress | undefined {
+    try {
+        const messageHeader = ptr(messageHeaderAddress);
+
+        if (messageHeader.isNull()) {
+            return undefined;
+        }
+
+        const address = messageHeader.readPointer();
+        const addressLength = messageHeader
+            .add(Process.pointerSize)
+            .readU32();
+
+        if (address.isNull()) {
+            return undefined;
+        }
+
+        return parseSockaddrUn(address, addressLength);
     } catch (_) {
         return undefined;
     }
@@ -1667,34 +1824,51 @@ function hook_bionic_socket_communication(){
             }
 
             const socketState = trackSocketFromRuntime(this.sd);
-            const socketType = socketState?.socketType;
 
-            if (!socketType || !isInetSocketType(socketType)) {
+            if (!socketState || !isTrackableSocketType(socketState.socketType)) {
                 return;
             }
 
-            const socketLocal = Socket.localAddress(this.sd);
-
-            if (!isTcpEndpointAddress(socketLocal)) {
-                return;
-            }
-
-            createSocketEvent("socket.native.bind", {
+            const socketType = socketState.socketType;
+            const eventData: any = {
                 method: "bind",
                 socket_descriptor: this.sd,
                 socket_type: socketType,
-                address_family: socketState?.addressFamily,
-                protocol: socketState?.protocol,
-                result_code: 0,
-                local_ip: socketLocal.ip,
-                local_port: socketLocal.port
-            });
+                address_family: socketState.addressFamily,
+                protocol: socketState.protocol,
+                result_code: 0
+            };
+
+            if (isUnixSocketType(socketType)) {
+                const unixAddress = parseSockaddrUn(this.addr, this.addrlen);
+
+                if (!unixAddress) {
+                    return;
+                }
+
+                const formatted = formatUnixSocketEndpoint(unixAddress);
+                socketState.localPath = formatted;
+                eventData.local_address = formatted;
+            } else {
+                const socketLocal = Socket.localAddress(this.sd);
+
+                if (!isTcpEndpointAddress(socketLocal)) {
+                    return;
+                }
+
+                eventData.local_ip = socketLocal.ip;
+                eventData.local_port = socketLocal.port;
+            }
+
+            createSocketEvent("socket.native.bind", eventData);
         }
     });
 
     safeAttachExport("libc.so", "connect", "sockets:connect", {
         onEnter(args) {
             this.sd = args[0].toInt32();
+            this.addr = args[1];
+            this.addrlen = args[2].toInt32();
         },
         onLeave(retval) {
             const resultCode = retval.toInt32();
@@ -1704,39 +1878,54 @@ function hook_bionic_socket_communication(){
             }
 
             const socketState = trackSocketFromRuntime(this.sd);
-            const socketType = socketState?.socketType;
 
-            if (!socketType) {
+            if (!socketState || !isTrackableSocketType(socketState.socketType)) {
                 return;
             }
 
-            const socketLocal = Socket.localAddress(this.sd);
-            const local = socketLocal && isTcpEndpointAddress(socketLocal)
-                ? socketLocal
-                : undefined;
-
-            const socketRemote = Socket.peerAddress(this.sd);
-            const remote = socketRemote && isTcpEndpointAddress(socketRemote)
-                ? socketRemote
-                : undefined;
-
-            // Do not emit raw endpoint objects without an event_type.
-            if (!local || !remote) {
-                return;
-            }
-
-            createSocketEvent("socket.native.connect", {
+            const socketType = socketState.socketType;
+            const eventData: any = {
                 method: "connect",
                 socket_descriptor: this.sd,
                 socket_type: socketType,
-                address_family: socketState?.addressFamily,
-                protocol: socketState?.protocol,
-                result_code: resultCode,
-                local_ip: local.ip,
-                local_port: local.port,
-                remote_ip: remote.ip,
-                remote_port: remote.port
-            });
+                address_family: socketState.addressFamily,
+                protocol: socketState.protocol,
+                result_code: resultCode
+            };
+
+            if (isUnixSocketType(socketType)) {
+                const unixAddress = parseSockaddrUn(this.addr, this.addrlen);
+
+                if (!unixAddress) {
+                    return;
+                }
+
+                const formatted = formatUnixSocketEndpoint(unixAddress);
+                socketState.remotePath = formatted;
+                eventData.remote_address = formatted;
+            } else {
+                const socketLocal = Socket.localAddress(this.sd);
+                const local = socketLocal && isTcpEndpointAddress(socketLocal)
+                    ? socketLocal
+                    : undefined;
+
+                const socketRemote = Socket.peerAddress(this.sd);
+                const remote = socketRemote && isTcpEndpointAddress(socketRemote)
+                    ? socketRemote
+                    : undefined;
+
+                // Do not emit raw endpoint objects without an event_type.
+                if (!local || !remote) {
+                    return;
+                }
+
+                eventData.local_ip = local.ip;
+                eventData.local_port = local.port;
+                eventData.remote_ip = remote.ip;
+                eventData.remote_port = remote.port;
+            }
+
+            createSocketEvent("socket.native.connect", eventData);
         }
     });
 
@@ -1778,26 +1967,23 @@ function hook_bionic_socket_communication(){
             }
 
             const socketState = trackSocketFromRuntime(this.sd);
-            const socketType = socketState?.socketType;
-            const socketLocal = Socket.localAddress(this.sd);
-            const local = socketLocal && isTcpEndpointAddress(socketLocal)
-                ? socketLocal
-                : undefined;
-            const socketRemote = Socket.peerAddress(this.sd);
-            const remote = socketRemote && isTcpEndpointAddress(socketRemote)
-                ? socketRemote
-                : undefined;
 
-            if (
-                socketType === "unix:stream" ||
-                socketType == null ||
-                local === undefined ||
-                remote === undefined
-            ) {
+            if (!socketState || !isTrackableSocketType(socketState.socketType)) {
                 return;
             }
 
-            trackSocketFromRuntime(this.sd);
+            const endpointFields = getNativeSocketEndpointFields(
+                this.sd,
+                socketState
+            );
+
+            if (
+                !isUnixSocketType(socketState.socketType) &&
+                (endpointFields.local_ip === undefined ||
+                    endpointFields.remote_ip === undefined)
+            ) {
+                return;
+            }
 
             const { buffer, truncated } = readSocketBufferCapped(
                 this.addr,
@@ -1810,14 +1996,11 @@ function hook_bionic_socket_communication(){
                 method: "write",
                 operation_id: operationId,
                 socket_descriptor: this.sd,
-                socket_type: socketType,
-                address_family: socketState?.addressFamily,
-                protocol: socketState?.protocol,
+                socket_type: socketState.socketType,
+                address_family: socketState.addressFamily,
+                protocol: socketState.protocol,
                 result_code: len,
-                local_ip: local.ip,
-                local_port: local.port,
-                remote_ip: remote.ip,
-                remote_port: remote.port,
+                ...endpointFields,
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined,
@@ -1851,26 +2034,23 @@ function hook_bionic_socket_communication(){
                 }
 
                 const socketState = trackSocketFromRuntime(this.sd);
-                const socketType = socketState?.socketType;
-                const socketLocal = Socket.localAddress(this.sd);
-                const local = socketLocal && isTcpEndpointAddress(socketLocal)
-                    ? socketLocal
-                    : undefined;
-                const socketRemote = Socket.peerAddress(this.sd);
-                const remote = socketRemote && isTcpEndpointAddress(socketRemote)
-                    ? socketRemote
-                    : undefined;
 
-                if (
-                    socketType === "unix:stream" ||
-                    socketType == null ||
-                    local === undefined ||
-                    remote === undefined
-                ) {
+                if (!socketState || !isTrackableSocketType(socketState.socketType)) {
                     return;
                 }
 
-                trackSocketFromRuntime(this.sd);
+                const endpointFields = getNativeSocketEndpointFields(
+                    this.sd,
+                    socketState
+                );
+
+                if (
+                    !isUnixSocketType(socketState.socketType) &&
+                    (endpointFields.local_ip === undefined ||
+                        endpointFields.remote_ip === undefined)
+                ) {
+                    return;
+                }
 
                 const { buffer, truncated } = readSocketBufferCapped(
                     this.addr,
@@ -1884,14 +2064,11 @@ function hook_bionic_socket_communication(){
                     method: "read",
                     operation_id: operationId,
                     socket_descriptor: this.sd,
-                    socket_type: socketType,
-                    address_family: socketState?.addressFamily,
-                    protocol: socketState?.protocol,
+                    socket_type: socketState.socketType,
+                    address_family: socketState.addressFamily,
+                    protocol: socketState.protocol,
                     result_code: len,
-                    local_ip: local.ip,
-                    local_port: local.port,
-                    remote_ip: remote.ip,
-                    remote_port: remote.port,
+                    ...endpointFields,
                     data_length: len,
                     captured_length: getCapturedLength(buffer),
                     has_buffer: buffer !== undefined,
@@ -1936,52 +2113,73 @@ function hook_bionic_socket_communication(){
 
             const socketState = trackSocketFromRuntime(this.sd);
 
-            if (!socketState || !isInetSocketType(socketState.socketType)) {
+            if (!socketState || !isTrackableSocketType(socketState.socketType)) {
                 return;
             }
 
-            const local = getSocketEndpoint(this.sd, false);
-            let remote: NativeSocketEndpoint | undefined;
+            const isUnix = isUnixSocketType(socketState.socketType);
+            const eventData: any = {
+                method: "sendto",
+                operation_id: createSocketOperationId(this.sd),
+                socket_descriptor: this.sd,
+                socket_type: socketState.socketType,
+                address_family: socketState.addressFamily,
+                protocol: socketState.protocol,
+                result_code: len,
+                data_length: len
+            };
 
-            if (this.destinationAddress.isNull()) {
-                remote = getSocketEndpoint(this.sd, true);
+            if (isUnix) {
+                if (socketState.localPath) {
+                    eventData.local_address = socketState.localPath;
+                }
+
+                if (!this.destinationAddress.isNull()) {
+                    const unixDestination = parseSockaddrUn(
+                        this.destinationAddress,
+                        this.destinationAddressLength
+                    );
+
+                    if (unixDestination) {
+                        eventData.remote_address =
+                            formatUnixSocketEndpoint(unixDestination);
+                    }
+                } else if (socketState.remotePath) {
+                    eventData.remote_address = socketState.remotePath;
+                }
             } else {
-                remote = getIpv4EndpointFromSockaddr(
-                    this.destinationAddress,
-                    this.destinationAddressLength
-                );
+                const local = getSocketEndpoint(this.sd, false);
+                let remote: NativeSocketEndpoint | undefined;
+
+                if (this.destinationAddress.isNull()) {
+                    remote = getSocketEndpoint(this.sd, true);
+                } else {
+                    remote = getIpv4EndpointFromSockaddr(
+                        this.destinationAddress,
+                        this.destinationAddressLength
+                    );
+                }
+
+                if (local) {
+                    eventData.local_ip = local.ip;
+                    eventData.local_port = local.port;
+                }
+
+                if (remote) {
+                    eventData.remote_ip = remote.ip;
+                    eventData.remote_port = remote.port;
+                }
             }
 
             const { buffer, truncated } = readSocketBufferCapped(
                 this.addr,
                 len
             );
-            const operationId = createSocketOperationId(this.sd);
             const native_backtrace = collectNativeBacktrace(this.context);
 
-            const eventData: any = {
-                method: "sendto",
-                operation_id: operationId,
-                socket_descriptor: this.sd,
-                socket_type: socketState.socketType,
-                address_family: socketState.addressFamily,
-                protocol: socketState.protocol,
-                result_code: len,
-                data_length: len,
-                captured_length: getCapturedLength(buffer),
-                has_buffer: buffer !== undefined,
-                payload_truncated: truncated
-            };
-
-            if (local) {
-                eventData.local_ip = local.ip;
-                eventData.local_port = local.port;
-            }
-
-            if (remote) {
-                eventData.remote_ip = remote.ip;
-                eventData.remote_port = remote.port;
-            }
+            eventData.captured_length = getCapturedLength(buffer);
+            eventData.has_buffer = buffer !== undefined;
+            eventData.payload_truncated = truncated;
 
             if (native_backtrace) {
                 eventData.native_backtrace = native_backtrace;
@@ -1991,7 +2189,7 @@ function hook_bionic_socket_communication(){
 
             sendSocketPayloadEvent(
                 "socket.native.sendto_data",
-                operationId,
+                eventData.operation_id,
                 this.sd,
                 len,
                 buffer,
@@ -2017,25 +2215,73 @@ function hook_bionic_socket_communication(){
 
             const socketState = trackSocketFromRuntime(this.sd);
 
-            if (!socketState || !isInetSocketType(socketState.socketType)) {
+            if (!socketState || !isTrackableSocketType(socketState.socketType)) {
                 return;
             }
 
-            const local = getSocketEndpoint(this.sd, false);
-            let remote: NativeSocketEndpoint | undefined;
+            const isUnix = isUnixSocketType(socketState.socketType);
+            const eventData: any = {
+                method: "recvfrom",
+                operation_id: createSocketOperationId(this.sd),
+                socket_descriptor: this.sd,
+                socket_type: socketState.socketType,
+                address_family: socketState.addressFamily,
+                protocol: socketState.protocol,
+                result_code: len,
+                data_length: len
+            };
 
-            if (this.sourceAddress.isNull()) {
-                remote = getSocketEndpoint(this.sd, true);
-            } else {
-                const sourceAddressLength = getSockaddrLength(
-                    this.sourceAddressLengthPointer
-                );
+            if (isUnix) {
+                if (socketState.localPath) {
+                    eventData.local_address = socketState.localPath;
+                }
 
-                if (sourceAddressLength !== undefined) {
-                    remote = getIpv4EndpointFromSockaddr(
-                        this.sourceAddress,
-                        sourceAddressLength
+                if (!this.sourceAddress.isNull()) {
+                    const sourceAddressLength = getSockaddrLength(
+                        this.sourceAddressLengthPointer
                     );
+
+                    if (sourceAddressLength !== undefined) {
+                        const unixSource = parseSockaddrUn(
+                            this.sourceAddress,
+                            sourceAddressLength
+                        );
+
+                        if (unixSource) {
+                            eventData.remote_address =
+                                formatUnixSocketEndpoint(unixSource);
+                        }
+                    }
+                } else if (socketState.remotePath) {
+                    eventData.remote_address = socketState.remotePath;
+                }
+            } else {
+                const local = getSocketEndpoint(this.sd, false);
+                let remote: NativeSocketEndpoint | undefined;
+
+                if (this.sourceAddress.isNull()) {
+                    remote = getSocketEndpoint(this.sd, true);
+                } else {
+                    const sourceAddressLength = getSockaddrLength(
+                        this.sourceAddressLengthPointer
+                    );
+
+                    if (sourceAddressLength !== undefined) {
+                        remote = getIpv4EndpointFromSockaddr(
+                            this.sourceAddress,
+                            sourceAddressLength
+                        );
+                    }
+                }
+
+                if (local) {
+                    eventData.local_ip = local.ip;
+                    eventData.local_port = local.port;
+                }
+
+                if (remote) {
+                    eventData.remote_ip = remote.ip;
+                    eventData.remote_port = remote.port;
                 }
             }
 
@@ -2043,32 +2289,11 @@ function hook_bionic_socket_communication(){
                 this.addr,
                 len
             );
-            const operationId = createSocketOperationId(this.sd);
             const native_backtrace = collectNativeBacktrace(this.context);
 
-            const eventData: any = {
-                method: "recvfrom",
-                operation_id: operationId,
-                socket_descriptor: this.sd,
-                socket_type: socketState.socketType,
-                address_family: socketState.addressFamily,
-                protocol: socketState.protocol,
-                result_code: len,
-                data_length: len,
-                captured_length: getCapturedLength(buffer),
-                has_buffer: buffer !== undefined,
-                payload_truncated: truncated
-            };
-
-            if (local) {
-                eventData.local_ip = local.ip;
-                eventData.local_port = local.port;
-            }
-
-            if (remote) {
-                eventData.remote_ip = remote.ip;
-                eventData.remote_port = remote.port;
-            }
+            eventData.captured_length = getCapturedLength(buffer);
+            eventData.has_buffer = buffer !== undefined;
+            eventData.payload_truncated = truncated;
 
             if (native_backtrace) {
                 eventData.native_backtrace = native_backtrace;
@@ -2078,7 +2303,7 @@ function hook_bionic_socket_communication(){
 
             sendSocketPayloadEvent(
                 "socket.native.recvfrom_data",
-                operationId,
+                eventData.operation_id,
                 this.sd,
                 len,
                 buffer,
@@ -2102,20 +2327,20 @@ function hook_bionic_socket_communication(){
 
             const socketState = trackSocketFromRuntime(this.sd);
 
-            if (!socketState || !isInetSocketType(socketState.socketType)) {
+            if (!socketState || !isTrackableSocketType(socketState.socketType)) {
                 return;
             }
 
-            const socketLocal = Socket.localAddress(this.sd);
-            const local = socketLocal && isTcpEndpointAddress(socketLocal)
-                ? socketLocal
-                : undefined;
-            const socketRemote = Socket.peerAddress(this.sd);
-            const remote = socketRemote && isTcpEndpointAddress(socketRemote)
-                ? socketRemote
-                : undefined;
+            const endpointFields = getNativeSocketEndpointFields(
+                this.sd,
+                socketState
+            );
 
-            if (local === undefined || remote === undefined) {
+            if (
+                !isUnixSocketType(socketState.socketType) &&
+                (endpointFields.local_ip === undefined ||
+                    endpointFields.remote_ip === undefined)
+            ) {
                 return;
             }
 
@@ -2134,10 +2359,7 @@ function hook_bionic_socket_communication(){
                 address_family: socketState.addressFamily,
                 protocol: socketState.protocol,
                 result_code: len,
-                local_ip: local.ip,
-                local_port: local.port,
-                remote_ip: remote.ip,
-                remote_port: remote.port,
+                ...endpointFields,
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined,
@@ -2171,20 +2393,20 @@ function hook_bionic_socket_communication(){
 
             const socketState = trackSocketFromRuntime(this.sd);
 
-            if (!socketState || !isInetSocketType(socketState.socketType)) {
+            if (!socketState || !isTrackableSocketType(socketState.socketType)) {
                 return;
             }
 
-            const socketLocal = Socket.localAddress(this.sd);
-            const local = socketLocal && isTcpEndpointAddress(socketLocal)
-                ? socketLocal
-                : undefined;
-            const socketRemote = Socket.peerAddress(this.sd);
-            const remote = socketRemote && isTcpEndpointAddress(socketRemote)
-                ? socketRemote
-                : undefined;
+            const endpointFields = getNativeSocketEndpointFields(
+                this.sd,
+                socketState
+            );
 
-            if (local === undefined || remote === undefined) {
+            if (
+                !isUnixSocketType(socketState.socketType) &&
+                (endpointFields.local_ip === undefined ||
+                    endpointFields.remote_ip === undefined)
+            ) {
                 return;
             }
 
@@ -2203,10 +2425,7 @@ function hook_bionic_socket_communication(){
                 address_family: socketState.addressFamily,
                 protocol: socketState.protocol,
                 result_code: len,
-                local_ip: local.ip,
-                local_port: local.port,
-                remote_ip: remote.ip,
-                remote_port: remote.port,
+                ...endpointFields,
                 data_length: len,
                 captured_length: getCapturedLength(buffer),
                 has_buffer: buffer !== undefined,
@@ -2239,45 +2458,63 @@ function hook_bionic_socket_communication(){
 
             const socketState = trackSocketFromRuntime(this.sd);
 
-            if (!socketState || !isInetSocketType(socketState.socketType)) {
+            if (!socketState || !isTrackableSocketType(socketState.socketType)) {
                 return;
             }
 
-            const local = getSocketEndpoint(this.sd, false);
-            const remote =
-                getMessageHeaderEndpoint(this.messageHeader) ||
-                getSocketEndpoint(this.sd, true);
-
-            const { buffer, truncated } = captureIovecPayload(
-                this.messageHeader,
-                len
-            );
-            const operationId = createSocketOperationId(this.sd);
-            const native_backtrace = collectNativeBacktrace(this.context);
-
+            const isUnix = isUnixSocketType(socketState.socketType);
             const eventData: any = {
                 method: "sendmsg",
-                operation_id: operationId,
+                operation_id: createSocketOperationId(this.sd),
                 socket_descriptor: this.sd,
                 socket_type: socketState.socketType,
                 address_family: socketState.addressFamily,
                 protocol: socketState.protocol,
                 result_code: len,
-                data_length: len,
-                captured_length: getCapturedLength(buffer),
-                has_buffer: buffer !== undefined,
-                payload_truncated: truncated
+                data_length: len
             };
 
-            if (local) {
-                eventData.local_ip = local.ip;
-                eventData.local_port = local.port;
+            if (isUnix) {
+                if (socketState.localPath) {
+                    eventData.local_address = socketState.localPath;
+                }
+
+                const unixDestination = getMessageHeaderUnixEndpoint(
+                    this.messageHeader
+                );
+
+                if (unixDestination) {
+                    eventData.remote_address =
+                        formatUnixSocketEndpoint(unixDestination);
+                } else if (socketState.remotePath) {
+                    eventData.remote_address = socketState.remotePath;
+                }
+            } else {
+                const local = getSocketEndpoint(this.sd, false);
+                const remote =
+                    getMessageHeaderEndpoint(this.messageHeader) ||
+                    getSocketEndpoint(this.sd, true);
+
+                if (local) {
+                    eventData.local_ip = local.ip;
+                    eventData.local_port = local.port;
+                }
+
+                if (remote) {
+                    eventData.remote_ip = remote.ip;
+                    eventData.remote_port = remote.port;
+                }
             }
 
-            if (remote) {
-                eventData.remote_ip = remote.ip;
-                eventData.remote_port = remote.port;
-            }
+            const { buffer, truncated } = captureIovecPayload(
+                this.messageHeader,
+                len
+            );
+            const native_backtrace = collectNativeBacktrace(this.context);
+
+            eventData.captured_length = getCapturedLength(buffer);
+            eventData.has_buffer = buffer !== undefined;
+            eventData.payload_truncated = truncated;
 
             if (native_backtrace) {
                 eventData.native_backtrace = native_backtrace;
@@ -2287,7 +2524,7 @@ function hook_bionic_socket_communication(){
 
             sendSocketPayloadEvent(
                 "socket.native.sendmsg_data",
-                operationId,
+                eventData.operation_id,
                 this.sd,
                 len,
                 buffer,
@@ -2310,45 +2547,63 @@ function hook_bionic_socket_communication(){
 
             const socketState = trackSocketFromRuntime(this.sd);
 
-            if (!socketState || !isInetSocketType(socketState.socketType)) {
+            if (!socketState || !isTrackableSocketType(socketState.socketType)) {
                 return;
             }
 
-            const local = getSocketEndpoint(this.sd, false);
-            const remote =
-                getMessageHeaderEndpoint(this.messageHeader) ||
-                getSocketEndpoint(this.sd, true);
-
-            const { buffer, truncated } = captureIovecPayload(
-                this.messageHeader,
-                len
-            );
-            const operationId = createSocketOperationId(this.sd);
-            const native_backtrace = collectNativeBacktrace(this.context);
-
+            const isUnix = isUnixSocketType(socketState.socketType);
             const eventData: any = {
                 method: "recvmsg",
-                operation_id: operationId,
+                operation_id: createSocketOperationId(this.sd),
                 socket_descriptor: this.sd,
                 socket_type: socketState.socketType,
                 address_family: socketState.addressFamily,
                 protocol: socketState.protocol,
                 result_code: len,
-                data_length: len,
-                captured_length: getCapturedLength(buffer),
-                has_buffer: buffer !== undefined,
-                payload_truncated: truncated
+                data_length: len
             };
 
-            if (local) {
-                eventData.local_ip = local.ip;
-                eventData.local_port = local.port;
+            if (isUnix) {
+                if (socketState.localPath) {
+                    eventData.local_address = socketState.localPath;
+                }
+
+                const unixSource = getMessageHeaderUnixEndpoint(
+                    this.messageHeader
+                );
+
+                if (unixSource) {
+                    eventData.remote_address =
+                        formatUnixSocketEndpoint(unixSource);
+                } else if (socketState.remotePath) {
+                    eventData.remote_address = socketState.remotePath;
+                }
+            } else {
+                const local = getSocketEndpoint(this.sd, false);
+                const remote =
+                    getMessageHeaderEndpoint(this.messageHeader) ||
+                    getSocketEndpoint(this.sd, true);
+
+                if (local) {
+                    eventData.local_ip = local.ip;
+                    eventData.local_port = local.port;
+                }
+
+                if (remote) {
+                    eventData.remote_ip = remote.ip;
+                    eventData.remote_port = remote.port;
+                }
             }
 
-            if (remote) {
-                eventData.remote_ip = remote.ip;
-                eventData.remote_port = remote.port;
-            }
+            const { buffer, truncated } = captureIovecPayload(
+                this.messageHeader,
+                len
+            );
+            const native_backtrace = collectNativeBacktrace(this.context);
+
+            eventData.captured_length = getCapturedLength(buffer);
+            eventData.has_buffer = buffer !== undefined;
+            eventData.payload_truncated = truncated;
 
             if (native_backtrace) {
                 eventData.native_backtrace = native_backtrace;
@@ -2358,7 +2613,7 @@ function hook_bionic_socket_communication(){
 
             sendSocketPayloadEvent(
                 "socket.native.recvmsg_data",
-                operationId,
+                eventData.operation_id,
                 this.sd,
                 len,
                 buffer,
@@ -2373,6 +2628,12 @@ function hook_bionic_socket_communication(){
             this.socketState = nativeSocketStates.get(this.sd);
 
             if (!this.socketState) {
+                return;
+            }
+
+            if (isUnixSocketType(this.socketState.socketType)) {
+                this.local = undefined;
+                this.remote = undefined;
                 return;
             }
 
@@ -2414,14 +2675,24 @@ function hook_bionic_socket_communication(){
                 result_code: resultCode
             };
 
-            if (this.local) {
-                eventData.local_ip = this.local.ip;
-                eventData.local_port = this.local.port;
-            }
+            if (isUnixSocketType(socketState.socketType)) {
+                if (socketState.localPath) {
+                    eventData.local_address = socketState.localPath;
+                }
 
-            if (this.remote) {
-                eventData.remote_ip = this.remote.ip;
-                eventData.remote_port = this.remote.port;
+                if (socketState.remotePath) {
+                    eventData.remote_address = socketState.remotePath;
+                }
+            } else {
+                if (this.local) {
+                    eventData.local_ip = this.local.ip;
+                    eventData.local_port = this.local.port;
+                }
+
+                if (this.remote) {
+                    eventData.remote_ip = this.remote.ip;
+                    eventData.remote_port = this.remote.port;
+                }
             }
 
             createSocketEvent("socket.native.close", eventData);
