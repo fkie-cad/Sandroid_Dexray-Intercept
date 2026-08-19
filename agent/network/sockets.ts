@@ -77,18 +77,30 @@ function isInetSocketType(socketType: string): boolean {
         socketType === "udp6";
 }
 
+function isUnixSocketType(socketType: string): boolean {
+    return socketType === "unix:stream" ||
+        socketType === "unix:dgram";
+}
+
+function isTrackableSocketType(socketType: string): boolean {
+    return isInetSocketType(socketType) || isUnixSocketType(socketType);
+}
+
 function trackNativeSocket(
     socketDescriptor: number,
     socketType: string,
     addressFamily?: number,
     protocol?: number
 ): NativeSocketState {
-    const existingState = nativeSocketStates.get(socketDescriptor);
-
-    if (existingState) {
-        return existingState;
-    }
-
+    /*
+     * A directly observed, successful socket() call is authoritative: the
+     * kernel only hands back a given fd number once its previous holder (if
+     * any) has been closed. Any entry already present under this descriptor
+     * is therefore guaranteed stale (a prior socket that reused this fd
+     * number) and must be discarded rather than reused, otherwise cached
+     * fields such as localPath/remotePath (and even socketType itself) can
+     * leak across unrelated sockets that happen to share an fd number.
+     */
     const state: NativeSocketState = {
         socketType: socketType,
         addressFamily: addressFamily,
