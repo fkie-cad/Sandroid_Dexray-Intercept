@@ -27,6 +27,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URL;
 import java.util.HashMap;
@@ -792,6 +793,12 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Log.e(TAG, "runUdpSocketIpv6Tests failed", t);
         }
+        try {
+            runDatagramSocketConstructorOverloadTests();
+            Log.i(TAG, "runDatagramSocketConstructorOverloadTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runDatagramSocketConstructorOverloadTests failed", t);
+        }
     }
 
     private void runTcpSocketTests() throws Exception {
@@ -1127,6 +1134,33 @@ public class MainActivity extends Activity {
 
         sender.close();
         receiver.close();
+    }
+
+    private void runDatagramSocketConstructorOverloadTests() throws Exception {
+        Log.i(TAG, "runDatagramSocketConstructorOverloadTests started");
+
+        // socket.java.datagram_init - DatagramSocket() (implicit bind on any port)
+        DatagramSocket implicitBind = new DatagramSocket();
+        Log.i(TAG, "DatagramSocket() - trigger, port=" + implicitBind.getLocalPort());
+        implicitBind.close();
+
+        // socket.java.datagram_init - DatagramSocket(int)
+        DatagramSocket portOnly = new DatagramSocket(0);
+        Log.i(TAG, "DatagramSocket(int) - trigger, port=" + portOnly.getLocalPort());
+        portOnly.close();
+
+        // socket.java.datagram_init - DatagramSocket(int, InetAddress)
+        DatagramSocket portAndAddress = new DatagramSocket(0, InetAddress.getByName("127.0.0.1"));
+        Log.i(TAG, "DatagramSocket(int,InetAddress) - trigger, port=" + portAndAddress.getLocalPort());
+        portAndAddress.close();
+
+        // socket.java.datagram_init - DatagramSocket(SocketAddress) unbound
+        //   + socket.java.bind - DatagramSocket.bind(SocketAddress)
+        DatagramSocket unbound = new DatagramSocket((SocketAddress) null);
+        Log.i(TAG, "DatagramSocket(SocketAddress) unbound - trigger");
+        unbound.bind(new InetSocketAddress("127.0.0.1", 0));
+        Log.i(TAG, "DatagramSocket.bind(SocketAddress) - trigger, port=" + unbound.getLocalPort());
+        unbound.close();
     }
 
     // ------------------------------------------------------------
