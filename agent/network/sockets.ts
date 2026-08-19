@@ -839,6 +839,15 @@ function getBindExtraFields(
     return extra;
 }
 
+function isDatagramSocketConstructorOverloadSkipped(
+    argumentTypes: any[]
+): boolean {
+    return (
+        argumentTypes.length === 1 &&
+        argumentTypes[0].className === "java.net.DatagramSocketImpl"
+    );
+}
+
 function hook_java_socket_communication() {
     safePerform("sockets:hook_java_socket_communication", () => {
         const ServerSocket = safeUse(
@@ -1112,6 +1121,30 @@ function hook_java_socket_communication() {
         }
 
         if (DatagramSocket) {
+            hookSocketOverloads(DatagramSocket, {
+                classLabel: "java.net.DatagramSocket",
+                methodName: "$init",
+                eventType: "socket.java.datagram_init",
+                shouldHook: (argumentTypes) =>
+                    !isDatagramSocketConstructorOverloadSkipped(argumentTypes),
+                getEndpointData: getJavaDatagramEndpointData,
+                getSocketType: (endpointData) =>
+                    getJavaDatagramSocketType(
+                        endpointData.local_ip || endpointData.remote_ip
+                    )
+            });
+
+            hookSocketOverloads(DatagramSocket, {
+                classLabel: "java.net.DatagramSocket",
+                methodName: "bind",
+                eventType: "socket.java.bind",
+                getEndpointData: getJavaDatagramEndpointData,
+                getSocketType: (endpointData) =>
+                    getJavaDatagramSocketType(
+                        endpointData.local_ip || endpointData.remote_ip
+                    )
+            });
+
             const datagramConnect = safeOverload(
                 DatagramSocket.connect,
                 "sockets:DatagramSocket.connect",
