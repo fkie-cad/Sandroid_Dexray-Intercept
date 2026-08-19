@@ -30,6 +30,9 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -805,6 +808,12 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Log.e(TAG, "runDatagramSocketConstructorOverloadTests failed", t);
         }
+        try {
+            runSocketChannelTests();
+            Log.i(TAG, "runSocketChannelTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runSocketChannelTests failed", t);
+        }
     }
 
     private void runTcpSocketTests() throws Exception {
@@ -1188,6 +1197,98 @@ public class MainActivity extends Activity {
         unbound.bind(new InetSocketAddress("127.0.0.1", 0));
         Log.i(TAG, "DatagramSocket.bind(SocketAddress) - trigger, port=" + unbound.getLocalPort());
         unbound.close();
+    }
+
+    private void runSocketChannelTests() throws Exception {
+        Log.i(TAG, "runSocketChannelTests started");
+
+        // socket.java.channel_server_open, socket.java.channel_bind, socket.java.channel_accept
+        ServerSocketChannel serverChannel = ServerSocketChannel.open();
+        serverChannel.bind(new InetSocketAddress("127.0.0.1", 0));
+        int channelServerPort = ((InetSocketAddress) serverChannel.getLocalAddress()).getPort();
+        Log.i(TAG, "ServerSocketChannel.open()+bind() - trigger, port=" + channelServerPort);
+
+        CountDownLatch acceptLatch = new CountDownLatch(1);
+        Thread acceptThread = new Thread(() -> {
+            try {
+                SocketChannel accepted = serverChannel.accept();
+                Log.i(TAG, "ServerSocketChannel.accept() - connection received");
+                ByteBuffer buf = ByteBuffer.allocate(32);
+                accepted.read(buf);
+                accepted.close();
+            } catch (Throwable e) {
+                Log.e(TAG, "runSocketChannelTests accept error", e);
+            } finally {
+                try { serverChannel.close(); } catch (Throwable ignored) {}
+                acceptLatch.countDown();
+            }
+        }, "channel-accept-server");
+        acceptThread.start();
+
+        // socket.java.channel_open, socket.java.channel_connect (blocking, immediate)
+        SocketChannel clientChannel = SocketChannel.open();
+        Log.i(TAG, "SocketChannel.open() - trigger");
+        boolean connected = clientChannel.connect(
+                new InetSocketAddress("127.0.0.1", channelServerPort)
+        );
+        Log.i(TAG, "SocketChannel.connect(SocketAddress) - trigger, connected=" + connected);
+        clientChannel.write(ByteBuffer.wrap("channel-a".getBytes("UTF-8")));
+        clientChannel.close();
+
+        acceptLatch.await(5, TimeUnit.SECONDS);
+
+        // socket.java.channel_bind - SocketChannel.bind(SocketAddress)
+        SocketChannel bindableChannel = SocketChannel.open();
+        bindableChannel.bind(new InetSocketAddress("127.0.0.1", 0));
+        Log.i(TAG, "SocketChannel.bind(SocketAddress) - trigger");
+        bindableChannel.close();
+
+        // Non-blocking connect + finishConnect - socket.java.channel_finish_connect
+        ServerSocketChannel serverChannel2 = ServerSocketChannel.open();
+        serverChannel2.bind(new InetSocketAddress("127.0.0.1", 0));
+        int channelServerPort2 =
+                ((InetSocketAddress) serverChannel2.getLocalAddress()).getPort();
+
+        CountDownLatch acceptLatch2 = new CountDownLatch(1);
+        Thread acceptThread2 = new Thread(() -> {
+            try {
+                SocketChannel accepted = serverChannel2.accept();
+                ByteBuffer buf = ByteBuffer.allocate(32);
+                accepted.read(buf);
+                accepted.close();
+            } catch (Throwable e) {
+                Log.e(TAG, "runSocketChannelTests non-blocking accept error", e);
+            } finally {
+                try { serverChannel2.close(); } catch (Throwable ignored) {}
+                acceptLatch2.countDown();
+            }
+        }, "channel-accept-server2");
+        acceptThread2.start();
+
+        SocketChannel nonBlockingChannel = SocketChannel.open();
+        nonBlockingChannel.configureBlocking(false);
+        boolean immediate = nonBlockingChannel.connect(
+                new InetSocketAddress("127.0.0.1", channelServerPort2)
+        );
+        Log.i(TAG, "SocketChannel non-blocking connect() - trigger, immediate=" + immediate);
+
+        long deadline = System.currentTimeMillis() + 5000;
+        boolean finished = immediate;
+        while (!finished && System.currentTimeMillis() < deadline) {
+            finished = nonBlockingChannel.finishConnect();
+            if (!finished) {
+                Thread.sleep(10);
+            }
+        }
+        Log.i(TAG, "SocketChannel.finishConnect() - trigger, finished=" + finished);
+
+        if (finished) {
+            nonBlockingChannel.configureBlocking(true);
+            nonBlockingChannel.write(ByteBuffer.wrap("channel-b".getBytes("UTF-8")));
+        }
+        nonBlockingChannel.close();
+
+        acceptLatch2.await(5, TimeUnit.SECONDS);
     }
 
     // ------------------------------------------------------------
