@@ -887,6 +887,67 @@ function getLocalSocketBindExtraFields(args: any[]): any {
     return extra;
 }
 
+function getNioSocketAddressEndpoint(
+    address: any
+): NativeSocketEndpoint | undefined {
+    try {
+        if (!address) {
+            return undefined;
+        }
+
+        const ip = getJavaInetAddressString(address.getAddress());
+        const port = address.getPort();
+
+        if (ip !== undefined && port >= 0) {
+            return { ip, port };
+        }
+
+        return undefined;
+    } catch (_) {
+        return undefined;
+    }
+}
+
+function getNioChannelEndpointData(channel: any): any {
+    const data: any = {};
+
+    try {
+        const localEndpoint = getNioSocketAddressEndpoint(
+            channel.getLocalAddress()
+        );
+
+        if (localEndpoint) {
+            data.local_ip = localEndpoint.ip;
+            data.local_port = localEndpoint.port;
+            data.local_address = formatSocketAddress(
+                localEndpoint.ip,
+                localEndpoint.port
+            );
+        }
+    } catch (_) {
+        // Endpoint information is optional.
+    }
+
+    try {
+        const remoteEndpoint = getNioSocketAddressEndpoint(
+            channel.getRemoteAddress()
+        );
+
+        if (remoteEndpoint) {
+            data.remote_ip = remoteEndpoint.ip;
+            data.remote_port = remoteEndpoint.port;
+            data.remote_address = formatSocketAddress(
+                remoteEndpoint.ip,
+                remoteEndpoint.port
+            );
+            data.connection_string = data.remote_address;
+        }
+    } catch (_) {
+        // Endpoint information is optional.
+    }
+
+    return data;
+}
 
 function hook_java_socket_communication() {
     safePerform("sockets:hook_java_socket_communication", () => {
@@ -1265,6 +1326,245 @@ function hook_java_socket_communication() {
     });
 }
 
+function hook_nio_socket_channel_communication() {
+    safePerform("sockets:hook_nio_socket_channel_communication", () => {
+        const SocketChannel = safeUse(
+            "java.nio.channels.SocketChannel",
+            "sockets:hook_nio_socket_channel_communication"
+        );
+        const ServerSocketChannel = safeUse(
+            "java.nio.channels.ServerSocketChannel",
+            "sockets:hook_nio_socket_channel_communication"
+        );
+        const SocketChannelImpl = safeUse(
+            "sun.nio.ch.SocketChannelImpl",
+            "sockets:hook_nio_socket_channel_communication"
+        );
+        const ServerSocketChannelImpl = safeUse(
+            "sun.nio.ch.ServerSocketChannelImpl",
+            "sockets:hook_nio_socket_channel_communication"
+        );
+
+        if (SocketChannel) {
+            const openOverload = safeOverload(
+                SocketChannel.open,
+                "sockets:SocketChannel.open"
+            );
+
+            if (openOverload) {
+                openOverload.implementation = safeImplementation(
+                    "sockets:SocketChannel.open",
+                    openOverload,
+                    function(original) {
+                        const result = callJavaOriginal(original, this);
+                        const javaStackTrace = collectJavaStackTrace();
+
+                        createSocketEventSafely("socket.java.channel_open", {
+                            class_name: "java.nio.channels.SocketChannel",
+                            method: "open",
+                            overload_signature: "open()",
+                            socket_type: getJavaSocketType(undefined),
+                            result_code: 0,
+                            ...(javaStackTrace
+                                ? { java_stack_trace: javaStackTrace }
+                                : {})
+                        });
+
+                        return result;
+                    }
+                );
+            }
+        }
+
+        if (ServerSocketChannel) {
+            const serverOpenOverload = safeOverload(
+                ServerSocketChannel.open,
+                "sockets:ServerSocketChannel.open"
+            );
+
+            if (serverOpenOverload) {
+                serverOpenOverload.implementation = safeImplementation(
+                    "sockets:ServerSocketChannel.open",
+                    serverOpenOverload,
+                    function(original) {
+                        const result = callJavaOriginal(original, this);
+                        const javaStackTrace = collectJavaStackTrace();
+
+                        createSocketEventSafely(
+                            "socket.java.channel_server_open",
+                            {
+                                class_name:
+                                    "java.nio.channels.ServerSocketChannel",
+                                method: "open",
+                                overload_signature: "open()",
+                                socket_type: getJavaSocketType(undefined),
+                                result_code: 0,
+                                ...(javaStackTrace
+                                    ? { java_stack_trace: javaStackTrace }
+                                    : {})
+                            }
+                        );
+
+                        return result;
+                    }
+                );
+            }
+        }
+
+        if (SocketChannelImpl) {
+            hookSocketOverloads(SocketChannelImpl, {
+                classLabel: "java.nio.channels.SocketChannel",
+                methodName: "bind",
+                eventType: "socket.java.channel_bind",
+                getEndpointData: getNioChannelEndpointData,
+                getSocketType: (endpointData) =>
+                    getJavaSocketType(endpointData.local_ip)
+            });
+
+            const connectOverload = safeOverload(
+                SocketChannelImpl.connect,
+                "sockets:SocketChannelImpl.connect",
+                "java.net.SocketAddress"
+            );
+
+            if (connectOverload) {
+                connectOverload.implementation = safeImplementation(
+                    "sockets:SocketChannelImpl.connect",
+                    connectOverload,
+                    function(original, endpoint) {
+                        const result = callJavaOriginal(
+                            original,
+                            this,
+                            endpoint
+                        );
+                        const endpointData = getNioChannelEndpointData(this);
+                        const socketType = getJavaSocketType(
+                            endpointData.remote_ip || endpointData.local_ip
+                        );
+                        const javaStackTrace = collectJavaStackTrace();
+
+                        createSocketEventSafely(
+                            "socket.java.channel_connect",
+                            {
+                                class_name:
+                                    "java.nio.channels.SocketChannel",
+                                method: "connect",
+                                overload_signature:
+                                    "connect(java.net.SocketAddress)",
+                                socket_type: socketType,
+                                result_code: result ? 1 : 0,
+                                ...endpointData,
+                                ...(javaStackTrace
+                                    ? { java_stack_trace: javaStackTrace }
+                                    : {})
+                            }
+                        );
+
+                        return result;
+                    }
+                );
+            }
+
+            const finishConnectOverload = safeOverload(
+                SocketChannelImpl.finishConnect,
+                "sockets:SocketChannelImpl.finishConnect"
+            );
+
+            if (finishConnectOverload) {
+                finishConnectOverload.implementation = safeImplementation(
+                    "sockets:SocketChannelImpl.finishConnect",
+                    finishConnectOverload,
+                    function(original) {
+                        const result = callJavaOriginal(original, this);
+
+                        if (!result) {
+                            return result;
+                        }
+
+                        const endpointData = getNioChannelEndpointData(this);
+                        const socketType = getJavaSocketType(
+                            endpointData.remote_ip || endpointData.local_ip
+                        );
+                        const javaStackTrace = collectJavaStackTrace();
+
+                        createSocketEventSafely(
+                            "socket.java.channel_finish_connect",
+                            {
+                                class_name:
+                                    "java.nio.channels.SocketChannel",
+                                method: "finishConnect",
+                                overload_signature: "finishConnect()",
+                                socket_type: socketType,
+                                result_code: 1,
+                                ...endpointData,
+                                ...(javaStackTrace
+                                    ? { java_stack_trace: javaStackTrace }
+                                    : {})
+                            }
+                        );
+
+                        return result;
+                    }
+                );
+            }
+        }
+
+        if (ServerSocketChannelImpl) {
+            hookSocketOverloads(ServerSocketChannelImpl, {
+                classLabel: "java.nio.channels.ServerSocketChannel",
+                methodName: "bind",
+                eventType: "socket.java.channel_bind",
+                getEndpointData: getNioChannelEndpointData,
+                getSocketType: (endpointData) =>
+                    getJavaSocketType(endpointData.local_ip)
+            });
+
+            const acceptOverload = safeOverload(
+                ServerSocketChannelImpl.accept,
+                "sockets:ServerSocketChannelImpl.accept"
+            );
+
+            if (acceptOverload) {
+                acceptOverload.implementation = safeImplementation(
+                    "sockets:ServerSocketChannelImpl.accept",
+                    acceptOverload,
+                    function(original) {
+                        const result = callJavaOriginal(original, this);
+
+                        if (result) {
+                            const endpointData =
+                                getNioChannelEndpointData(result);
+                            const socketType = getJavaSocketType(
+                                endpointData.local_ip
+                            );
+                            const javaStackTrace = collectJavaStackTrace();
+
+                            createSocketEventSafely(
+                                "socket.java.channel_accept",
+                                {
+                                    class_name:
+                                        "java.nio.channels.ServerSocketChannel",
+                                    method: "accept",
+                                    overload_signature: "accept()",
+                                    socket_type: socketType,
+                                    result_code: 0,
+                                    ...endpointData,
+                                    ...(javaStackTrace
+                                        ? {
+                                            java_stack_trace: javaStackTrace
+                                        }
+                                        : {})
+                                }
+                            );
+                        }
+
+                        return result;
+                    }
+                );
+            }
+        }
+    });
+}
 
 function hook_bionic_socket_communication(){
     // TCP/UDP functions in libc.so. Each symbol is resolved and hooked
@@ -2063,6 +2363,12 @@ export function install_socket_hooks() {
         hook_java_socket_communication();
     } catch (error) {
         devlog(`[HOOK] Failed to install Java socket hooks: ${error}`);
+    }
+
+    try {
+        hook_nio_socket_channel_communication();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install NIO socket channel hooks: ${error}`);
     }
 
     try {
