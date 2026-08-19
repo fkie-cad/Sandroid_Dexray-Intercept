@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/socket.h>
@@ -728,6 +729,82 @@ static void test_sendto_recvfrom(void) {
     close(recv_fd);
 }
 
+/* ------------------------------------------------------------------ */
+/* Test 5: large single-call transfer exceeding the agent's payload    */
+/* capture cap (65536 bytes), to exercise payload_truncated metadata. */
+/*                                                                      */
+/* SO_RCVBUF/SO_SNDBUF are raised explicitly so the transfer isn't     */
+/* limited by small default buffer autotuning on constrained devices. */
+/* A short delay lets the full payload land in the kernel receive     */
+/* buffer before the single read() call, making a single-call         */
+/* observation of size > cap the overwhelmingly likely outcome on     */
+/* loopback. This is inherently a best-effort timing scenario; the    */
+/* test logs actual per-call sizes rather than hard-failing if the    */
+/* kernel happens to split the transfer across multiple read() calls. */
+/* ------------------------------------------------------------------ */
+static void test_large_payload_transfer(void) {
+    LOGI("");
+    LOGI("=== Native socket tests: large payload transfer (>64KB) ===");
+
+    int cli = -1, srv = -1;
+    if (make_loopback_pair(&cli, &srv) != 0) {
+        TEST_ASSERT(0, "make_loopback_pair for large payload test");
+        return;
+    }
+    TEST_ASSERT(1, "make_loopback_pair for large payload test");
+
+    int large_buf_size = 1024 * 1024;
+    setsockopt(cli, SOL_SOCKET, SO_SNDBUF, &large_buf_size, sizeof(large_buf_size));
+    setsockopt(srv, SOL_SOCKET, SO_RCVBUF, &large_buf_size, sizeof(large_buf_size));
+
+    const size_t payload_size = 200 * 1024; /* 200KB, well above the 64KB cap */
+    char *payload = (char *)malloc(payload_size);
+    TEST_ASSERT(payload != NULL, "large payload buffer allocation");
+    if (!payload) {
+        close(cli);
+        close(srv);
+        return;
+    }
+    memset(payload, 0x5A, payload_size);
+
+    size_t total_sent = 0;
+    while (total_sent < payload_size) {
+        ssize_t chunk = send(cli, payload + total_sent, payload_size - total_sent, 0);
+        if (chunk <= 0) {
+            break;
+        }
+        total_sent += (size_t)chunk;
+    }
+    LOGI("large payload: sent %zu of %zu bytes", total_sent, payload_size);
+    TEST_ASSERT(total_sent == payload_size, "large payload fully queued via send()");
+
+    usleep(200000); /* allow the full transfer to land in the receive buffer */
+
+    char *receive_buf = (char *)malloc(payload_size);
+    TEST_ASSERT(receive_buf != NULL, "large payload receive buffer allocation");
+    if (!receive_buf) {
+        free(payload);
+        close(cli);
+        close(srv);
+        return;
+    }
+
+    ssize_t received = recv(srv, receive_buf, payload_size, 0);
+    LOGI("large payload: single recv() returned %zd bytes", received);
+    TEST_ASSERT(received > 0, "large payload recv() returned data");
+
+    if (received > 65536) {
+        LOGI("large payload: single recv() exceeded 65536-byte cap as expected (%zd bytes)", received);
+    } else {
+        LOGI("large payload: single recv() did not exceed cap in this run (%zd bytes); kernel split the transfer", received);
+    }
+
+    free(payload);
+    free(receive_buf);
+    close(cli);
+    close(srv);
+}
+
 JNIEXPORT jboolean JNICALL
 Java_com_test_networke2e_NativeSocketTests_startFilesystemLocalSocketServer(
         JNIEnv *env,
@@ -930,6 +1007,10 @@ Java_com_test_networke2e_NativeSocketTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("");
     LOGI(">> Running test_sendto_recvfrom...");
     test_sendto_recvfrom();
+
+    LOGI("");
+    LOGI(">> Running test_large_payload_transfer...");
+    test_large_payload_transfer();
 
     LOGI("========================================");
     LOGI("NativeSocketTests summary: %d passed, %d failed",
