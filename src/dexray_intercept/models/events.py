@@ -157,6 +157,8 @@ class NetworkEvent(Event):
         self.endpoint = None
         self.timeout = None
         self.server_info = None
+        self.proxy = None
+        self.backlog = None
 
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
@@ -171,7 +173,7 @@ class NetworkEvent(Event):
             'provider_class', 'declaring_class', 'overload_signature',
             'operation_id', 'captured_length', 'data_hex',
             'class_name', 'host', 'port', 'endpoint', 'timeout',
-            'server_info',
+            'server_info', 'proxy', 'backlog'
         ]
 
         for field in fields:

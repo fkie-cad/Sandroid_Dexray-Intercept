@@ -387,6 +387,12 @@ class ConsoleFormatter(BaseFormatter):
             if event.server_info:
                 lines.append(f"[*] Server: {event.server_info}")
 
+            if event.proxy:
+                lines.append(f"[*] Proxy: {event.proxy}")
+
+            if event.backlog is not None:
+                lines.append(f"[*] Backlog: {event.backlog}")
+
             if event.class_name:
                 lines.append(f"[*] Class: {event.class_name}")
 

@@ -55,6 +55,8 @@ class NetworkParser(BaseParser):
             'endpoint': 'endpoint',
             'timeout': 'timeout',
             'server_info': 'server_info',
+            'proxy': 'proxy',
+            'backlog': 'backlog',
             'local_address': 'local_address',
             'remote_address': 'remote_address',
             'connection_string': 'connection_string',
