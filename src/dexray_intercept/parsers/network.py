@@ -8,6 +8,10 @@ from .base import BaseParser
 from ..models.events import NetworkEvent
 
 
+def format_socket_address(address: str, port: int) -> str:
+    """Format an ip:port pair, bracketing IPv6 literals."""
+    return f"[{address}]:{port}" if ":" in address else f"{address}:{port}"
+
 class NetworkParser(BaseParser):
     """Parser for network events (web and socket)"""
     
@@ -70,12 +74,15 @@ class NetworkParser(BaseParser):
             else:
                 event.socket_description = f'Socket ({socket_type})'
         
-        # Format connection info for easy display
-        if event.local_ip and event.local_port:
-            event.local_address = f"{event.local_ip}:{event.local_port}"
+        # Format connection info for easy display.
+        # Skip if the agent already supplied a formatted address (e.g. Java
+        # socket hooks send bracketed IPv6 endpoints directly) to avoid
+        # clobbering it with an unbracketed reconstruction.
+        if not event.local_address and event.local_ip and event.local_port:
+            event.local_address = format_socket_address(event.local_ip, event.local_port)
         
-        if event.remote_ip and event.remote_port:
-            event.remote_address = f"{event.remote_ip}:{event.remote_port}"
+        if not event.remote_address and event.remote_ip and event.remote_port:
+            event.remote_address = format_socket_address(event.remote_ip, event.remote_port)
         
         # Add method description for socket events
         if 'method' in data:
