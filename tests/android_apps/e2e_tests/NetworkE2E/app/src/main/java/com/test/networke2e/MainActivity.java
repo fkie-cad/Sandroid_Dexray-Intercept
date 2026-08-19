@@ -757,6 +757,12 @@ public class MainActivity extends Activity {
             Log.e(TAG, "runTcpSocketTests failed", t);
         }
         try {
+            runSocketConstructorOverloadTests();
+            Log.i(TAG, "runSocketConstructorOverloadTests completed");
+        } catch (Throwable t) {
+            Log.e(TAG, "runSocketConstructorOverloadTests failed", t);
+        }
+        try {
             runTcpSocketIpv6Tests();
             Log.i(TAG, "runTcpSocketIpv6Tests completed");
         } catch (Throwable t) {
@@ -874,6 +880,102 @@ public class MainActivity extends Activity {
         client.close();
 
         serverLatch.await(5, TimeUnit.SECONDS);
+    }
+
+    private void runSocketConstructorOverloadTests() throws Exception {
+        Log.i(TAG, "runSocketConstructorOverloadTests started");
+
+        // socket.java.server_init - ServerSocket(int)
+        ServerSocket serverSocketPortOnly = new ServerSocket(0);
+        int portOnly = serverSocketPortOnly.getLocalPort();
+        serverSocketPortOnly.close();
+        Log.i(TAG, "ServerSocket(int) - trigger, port=" + portOnly);
+
+        // socket.java.server_init - ServerSocket(int, int)
+        ServerSocket serverSocketWithBacklog = new ServerSocket(0, 4);
+        int backlogPort = serverSocketWithBacklog.getLocalPort();
+        serverSocketWithBacklog.close();
+        Log.i(TAG, "ServerSocket(int,int) - trigger, port=" + backlogPort);
+
+        // socket.java.server_init - ServerSocket() + socket.java.bind
+        ServerSocket unboundServerSocket = new ServerSocket();
+        unboundServerSocket.bind(new InetSocketAddress("127.0.0.1", 0), 4);
+        int boundServerPort = unboundServerSocket.getLocalPort();
+        Log.i(TAG, "ServerSocket() + bind(SocketAddress,int) - trigger, port=" + boundServerPort);
+
+        CountDownLatch serverLatch = new CountDownLatch(1);
+        Thread serverThread = new Thread(() -> {
+            try {
+                Socket accepted = unboundServerSocket.accept();
+                byte[] buf = new byte[32];
+                accepted.getInputStream().read(buf);
+                accepted.close();
+            } catch (Throwable e) {
+                Log.e(TAG, "runSocketConstructorOverloadTests server error", e);
+            } finally {
+                try { unboundServerSocket.close(); } catch (Throwable ignored) {}
+                serverLatch.countDown();
+            }
+        }, "ctor-overload-server");
+        serverThread.start();
+
+        // socket.java.init - Socket() + socket.java.bind - Socket.bind(SocketAddress)
+        Socket unboundClient = new Socket();
+        unboundClient.bind(new InetSocketAddress("127.0.0.1", 0));
+        unboundClient.connect(new InetSocketAddress("127.0.0.1", boundServerPort));
+        unboundClient.getOutputStream().write("ctor-a".getBytes());
+        unboundClient.close();
+        Log.i(TAG, "Socket() + bind(SocketAddress) - trigger");
+
+        serverLatch.await(5, TimeUnit.SECONDS);
+
+        // Second server for the remaining direct-connect constructor overloads
+        ServerSocket serverSocket2 = new ServerSocket(0, 3, InetAddress.getByName("127.0.0.1"));
+        final int port2 = serverSocket2.getLocalPort();
+        CountDownLatch serverLatch2 = new CountDownLatch(1);
+
+        Thread serverThread2 = new Thread(() -> {
+            try {
+                for (int i = 0; i < 3; i++) {
+                    Socket accepted = serverSocket2.accept();
+                    byte[] buf = new byte[32];
+                    accepted.getInputStream().read(buf);
+                    accepted.close();
+                }
+            } catch (Throwable e) {
+                Log.e(TAG, "runSocketConstructorOverloadTests server2 error", e);
+            } finally {
+                try { serverSocket2.close(); } catch (Throwable ignored) {}
+                serverLatch2.countDown();
+            }
+        }, "ctor-overload-server2");
+        serverThread2.start();
+
+        // socket.java.init - Socket(InetAddress, int)
+        Log.i(TAG, "Socket(InetAddress,int) - trigger");
+        Socket socketByAddress = new Socket(InetAddress.getByName("127.0.0.1"), port2);
+        socketByAddress.getOutputStream().write("ctor-b".getBytes());
+        socketByAddress.close();
+
+        // socket.java.init - Socket(InetAddress, int, InetAddress, int)
+        Log.i(TAG, "Socket(InetAddress,int,InetAddress,int) - trigger");
+        Socket socketByAddressWithLocalBind = new Socket(
+                InetAddress.getByName("127.0.0.1"),
+                port2,
+                InetAddress.getByName("127.0.0.1"),
+                0
+        );
+        socketByAddressWithLocalBind.getOutputStream().write("ctor-c".getBytes());
+        socketByAddressWithLocalBind.close();
+
+        // socket.java.init - Socket(Proxy)
+        Log.i(TAG, "Socket(Proxy) - trigger");
+        Socket socketWithProxy = new Socket(Proxy.NO_PROXY);
+        socketWithProxy.connect(new InetSocketAddress("127.0.0.1", port2));
+        socketWithProxy.getOutputStream().write("ctor-d".getBytes());
+        socketWithProxy.close();
+
+        serverLatch2.await(5, TimeUnit.SECONDS);
     }
 
     private void runLocalSocketTests() throws Exception {
