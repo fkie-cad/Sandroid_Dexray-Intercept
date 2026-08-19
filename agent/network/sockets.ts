@@ -1765,7 +1765,8 @@ function hook_bionic_socket_communication(){
                 return;
             }
 
-            const socketType = Socket.type(this.sd);
+            const socketState = trackSocketFromRuntime(this.sd);
+            const socketType = socketState?.socketType;
             const socketLocal = Socket.localAddress(this.sd);
             const local = socketLocal && isTcpEndpointAddress(socketLocal)
                 ? socketLocal
@@ -1798,6 +1799,9 @@ function hook_bionic_socket_communication(){
                 operation_id: operationId,
                 socket_descriptor: this.sd,
                 socket_type: socketType,
+                address_family: socketState?.addressFamily,
+                protocol: socketState?.protocol,
+                result_code: len,
                 local_ip: local.ip,
                 local_port: local.port,
                 remote_ip: remote.ip,
@@ -1834,7 +1838,8 @@ function hook_bionic_socket_communication(){
                     return;
                 }
 
-                const socketType = Socket.type(this.sd);
+                const socketState = trackSocketFromRuntime(this.sd);
+                const socketType = socketState?.socketType;
                 const socketLocal = Socket.localAddress(this.sd);
                 const local = socketLocal && isTcpEndpointAddress(socketLocal)
                     ? socketLocal
@@ -1868,6 +1873,9 @@ function hook_bionic_socket_communication(){
                     operation_id: operationId,
                     socket_descriptor: this.sd,
                     socket_type: socketType,
+                    address_family: socketState?.addressFamily,
+                    protocol: socketState?.protocol,
+                    result_code: len,
                     local_ip: local.ip,
                     local_port: local.port,
                     remote_ip: remote.ip,
