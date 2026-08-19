@@ -1,4 +1,5 @@
 import { devlog, am_send } from "../utils/logging.js"
+import { Java } from "../utils/javalib.js"
 import { PropagateException, safeDeferred, safeImplementation, safeOverload, safePerform, safeUse } from "../utils/safe_java.js"
 import { safeAttachExport } from "../utils/safe_native.js"
 import { collectJavaStackTrace, collectNativeBacktrace } from "../utils/stacktrace.js"
@@ -907,6 +908,19 @@ function getLocalSocketBindExtraFields(args: any[]): any {
     return extra;
 }
 
+let cachedInetSocketAddressClass: any = null;
+
+function getInetSocketAddressClass(): any {
+    if (!cachedInetSocketAddressClass) {
+        cachedInetSocketAddressClass = safeUse(
+            "java.net.InetSocketAddress",
+            "sockets:getInetSocketAddressClass"
+        );
+    }
+
+    return cachedInetSocketAddressClass;
+}
+
 function getNioSocketAddressEndpoint(
     address: any
 ): NativeSocketEndpoint | undefined {
@@ -915,8 +929,15 @@ function getNioSocketAddressEndpoint(
             return undefined;
         }
 
-        const ip = getJavaInetAddressString(address.getAddress());
-        const port = address.getPort();
+        const InetSocketAddress = getInetSocketAddressClass();
+
+        if (!InetSocketAddress) {
+            return undefined;
+        }
+
+        const typedAddress = Java.cast(address, InetSocketAddress);
+        const ip = getJavaInetAddressString(typedAddress.getAddress());
+        const port = typedAddress.getPort();
 
         if (ip !== undefined && port >= 0) {
             return { ip, port };
