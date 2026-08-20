@@ -1214,6 +1214,14 @@ class ConsoleFormatter(BaseFormatter):
             if any(skip_type in event.event_type for skip_type in skip_types):
                 return True
 
+        # Skip low-signal native socket chatter (known noisy control-socket
+        # endpoints, unresolved anonymous unix socket IPC) unless verbose.
+        # Classification-only metadata set by SocketParser; never affects
+        # the JSON profile, where the event and its data are always present.
+        if not self.verbose_mode and isinstance(event, NetworkEvent):
+            if event.metadata.get('socket_noise_reason'):
+                return True
+
         # Skip file write events for certain paths unless verbose
         if isinstance(event, FileSystemEvent) and not self.verbose_mode:
             if event.file_path and "/system/fonts/" in event.file_path:

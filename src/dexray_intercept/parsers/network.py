@@ -208,14 +208,82 @@ class WebParser(NetworkParser):
 
 class SocketParser(NetworkParser):
     """Specialized parser for socket events"""
-    
+
+    # Fixed OS-level control-socket paths that are plumbing rather than
+    # application or library behavior of research interest: per-connection
+    # network policy marking, system tracing infrastructure, and PRNG
+    # seeding, each using a small, fixed protocol with no payload variance
+    # of research interest.
+    KNOWN_NOISY_UNIX_ENDPOINTS = {
+        "filesystem:/dev/socket/fwmarkd",
+        "filesystem:/dev/socket/traced_producer",
+        "filesystem:/dev/socket/statsdw",
+        "filesystem:/dev/socket/prng_seeder",
+        "filesystem:/dev/socket/logdw",
+    }
+
+    def __init__(self):
+        super().__init__()
+        # operation_id values classified as noise on their primary event, so
+        # the matching *_data companion (which carries no socket_type/address
+        # fields of its own) inherits the same classification.
+        self._noisy_operation_ids = set()
+
     def parse_json_data(self, data: dict, timestamp: str) -> Optional[NetworkEvent]:
         """Parse socket-specific JSON data"""
         event = super().parse_json_data(data, timestamp)
-        
-        # Socket-specific processing
-        if event and event.event_type.startswith('socket.'):
-            # Already handled by parent class
-            pass
-        
+
+        if event:
+            self._classify_socket_noise(event)
+
         return event
+
+    def _classify_socket_noise(self, event: NetworkEvent) -> None:
+        """Tag low-signal native socket chatter for default console suppression.
+
+        Never drops the event or any of its data - JSON profile output is
+        unaffected; this only sets metadata consulted by ConsoleFormatter to
+        hide the event from the default (non -v) live console view.
+
+        Two independent classifications:
+
+        - known noisy endpoint: local_address/remote_address matches a fixed
+          low-value control-socket path (see KNOWN_NOISY_UNIX_ENDPOINTS).
+        - unresolved unix endpoint: a unix:stream/unix:dgram event whose
+          endpoint was never resolved via a directly observed bind()/
+          connect(), typically anonymous socketpair()-based IPC opened
+          before agent attach. Generic by construction: it does not fire for
+          any socket whose endpoint is resolved, regardless of what opened it.
+        """
+        event_type = event.event_type
+
+        if not event_type.startswith('socket.native.'):
+            return
+
+        if event_type.endswith('_data'):
+            operation_id = event.operation_id
+            if operation_id and operation_id in self._noisy_operation_ids:
+                event.add_metadata('socket_noise_reason', 'inherited')
+            return
+
+        local_address = event.local_address or ''
+        remote_address = event.remote_address or ''
+        noise_reason = None
+
+        if (
+            local_address in self.KNOWN_NOISY_UNIX_ENDPOINTS
+            or remote_address in self.KNOWN_NOISY_UNIX_ENDPOINTS
+        ):
+            noise_reason = 'known_noisy_endpoint'
+        elif (
+            event.socket_type in ('unix:stream', 'unix:dgram')
+            and not local_address
+            and not remote_address
+        ):
+            noise_reason = 'unresolved_unix_endpoint'
+
+        if noise_reason:
+            event.add_metadata('socket_noise_reason', noise_reason)
+
+            if event.operation_id:
+                self._noisy_operation_ids.add(event.operation_id)
