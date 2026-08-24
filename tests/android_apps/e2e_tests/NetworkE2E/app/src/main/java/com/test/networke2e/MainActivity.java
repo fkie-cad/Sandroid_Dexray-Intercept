@@ -124,11 +124,23 @@ public class MainActivity extends Activity {
     };
 
 
+    private static final String EXTRA_LOAD_TEST = "load_test";
+    private static final String EXTRA_LOAD_TEST_ITERATIONS = "load_test_iterations";
+    private static final String EXTRA_LOAD_TEST_PAYLOAD_SIZE = "load_test_payload_size";
+
+    private static final int DEFAULT_LOAD_TEST_ITERATIONS = 1000;
+    private static final int DEFAULT_LOAD_TEST_PAYLOAD_SIZE = 1024;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         Log.i(TAG, "NetworkE2E started");
+
+        if (getIntent().getBooleanExtra(EXTRA_LOAD_TEST, false)) {
+            runLoadTestMode();
+            return;
+        }
 
         // WebView construction and all loadUrl/loadData/postUrl calls require
         // the main thread; executed here before the network thread is started.
@@ -138,7 +150,6 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Log.e(TAG, "runWebViewTests failed", t);
         }
-
         // All remaining tests perform blocking network I/O and must run off
         // the main thread to satisfy Android's NetworkOnMainThreadException policy.
         Thread thread = new Thread(() -> {
@@ -251,6 +262,51 @@ public class MainActivity extends Activity {
         }, "networke2e-tests");
         thread.start();
         Log.i(TAG, "NetworkE2E calling finish()");
+        finish();
+    }
+
+    // ------------------------------------------------------------
+    // Load generator entry point
+    //
+    // Opt-in only, via Intent extras; entirely separate from the normal
+    // test sequence above. Generates sustained native socket volume for
+    // performance and scale investigation rather than correctness checks.
+    //
+    // Example invocation:
+    //   adb shell am start -n com.test.networke2e/.MainActivity \
+    //     --ez load_test true \
+    //     --ei load_test_iterations 5000 \
+    //     --ei load_test_payload_size 4096
+    // ------------------------------------------------------------
+    private void runLoadTestMode() {
+        int iterations = getIntent().getIntExtra(
+                EXTRA_LOAD_TEST_ITERATIONS,
+                DEFAULT_LOAD_TEST_ITERATIONS
+        );
+        int payloadSize = getIntent().getIntExtra(
+                EXTRA_LOAD_TEST_PAYLOAD_SIZE,
+                DEFAULT_LOAD_TEST_PAYLOAD_SIZE
+        );
+
+        Log.i(
+                TAG,
+                "NetworkE2E load test mode: iterations=" + iterations +
+                ", payloadSize=" + payloadSize
+        );
+
+        Thread thread = new Thread(() -> {
+            try {
+                NativeSocketTests.runLoadTest(iterations, payloadSize);
+                Log.i(TAG, "NativeSocketTests.runLoadTest completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "NativeSocketTests.runLoadTest failed", t);
+            } finally {
+                Log.i(TAG, "NetworkE2E load test finished");
+            }
+        }, "networke2e-load-test");
+        thread.start();
+
+        Log.i(TAG, "NetworkE2E calling finish() (load test mode)");
         finish();
     }
 

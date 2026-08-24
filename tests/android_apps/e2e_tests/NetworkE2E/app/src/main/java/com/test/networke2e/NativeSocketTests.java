@@ -39,4 +39,11 @@ public class NativeSocketTests {
      * the deterministic Java LocalSocket client payload.
      */
     public static native boolean waitForFilesystemLocalSocketServer();
+
+    /**
+     * Generates sustained native socket volume (TCP then UDP loopback,
+     * send/recv in a loop) for performance and scale investigation.
+     * Not part of runTests(); invoked separately via a distinct trigger.
+     */
+    public static native void runLoadTest(int iterations, int payloadSize);
 }

@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include <poll.h>
 #include <sys/un.h>
+#include <time.h>
 
 #define LOG_TAG "NET_NATIVE_SOCKETS"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
@@ -1015,5 +1016,159 @@ Java_com_test_networke2e_NativeSocketTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("========================================");
     LOGI("NativeSocketTests summary: %d passed, %d failed",
          tests_passed, tests_failed);
+    LOGI("========================================");
+}
+
+/* ------------------------------------------------------------------ */
+/* Load generator                                                      */
+/*                                                                     */
+/* Separate from the deterministic correctness tests above. Generates  */
+/* sustained native socket volume (TCP then UDP loopback, send/recv    */
+/* in a loop) for performance and scale investigation. Not part of     */
+/* the default test sequence; invoked only via a distinct entry point. */
+/* ------------------------------------------------------------------ */
+
+static long elapsed_ms(struct timespec *start, struct timespec *end) {
+    long seconds = end->tv_sec - start->tv_sec;
+    long nanos = end->tv_nsec - start->tv_nsec;
+    return seconds * 1000L + nanos / 1000000L;
+}
+
+static void run_tcp_load_phase(int iterations, int payload_size,
+                                char *payload, char *receive_buf) {
+    int cli = -1, srv = -1;
+    if (make_loopback_pair(&cli, &srv) != 0) {
+        LOGE("load test: TCP loopback pair setup failed");
+        return;
+    }
+
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    int completed = 0;
+    for (int i = 0; i < iterations; i++) {
+        ssize_t sent = send(cli, payload, (size_t)payload_size, 0);
+        if (sent <= 0) {
+            LOGE("load test: TCP send failed at iteration %d, errno=%d", i, errno);
+            break;
+        }
+
+        ssize_t received = recv(srv, receive_buf, (size_t)payload_size, 0);
+        if (received <= 0) {
+            LOGE("load test: TCP recv failed at iteration %d, errno=%d", i, errno);
+            break;
+        }
+
+        completed++;
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    LOGI("load test: TCP phase completed %d/%d iterations in %ld ms",
+         completed, iterations, elapsed_ms(&start, &end));
+
+    close(cli);
+    close(srv);
+}
+
+static void run_udp_load_phase(int iterations, int payload_size,
+                                char *payload, char *receive_buf) {
+    int recv_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int send_fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+    if (recv_fd < 0 || send_fd < 0) {
+        LOGE("load test: UDP socket creation failed, errno=%d", errno);
+        if (recv_fd >= 0) close(recv_fd);
+        if (send_fd >= 0) close(send_fd);
+        return;
+    }
+
+    struct sockaddr_in addr;
+    socklen_t addrlen = sizeof(addr);
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+
+    if (
+        bind(recv_fd, (struct sockaddr *)&addr, sizeof(addr)) != 0 ||
+        getsockname(recv_fd, (struct sockaddr *)&addr, &addrlen) != 0
+    ) {
+        LOGE("load test: UDP bind/getsockname failed, errno=%d", errno);
+        close(recv_fd);
+        close(send_fd);
+        return;
+    }
+
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    int completed = 0;
+    for (int i = 0; i < iterations; i++) {
+        ssize_t sent = sendto(send_fd, payload, (size_t)payload_size, 0,
+                               (struct sockaddr *)&addr, sizeof(addr));
+        if (sent <= 0) {
+            LOGE("load test: UDP sendto failed at iteration %d, errno=%d", i, errno);
+            break;
+        }
+
+        ssize_t received = recvfrom(recv_fd, receive_buf, (size_t)payload_size, 0,
+                                     NULL, NULL);
+        if (received <= 0) {
+            LOGE("load test: UDP recvfrom failed at iteration %d, errno=%d", i, errno);
+            break;
+        }
+
+        completed++;
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    LOGI("load test: UDP phase completed %d/%d iterations in %ld ms",
+         completed, iterations, elapsed_ms(&start, &end));
+
+    close(recv_fd);
+    close(send_fd);
+}
+
+JNIEXPORT void JNICALL
+Java_com_test_networke2e_NativeSocketTests_runLoadTest(
+        JNIEnv *env,
+        jclass clazz,
+        jint iterations,
+        jint payloadSize
+) {
+    (void)env;
+    (void)clazz;
+
+    LOGI("========================================");
+    LOGI("NativeSocketTests: load test starting (iterations=%d, payload_size=%d)",
+         iterations, payloadSize);
+    LOGI("========================================");
+
+    if (iterations <= 0 || payloadSize <= 0) {
+        LOGE("load test: invalid parameters (iterations=%d, payload_size=%d)",
+             iterations, payloadSize);
+        return;
+    }
+
+    char *payload = (char *)malloc((size_t)payloadSize);
+    char *receive_buf = (char *)malloc((size_t)payloadSize);
+
+    if (!payload || !receive_buf) {
+        LOGE("load test: buffer allocation failed");
+        free(payload);
+        free(receive_buf);
+        return;
+    }
+
+    memset(payload, 0x41, (size_t)payloadSize);
+
+    run_tcp_load_phase(iterations, payloadSize, payload, receive_buf);
+    run_udp_load_phase(iterations, payloadSize, payload, receive_buf);
+
+    free(payload);
+    free(receive_buf);
+
+    LOGI("========================================");
+    LOGI("NativeSocketTests: load test finished");
     LOGI("========================================");
 }
