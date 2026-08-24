@@ -55,6 +55,7 @@ class FileSystemEvent(Event):
         self.stream_type = None
         self.bytes_read = None
         self.bytes_written = None
+        self.success = None
         self.hexdump_display = None
 
     def get_event_data(self) -> Dict[str, Any]:
@@ -65,7 +66,8 @@ class FileSystemEvent(Event):
         optional_fields = [
             'operation', 'buffer_size', 'offset', 'length', 'data_hex',
             'plaintext', 'file_type', 'is_large_data', 'fd', 'parent_path',
-            'child_path', 'stream_type', 'bytes_read', 'bytes_written'
+            'child_path', 'stream_type', 'bytes_read', 'bytes_written',
+            'success'
         ]
 
         for field in optional_fields:

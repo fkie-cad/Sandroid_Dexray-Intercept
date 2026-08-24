@@ -167,6 +167,8 @@ class ConsoleFormatter(BaseFormatter):
         elif event.event_type.startswith('file.delete'):
             lines.append(f"\n[*] [File] File Deletion ({event.event_type}):")
             lines.append(f"[*] File Path: {event.file_path or 'Unknown'}")
+            if event.success is not None:
+                lines.append(f"[*] Success: {event.success}")
 
         else:
             # Fallback for unknown filesystem events
