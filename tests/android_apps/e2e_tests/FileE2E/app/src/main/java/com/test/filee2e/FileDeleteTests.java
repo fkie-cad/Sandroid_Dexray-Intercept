@@ -28,6 +28,7 @@ public class FileDeleteTests {
     public void runTests() {
         testJavaDelete_dex();
         testJavaDelete_jar();
+        testJavaDelete_jarSubstring();
         testNativeUnlink();
 
         Log.i(TAG, "FileDeleteTests summary: " + passed + " passed, " + failed + " failed");
@@ -77,6 +78,30 @@ public class FileDeleteTests {
             }
         } catch (Throwable t) {
             Log.e(TAG, "File.delete() .jar failed", t);
+            failed++;
+        }
+    }
+
+    // File.delete() on a non-jar path containing "jar"
+    private void testJavaDelete_jarSubstring() {
+        try {
+            File f = new File(ctx.getFilesDir(), "delete_jar_marker.tmp");
+            FileOutputStream fos = new FileOutputStream(f);
+            fos.write("dummy-marker".getBytes("UTF-8"));
+            fos.close();
+
+            boolean deleted = f.delete();
+            boolean exists = f.exists();
+
+            Log.i(TAG, "File.delete() jar substring: deleted=" + deleted + ", exists=" + exists);
+            if (deleted && !exists) {
+                passed++;
+            } else {
+                Log.e(TAG, "File.delete() jar substring did not remove the file");
+                failed++;
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "File.delete() jar substring failed", t);
             failed++;
         }
     }
