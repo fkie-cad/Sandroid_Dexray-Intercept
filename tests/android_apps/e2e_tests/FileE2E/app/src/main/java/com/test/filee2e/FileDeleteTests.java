@@ -40,9 +40,17 @@ public class FileDeleteTests {
             FileOutputStream fos = new FileOutputStream(f);
             fos.write("dummy-dex".getBytes("UTF-8"));
             fos.close();
+
             boolean deleted = f.delete();
-            Log.i(TAG, "File.delete() .dex: " + deleted);
-            passed++;
+            boolean exists = f.exists();
+
+            Log.i(TAG, "File.delete() .dex: deleted=" + deleted + ", exists=" + exists);
+            if (deleted && !exists) {
+                passed++;
+            } else {
+                Log.e(TAG, "File.delete() .dex did not remove the file");
+                failed++;
+            }
         } catch (Throwable t) {
             Log.e(TAG, "File.delete() .dex failed", t);
             failed++;
@@ -56,9 +64,17 @@ public class FileDeleteTests {
             FileOutputStream fos = new FileOutputStream(f);
             fos.write("dummy-jar".getBytes("UTF-8"));
             fos.close();
+
             boolean deleted = f.delete();
-            Log.i(TAG, "File.delete() .jar: " + deleted);
-            passed++;
+            boolean exists = f.exists();
+
+            Log.i(TAG, "File.delete() .jar: deleted=" + deleted + ", exists=" + exists);
+            if (deleted && !exists) {
+                passed++;
+            } else {
+                Log.e(TAG, "File.delete() .jar did not remove the file");
+                failed++;
+            }
         } catch (Throwable t) {
             Log.e(TAG, "File.delete() .jar failed", t);
             failed++;
