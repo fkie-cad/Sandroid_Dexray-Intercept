@@ -114,7 +114,15 @@ class ConsoleFormatter(BaseFormatter):
         elif event.event_type == 'file.stream.create':
             lines.append("\n[*] [File] Stream Creation:")
             lines.append(f"[*] Operation: {event.operation or 'Unknown'}")
+            if event.method:
+                lines.append(f"[*] Method: {event.method}")
+            if event.variant is not None:
+                lines.append(f"[*] Variant: {event.variant}")
             lines.append(f"[*] Stream Type: {event.stream_type or 'Unknown'}")
+            if event.close_descriptor is not None:
+                lines.append(
+                    f"[*] Close Descriptor: {event.close_descriptor}"
+                )
             lines.append(f"[*] File Path: {event.file_path or 'Unknown'}")
 
         elif event.event_type == 'file.read':
