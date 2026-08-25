@@ -8,15 +8,22 @@ import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 
-// Triggers all FileInputStream constructor and read overloads declared in file_system_hooks.ts.
+// Triggers public FileInputStream constructors and read overloads declared in
+// file_system_hooks.ts.
 //
-// Hook status per overload:
-//   new[0] FileInputStream(File)           - declared, implementation present
-//   new[1] FileInputStream(FileDescriptor) - declared, NO implementation assigned
-//   new[2] FileInputStream(String)         - declared, NO implementation assigned
-//   read[0] read()                         - declared, NO implementation assigned
-//   read[1] read(byte[])                   - declared, implementation present
-//   read[2] read(byte[], int, int)         - declared, implementation present
+// Public SDK constructor coverage:
+//   new[0] FileInputStream(File)
+//   new[1] FileInputStream(FileDescriptor)
+//   new[2] FileInputStream(String)
+//
+// Runtime-only constructor coverage:
+//   new[3] FileInputStream(FileDescriptor, boolean) is invoked internally by
+//   FileInputStream(FileDescriptor) on supported Android runtimes.
+//
+// Read coverage:
+//   read[0] read()
+//   read[1] read(byte[])
+//   read[2] read(byte[], int, int)
 public class FileInputStreamTests {
 
     private static final String TAG = "FS_E2E";
@@ -47,7 +54,7 @@ public class FileInputStreamTests {
         return f;
     }
 
-    // hook new[0]: FileInputStream(File) - implementation present
+    // hook new[0]: FileInputStream(File)
     private void testFIS_File() {
         try {
             File f = prepareFile("fis_file.log", "FIS-File-Test");
@@ -61,7 +68,7 @@ public class FileInputStreamTests {
         }
     }
 
-    // hook new[2]: FileInputStream(String) - NO implementation assigned
+    // hook new[2]: FileInputStream(String)
     private void testFIS_String() {
         try {
             File f = prepareFile("fis_string.log", "FIS-String-Test");
@@ -75,7 +82,7 @@ public class FileInputStreamTests {
         }
     }
 
-    // hook new[1]: FileInputStream(FileDescriptor) - NO implementation assigned
+    // hook new[1]: FileInputStream(FileDescriptor)
     private void testFIS_FileDescriptor() {
         try {
             File f = prepareFile("fis_fd.log", "FIS-FD-Test");
@@ -93,7 +100,7 @@ public class FileInputStreamTests {
         }
     }
 
-    // hook read[0]: read() no-arg - NO implementation assigned
+    // hook read[0]: read() no-arg
     private void testFIS_read_noarg() {
         try {
             File f = prepareFile("fis_read0.log", "X");
@@ -108,7 +115,7 @@ public class FileInputStreamTests {
         }
     }
 
-    // hook read[1]: read(byte[]) - implementation present
+    // hook read[1]: read(byte[])
     private void testFIS_read_bytes() {
         try {
             File f = prepareFile("fis_read1.log", "ReadBytesTest");
@@ -124,7 +131,7 @@ public class FileInputStreamTests {
         }
     }
 
-    // hook read[2]: read(byte[], int, int) - implementation present
+    // hook read[2]: read(byte[], int, int)
     private void testFIS_read_bytes_offset() {
         try {
             File f = prepareFile("fis_read2.log", "ReadBytesOffsetTest");
