@@ -368,20 +368,211 @@ function hook_file_input_stream_constructors(): void {
     });
 }
 
+function hook_file_input_stream_reads(): void {
+    const readDepths = new Map<number, number>();
+
+    safePerform("file_system:input_stream_reads:install", () => {
+        const FileInputStream = safeUse(
+            "java.io.FileInputStream",
+            "file_system:input_stream_reads"
+        );
+        const FileDescriptor = safeUse(
+            "java.io.FileDescriptor",
+            "file_system:input_stream_reads"
+        );
+
+        if (!FileInputStream || !FileDescriptor) {
+            return;
+        }
+
+        function resolveFilePath(stream: any): string {
+            let filePath = TraceFS["fd" + stream.hashCode()];
+
+            if (filePath != null) {
+                return filePath;
+            }
+
+            const descriptor = Java.cast(stream.getFD(), FileDescriptor);
+            filePath = TraceFD["fd" + descriptor.hashCode()];
+
+            return filePath || "[unknown]";
+        }
+
+        function emitReadEvent(
+            stream: any,
+            variant: number,
+            method: string,
+            eventData: any
+        ): void {
+            let filePath = "[unknown]";
+
+            try {
+                filePath = resolveFilePath(stream);
+            } catch (error) {
+                devlog(`FileInputStream read path resolution failed: ${error}`);
+            }
+
+            if (shouldSkipFile(filePath)) {
+                return;
+            }
+
+            const shouldDumpAscii = isPatternPresent(
+                filePath,
+                CONFIG.dump_ascii_If_Path_contains
+            );
+            const shouldDumpHex = !isPatternPresent(
+                filePath,
+                CONFIG.dump_hex_If_Path_NOT_contains
+            );
+            const java_stack_trace = collectJavaStackTrace();
+
+            createFileSystemEvent("file.read", {
+                operation: "FileInputStream.read",
+                variant,
+                file_path: filePath,
+                method,
+                ...eventData,
+                data_hex: shouldDumpHex || shouldDumpAscii
+                    ? eventData.data_hex
+                    : null,
+                should_dump_ascii: shouldDumpAscii,
+                should_dump_hex: shouldDumpHex,
+                ...(java_stack_trace ? { java_stack_trace } : {})
+            });
+        }
+
+        function installRead(
+            overload: any,
+            context: string,
+            variant: number,
+            method: string,
+            createEventData: (args: any[], result: number) => any
+        ): void {
+            if (!overload) {
+                return;
+            }
+
+            overload.implementation = safeImplementation(
+                context,
+                overload,
+                function (original, ...args: any[]) {
+                    const threadId = Process.getCurrentThreadId();
+                    const depth = readDepths.get(threadId) || 0;
+                    const isNested = depth > 0;
+                    readDepths.set(threadId, depth + 1);
+
+                    try {
+                        let result;
+
+                        try {
+                            result = original.apply(this, args);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
+
+                        if (!isNested) {
+                            try {
+                                emitReadEvent(
+                                    this,
+                                    variant,
+                                    method,
+                                    createEventData(args, result)
+                                );
+                            } catch (error) {
+                                devlog(
+                                    `FileInputStream read metadata failed: ${error}`
+                                );
+                            }
+                        }
+
+                        return result;
+                    } finally {
+                        if (depth === 0) {
+                            readDepths.delete(threadId);
+                        } else {
+                            readDepths.set(threadId, depth);
+                        }
+                    }
+                }
+            );
+        }
+
+        installRead(
+            safeOverload(
+                FileInputStream.read,
+                "file_system:FileInputStream.read()"
+            ),
+            "file_system:FileInputStream.read()",
+            0,
+            "java.io.FileInputStream.read()",
+            (_args, result) => {
+                const byteValue = result >= 0 ? result : null;
+
+                return {
+                    buffer_size: 1,
+                    offset: 0,
+                    length: 1,
+                    bytes_read: byteValue === null ? 0 : 1,
+                    byte_value: byteValue,
+                    data_hex: byteValue === null
+                        ? null
+                        : bytesToHexSafe([byteValue])
+                };
+            }
+        );
+
+        installRead(
+            safeOverload(
+                FileInputStream.read,
+                "file_system:FileInputStream.read(byte[])",
+                "[B"
+            ),
+            "file_system:FileInputStream.read(byte[])",
+            1,
+            "java.io.FileInputStream.read(byte[])",
+            (args, result) => {
+                const buffer = Java.array("byte", args[0]);
+
+                return {
+                    buffer_size: args[0].length,
+                    bytes_read: result,
+                    data_hex: bytesToHexSafe(buffer)
+                };
+            }
+        );
+
+        installRead(
+            safeOverload(
+                FileInputStream.read,
+                "file_system:FileInputStream.read(byte[],int,int)",
+                "[B",
+                "int",
+                "int"
+            ),
+            "file_system:FileInputStream.read(byte[],int,int)",
+            2,
+            "java.io.FileInputStream.read(byte[], int, int)",
+            (args, result) => {
+                const buffer = Java.array("byte", args[0]);
+
+                return {
+                    buffer_size: args[0].length,
+                    offset: args[1],
+                    length: args[2],
+                    bytes_read: result,
+                    data_hex: bytesToHexSafe(buffer)
+                };
+            }
+        );
+    });
+}
+
 function hook_filesystem_accesses() {
     Java.perform(function () {
 
         var CLS = {
-            FileInputStream: Java.use("java.io.FileInputStream"),
             FileOutputStream: Java.use("java.io.FileOutputStream"),
             FileDescriptor: Java.use("java.io.FileDescriptor")
-        };
-        var FileInputStream = {
-            read: [
-                CLS.FileInputStream.read.overload(),
-                CLS.FileInputStream.read.overload("[B"),
-                CLS.FileInputStream.read.overload("[B", "int", "int"),
-            ],
         };
         var FileOuputStream = {
             new: [
@@ -399,87 +590,6 @@ function hook_filesystem_accesses() {
         };
 
         // ============= Hook implementation
-
-        FileInputStream.read[1].implementation = function (a0) {
-            var fname = TraceFS["fd" + this.hashCode()];
-            var fd = null;
-            if (fname == null) {
-                fd = Java.cast(this.getFD(), CLS.FileDescriptor);
-                fname = TraceFD["fd" + fd.hashCode()]
-            }
-            if (fname == null) {
-                devlog("FileInputStream.read[1]: fd-->" + fd);
-                fname = "[unknown]"
-            }
-
-            var result = FileInputStream.read[1].call(this, a0);
-            var b = Java.array('byte', a0);
-
-            if (!shouldSkipFile(fname)) {
-                // Determine content type for proper processing
-                const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
-                const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
-                const java_stack_trace = collectJavaStackTrace();
-
-                // Send full buffer hex (NO slicing here - Python will truncate using bytes_read)
-                // We avoid slice() because it causes app freezing on Java arrays in Frida
-                createFileSystemEvent("file.read", {
-                    operation: "FileInputStream.read",
-                    variant: 1,
-                    file_path: fname,
-                    buffer_size: a0.length,
-                    bytes_read: result,
-                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(b) : null,
-                    should_dump_ascii: shouldDumpAscii,
-                    should_dump_hex: shouldDumpHex,
-                    method: "java.io.FileInputStream.read(byte[])",
-                    ...(java_stack_trace ? { java_stack_trace } : {})
-                });
-            }
-
-            return result;
-        }
-        FileInputStream.read[2].implementation = function (a0, a1, a2) {
-            var fname = TraceFS["fd" + this.hashCode()];
-            var fd = null;
-            if (fname == null) {
-                fd = Java.cast(this.getFD(), CLS.FileDescriptor);
-                fname = TraceFD["fd" + fd.hashCode()]
-            }
-            if (fname == null) {
-                devlog("FileInputStream.read[2]: fd-->" + fd);
-                fname = "[unknown]"
-            }
-
-            var result = FileInputStream.read[2].call(this, a0, a1, a2);
-            var b = Java.array('byte', a0);
-
-            if (!shouldSkipFile(fname)) {
-                // Determine content type for proper processing
-                const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
-                const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
-                const java_stack_trace = collectJavaStackTrace();
-
-                // Send full buffer hex (NO slicing here - Python will truncate using offset+bytes_read)
-                // We avoid slice() because it causes app freezing on Java arrays in Frida
-                createFileSystemEvent("file.read", {
-                    operation: "FileInputStream.read",
-                    variant: 2,
-                    file_path: fname,
-                    buffer_size: a0.length,
-                    offset: a1,
-                    length: a2,
-                    bytes_read: result,
-                    data_hex: shouldDumpHex || shouldDumpAscii ? bytesToHexSafe(b) : null,
-                    should_dump_ascii: shouldDumpAscii,
-                    should_dump_hex: shouldDumpHex,
-                    method: "java.io.FileInputStream.read(byte[], int, int)",
-                    ...(java_stack_trace ? { java_stack_trace } : {})
-                });
-            }
-
-            return result;
-        }
 
         // =============== File Output Stream ============
 
@@ -662,6 +772,12 @@ export function install_file_system_hooks() {
         hook_file_input_stream_constructors();
     } catch (error) {
         devlog(`[HOOK] Failed to install FileInputStream constructor hooks: ${error}`);
+    }
+
+    try {
+        hook_file_input_stream_reads();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install FileInputStream read hooks: ${error}`);
     }
 
     try {
