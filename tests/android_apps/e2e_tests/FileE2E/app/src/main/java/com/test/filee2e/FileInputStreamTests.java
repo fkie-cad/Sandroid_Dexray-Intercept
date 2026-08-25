@@ -107,8 +107,14 @@ public class FileInputStreamTests {
             FileInputStream fis = new FileInputStream(f);
             int b = fis.read();
             fis.close();
+
             Log.i(TAG, "FileInputStream.read() -> " + b);
-            passed++;
+            if (b == 'X') {
+                passed++;
+            } else {
+                Log.e(TAG, "FileInputStream.read() returned unexpected byte: " + b);
+                failed++;
+            }
         } catch (Throwable t) {
             Log.e(TAG, "FileInputStream.read() failed", t);
             failed++;
@@ -123,8 +129,14 @@ public class FileInputStreamTests {
             byte[] buf = new byte[64];
             int n = fis.read(buf);
             fis.close();
+
             Log.i(TAG, "FileInputStream.read(byte[]) -> " + n + " bytes");
-            passed++;
+            if (n == "ReadBytesTest".length()) {
+                passed++;
+            } else {
+                Log.e(TAG, "FileInputStream.read(byte[]) returned unexpected length: " + n);
+                failed++;
+            }
         } catch (Throwable t) {
             Log.e(TAG, "FileInputStream.read(byte[]) failed", t);
             failed++;
@@ -139,8 +151,17 @@ public class FileInputStreamTests {
             byte[] buf = new byte[128];
             int n = fis.read(buf, 4, 50);
             fis.close();
+
             Log.i(TAG, "FileInputStream.read(byte[],int,int) -> " + n + " bytes");
-            passed++;
+            if (n == "ReadBytesOffsetTest".length()) {
+                passed++;
+            } else {
+                Log.e(
+                    TAG,
+                    "FileInputStream.read(byte[],int,int) returned unexpected length: " + n
+                );
+                failed++;
+            }
         } catch (Throwable t) {
             Log.e(TAG, "FileInputStream.read(byte[],int,int) failed", t);
             failed++;
