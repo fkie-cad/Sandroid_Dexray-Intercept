@@ -160,6 +160,10 @@ class ConsoleFormatter(BaseFormatter):
             lines.append(f"[*] Buffer Size: {event.buffer_size or 0} bytes")
             if event.offset is not None:
                 lines.append(f"[*] Offset: {event.offset}, Length: {event.length or 0}")
+            if event.bytes_written is not None:
+                lines.append(f"[*] Bytes Written: {event.bytes_written}")
+            if event.byte_value is not None:
+                lines.append(f"[*] Byte Value: {event.byte_value}")
             if event.is_large_data:
                 lines.append(f"[*] Data truncated (showing {getattr(event, 'displayed_length', 0)} of {getattr(event, 'original_length', 0)} bytes)")
 
