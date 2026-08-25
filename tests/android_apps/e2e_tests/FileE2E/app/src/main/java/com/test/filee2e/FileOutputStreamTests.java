@@ -7,21 +7,24 @@ import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 
-// Triggers all FileOutputStream constructor and write overloads declared in file_system_hooks.ts.
+// Triggers public FileOutputStream constructors and write overloads declared in
+// file_system_hooks.ts.
 //
-// Hook status per overload:
-//   new[0] FileOutputStream(File)                - declared, NO implementation assigned
-//   new[1] FileOutputStream(File, boolean)       - declared, NO implementation assigned
-//   new[2] FileOutputStream(FileDescriptor)      - declared, NO implementation assigned
-//   new[3] FileOutputStream(String)              - declared, NO implementation assigned
-//   new[4] FileOutputStream(String, boolean)     - declared, NO implementation assigned
-//   write[0] write(byte[])                       - declared, NO implementation assigned
-//   write[1] write(int)                          - declared, NO implementation assigned
-//   write[2] write(byte[], int, int)             - declared, implementation present
+// Public SDK constructor coverage:
+//   new[0] FileOutputStream(File)
+//   new[1] FileOutputStream(File, boolean)
+//   new[2] FileOutputStream(FileDescriptor)
+//   new[4] FileOutputStream(String)
+//   new[5] FileOutputStream(String, boolean)
 //
-// Additional gap: none of the constructors populate TraceFS, so even write[2]
-// will resolve the filename as "[unknown]" unless the path was registered via
-// a File.$init hook first.
+// Runtime-only constructor coverage:
+//   new[3] FileOutputStream(FileDescriptor, boolean) is invoked internally by
+//   FileOutputStream(FileDescriptor) on supported Android runtimes.
+//
+// Write coverage:
+//   write[0] write(byte[])
+//   write[1] write(int)
+//   write[2] write(byte[], int, int)
 public class FileOutputStreamTests {
 
     private static final String TAG = "FS_E2E";
@@ -46,7 +49,7 @@ public class FileOutputStreamTests {
         Log.i(TAG, "FileOutputStreamTests summary: " + passed + " passed, " + failed + " failed");
     }
 
-    // hook new[0]: FileOutputStream(File) - NO implementation assigned
+    // hook new[0]: FileOutputStream(File)
     private void testFOS_File() {
         try {
             File f = new File(ctx.getFilesDir(), "fos_file.log");
@@ -61,7 +64,7 @@ public class FileOutputStreamTests {
         }
     }
 
-    // hook new[1]: FileOutputStream(File, boolean) - NO implementation assigned
+    // hook new[1]: FileOutputStream(File, boolean)
     private void testFOS_File_Boolean() {
         try {
             File f = new File(ctx.getFilesDir(), "fos_file_bool.log");
@@ -76,7 +79,7 @@ public class FileOutputStreamTests {
         }
     }
 
-    // hook new[2]: FileOutputStream(FileDescriptor) - NO implementation assigned
+    // hook new[2]: FileOutputStream(FileDescriptor)
     private void testFOS_FileDescriptor() {
         try {
             File f = new File(ctx.getFilesDir(), "fos_fd.log");
@@ -94,7 +97,7 @@ public class FileOutputStreamTests {
         }
     }
 
-    // hook new[3]: FileOutputStream(String) - NO implementation assigned
+    // hook new[4]: FileOutputStream(String)
     private void testFOS_String() {
         try {
             File f = new File(ctx.getFilesDir(), "fos_string.log");
@@ -109,7 +112,7 @@ public class FileOutputStreamTests {
         }
     }
 
-    // hook new[4]: FileOutputStream(String, boolean) - NO implementation assigned
+    // hook new[5]: FileOutputStream(String, boolean)
     private void testFOS_String_Boolean() {
         try {
             File f = new File(ctx.getFilesDir(), "fos_string_bool.log");
@@ -124,7 +127,7 @@ public class FileOutputStreamTests {
         }
     }
 
-    // hook write[0]: write(byte[]) - NO implementation assigned
+    // hook write[0]: write(byte[])
     private void testFOS_write_bytes() {
         try {
             File f = new File(ctx.getFilesDir(), "fos_write0.log");
@@ -139,7 +142,7 @@ public class FileOutputStreamTests {
         }
     }
 
-    // hook write[1]: write(int) - NO implementation assigned
+    // hook write[1]: write(int)
     private void testFOS_write_int() {
         try {
             File f = new File(ctx.getFilesDir(), "fos_write1.log");
@@ -154,9 +157,7 @@ public class FileOutputStreamTests {
         }
     }
 
-    // hook write[2]: write(byte[], int, int) - implementation present
-    // Note: filename resolves as "[unknown]" unless a File.$init hook ran first,
-    // because no FileOutputStream constructor hook populates TraceFS.
+    // hook write[2]: write(byte[],int,int)
     private void testFOS_write_bytes_offset() {
         try {
             File f = new File(ctx.getFilesDir(), "fos_write2.xml");
