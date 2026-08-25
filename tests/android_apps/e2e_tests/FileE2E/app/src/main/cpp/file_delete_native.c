@@ -25,7 +25,7 @@ static int tests_failed = 0;
     } \
 } while (0)
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_test_filee2e_FileDeleteNative_unlinkFile(JNIEnv *env, jclass clazz, jstring path) {
     (void)clazz;
 
@@ -41,7 +41,7 @@ Java_com_test_filee2e_FileDeleteNative_unlinkFile(JNIEnv *env, jclass clazz, jst
         LOGE("GetStringUTFChars returned NULL");
         TEST_ASSERT(0, "GetStringUTFChars non-NULL");
         LOGI("FileDeleteNative summary: %d passed, %d failed", tests_passed, tests_failed);
-        return;
+        return -1;
     }
 
     LOGI("calling unlink(\"%s\")", c_path);
@@ -53,4 +53,5 @@ Java_com_test_filee2e_FileDeleteNative_unlinkFile(JNIEnv *env, jclass clazz, jst
     LOGI("========================================");
     LOGI("FileDeleteNative summary: %d passed, %d failed", tests_passed, tests_failed);
     LOGI("========================================");
+    return result;
 }

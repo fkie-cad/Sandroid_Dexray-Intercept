@@ -106,16 +106,53 @@ public class FileDeleteTests {
         }
     }
 
-    // native unlink() via JNI - triggers safeAttach hook on libc "unlink"
+    public void runBlockedUnlinkTest() {
+        try {
+            File f = new File(ctx.getFilesDir(), "unlink_blocked.tmp");
+            FileOutputStream fos = new FileOutputStream(f);
+            fos.write("blocked-unlink-target".getBytes("UTF-8"));
+            fos.close();
+
+            int result = FileDeleteNative.unlinkFile(f.getAbsolutePath());
+            boolean exists = f.exists();
+
+            Log.i(TAG, "blocked native unlink: result=" + result + ", exists=" + exists);
+            if (result == 0 && exists) {
+                passed++;
+            } else {
+                Log.e(TAG, "blocked native unlink did not preserve the file");
+                failed++;
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "blocked native unlink failed", t);
+            failed++;
+        }
+
+        Log.i(
+            TAG,
+            "FileDeleteTests blocked unlink summary: " +
+            passed + " passed, " + failed + " failed"
+        );
+    }
+
+    // native unlink() via JNI - triggers the unlink hook in file_system_hooks.ts
     private void testNativeUnlink() {
         try {
             File f = new File(ctx.getFilesDir(), "unlink_test.tmp");
             FileOutputStream fos = new FileOutputStream(f);
             fos.write("unlink-target".getBytes("UTF-8"));
             fos.close();
-            FileDeleteNative.unlinkFile(f.getAbsolutePath());
-            Log.i(TAG, "native unlink: ok, file still exists=" + f.exists());
-            passed++;
+
+            int result = FileDeleteNative.unlinkFile(f.getAbsolutePath());
+            boolean exists = f.exists();
+
+            Log.i(TAG, "native unlink: result=" + result + ", exists=" + exists);
+            if (result == 0 && !exists) {
+                passed++;
+            } else {
+                Log.e(TAG, "native unlink did not remove the file");
+                failed++;
+            }
         } catch (Throwable t) {
             Log.e(TAG, "native unlink failed", t);
             failed++;
