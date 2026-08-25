@@ -67,6 +67,7 @@ class FileSystemParser(BaseParser):
             'operation': 'operation',
             'method': 'method',
             'variant': 'variant',
+            'append': 'append',
             'close_descriptor': 'close_descriptor',
             'buffer_size': 'buffer_size',
             'offset': 'offset',

@@ -119,6 +119,8 @@ class ConsoleFormatter(BaseFormatter):
             if event.variant is not None:
                 lines.append(f"[*] Variant: {event.variant}")
             lines.append(f"[*] Stream Type: {event.stream_type or 'Unknown'}")
+            if event.append is not None:
+                lines.append(f"[*] Append: {event.append}")
             if event.close_descriptor is not None:
                 lines.append(
                     f"[*] Close Descriptor: {event.close_descriptor}"

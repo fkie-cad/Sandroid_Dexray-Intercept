@@ -44,6 +44,7 @@ class FileSystemEvent(Event):
         self.operation = None
         self.method = None
         self.variant = None
+        self.append = None
         self.close_descriptor = None
         self.buffer_size = 0
         self.offset = None
@@ -69,8 +70,9 @@ class FileSystemEvent(Event):
         # Only include non-None values
         # hexdump_display is excluded - it's only for console display and contains ANSI codes
         optional_fields = [
-            'operation', 'method', 'variant', 'close_descriptor',
-            'buffer_size', 'offset', 'length', 'data_hex',
+            'operation', 'method', 'variant', 'append',
+            'close_descriptor', 'buffer_size', 'offset', 'length',
+            'data_hex',
             'plaintext', 'file_type', 'is_large_data', 'fd', 'parent_path',
             'child_path', 'stream_type', 'bytes_read', 'bytes_written',
             'byte_value', 'success', 'blocked'
