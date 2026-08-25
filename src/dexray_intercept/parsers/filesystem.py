@@ -80,6 +80,7 @@ class FileSystemParser(BaseParser):
             'stream_type': 'stream_type',
             'bytes_read': 'bytes_read',
             'bytes_written': 'bytes_written',
+            'byte_value': 'byte_value',
             'success': 'success',
             'blocked': 'blocked',
             'should_dump_ascii': None,  # Used for processing

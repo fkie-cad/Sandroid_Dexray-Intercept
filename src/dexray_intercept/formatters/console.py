@@ -132,8 +132,10 @@ class ConsoleFormatter(BaseFormatter):
             lines.append(f"[*] Buffer Size: {event.buffer_size or 0} bytes")
             if event.offset is not None:
                 lines.append(f"[*] Offset: {event.offset}, Length: {event.length or 0}")
-            if event.bytes_read:
+            if event.bytes_read is not None:
                 lines.append(f"[*] Bytes Read: {event.bytes_read}")
+            if event.byte_value is not None:
+                lines.append(f"[*] Byte Value: {event.byte_value}")
 
             # Display data if available (truncated for terminal)
             if event.data_hex:

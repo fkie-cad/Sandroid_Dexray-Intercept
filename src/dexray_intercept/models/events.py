@@ -58,6 +58,7 @@ class FileSystemEvent(Event):
         self.stream_type = None
         self.bytes_read = None
         self.bytes_written = None
+        self.byte_value = None
         self.success = None
         self.blocked = None
         self.hexdump_display = None
@@ -72,7 +73,7 @@ class FileSystemEvent(Event):
             'buffer_size', 'offset', 'length', 'data_hex',
             'plaintext', 'file_type', 'is_large_data', 'fd', 'parent_path',
             'child_path', 'stream_type', 'bytes_read', 'bytes_written',
-            'success', 'blocked'
+            'byte_value', 'success', 'blocked'
         ]
 
         for field in optional_fields:
