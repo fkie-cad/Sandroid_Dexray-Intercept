@@ -567,6 +567,198 @@ function hook_file_input_stream_reads(): void {
     });
 }
 
+function hook_file_output_stream_constructors(): void {
+    const createdFileStreams: Set<string> = new Set();
+    const constructorDepths = new Map<number, number>();
+
+    safePerform("file_system:output_stream_constructors:install", () => {
+        const FileOutputStream = safeUse(
+            "java.io.FileOutputStream",
+            "file_system:output_stream_constructors"
+        );
+        const FileDescriptor = safeUse(
+            "java.io.FileDescriptor",
+            "file_system:output_stream_constructors"
+        );
+
+        if (!FileOutputStream || !FileDescriptor) {
+            return;
+        }
+
+        function resolveFilePath(variant: number, args: any[]): string {
+            if (variant === 0 || variant === 1) {
+                return args[0].getAbsolutePath().toString();
+            }
+
+            if (variant === 4 || variant === 5) {
+                return args[0].toString();
+            }
+
+            const descriptor = args[0];
+            return TraceFD["fd" + descriptor.hashCode()] || "[unknown]";
+        }
+
+        function installConstructor(
+            overload: any,
+            context: string,
+            variant: number,
+            method: string,
+            getDetails: (args: any[]) => any
+        ): void {
+            if (!overload) {
+                return;
+            }
+
+            overload.implementation = safeImplementation(
+                context,
+                overload,
+                function (original, ...args: any[]) {
+                    const threadId = Process.getCurrentThreadId();
+                    const depth = constructorDepths.get(threadId) || 0;
+                    const isNested = depth > 0;
+                    constructorDepths.set(threadId, depth + 1);
+
+                    try {
+                        let result;
+
+                        try {
+                            result = original.apply(this, args);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
+
+                        if (!isNested) {
+                            try {
+                                const filePath = resolveFilePath(variant, args);
+                                const descriptor = Java.cast(
+                                    this.getFD(),
+                                    FileDescriptor
+                                );
+                                const deduplicationKey = `${variant}:${filePath}`;
+
+                                if (
+                                    !createdFileStreams.has(deduplicationKey) &&
+                                    !shouldSkipFile(filePath)
+                                ) {
+                                    const java_stack_trace = collectJavaStackTrace();
+                                    createFileSystemEvent("file.stream.create", {
+                                        operation: "FileOutputStream.new",
+                                        variant,
+                                        file_path: filePath,
+                                        stream_type: "output",
+                                        method,
+                                        ...getDetails(args),
+                                        ...(java_stack_trace
+                                            ? { java_stack_trace }
+                                            : {})
+                                    });
+                                    createdFileStreams.add(deduplicationKey);
+                                }
+
+                                TraceFS["fd" + this.hashCode()] = filePath;
+                                TraceFD["fd" + descriptor.hashCode()] = filePath;
+                            } catch (error) {
+                                devlog(
+                                    `FileOutputStream constructor metadata failed: ${error}`
+                                );
+                            }
+                        }
+
+                        return result;
+                    } finally {
+                        if (depth === 0) {
+                            constructorDepths.delete(threadId);
+                        } else {
+                            constructorDepths.set(threadId, depth);
+                        }
+                    }
+                }
+            );
+        }
+
+        installConstructor(
+            safeOverload(
+                FileOutputStream.$init,
+                "file_system:FileOutputStream.init(File)",
+                "java.io.File"
+            ),
+            "file_system:FileOutputStream.init(File)",
+            0,
+            "java.io.FileOutputStream.init(File)",
+            () => ({})
+        );
+
+        installConstructor(
+            safeOverload(
+                FileOutputStream.$init,
+                "file_system:FileOutputStream.init(File,boolean)",
+                "java.io.File",
+                "boolean"
+            ),
+            "file_system:FileOutputStream.init(File,boolean)",
+            1,
+            "java.io.FileOutputStream.init(File, boolean)",
+            (args) => ({
+                append: Boolean(args[1])
+            })
+        );
+
+        installConstructor(
+            safeOverload(
+                FileOutputStream.$init,
+                "file_system:FileOutputStream.init(FileDescriptor)",
+                "java.io.FileDescriptor"
+            ),
+            "file_system:FileOutputStream.init(FileDescriptor)",
+            2,
+            "java.io.FileOutputStream.init(FileDescriptor)",
+            () => ({})
+        );
+
+        installConstructor(
+            safeOverload(
+                FileOutputStream.$init,
+                "file_system:FileOutputStream.init(FileDescriptor,boolean)",
+                "java.io.FileDescriptor",
+                "boolean"
+            ),
+            "file_system:FileOutputStream.init(FileDescriptor,boolean)",
+            3,
+            "java.io.FileOutputStream.init(FileDescriptor, boolean)",
+            (args) => ({
+                close_descriptor: Boolean(args[1])
+            })
+        );
+
+        installConstructor(
+            safeOverload(
+                FileOutputStream.$init,
+                "file_system:FileOutputStream.init(String)",
+                "java.lang.String"
+            ),
+            "file_system:FileOutputStream.init(String)",
+            4,
+            "java.io.FileOutputStream.init(String)",
+            () => ({})
+        );
+
+        installConstructor(
+            safeOverload(
+                FileOutputStream.$init,
+                "file_system:FileOutputStream.init(String,boolean)",
+                "java.lang.String",
+                "boolean"
+            ),
+            "file_system:FileOutputStream.init(String,boolean)",
+            5,
+            "java.io.FileOutputStream.init(String, boolean)",
+            (args) => ({
+                append: Boolean(args[1])
+            })
+        );
+    });
+}
+
 function hook_filesystem_accesses() {
     Java.perform(function () {
 
@@ -575,13 +767,6 @@ function hook_filesystem_accesses() {
             FileDescriptor: Java.use("java.io.FileDescriptor")
         };
         var FileOuputStream = {
-            new: [
-                CLS.FileOutputStream.$init.overload("java.io.File"),
-                CLS.FileOutputStream.$init.overload("java.io.File", "boolean"),
-                CLS.FileOutputStream.$init.overload("java.io.FileDescriptor"),
-                CLS.FileOutputStream.$init.overload("java.lang.String"),
-                CLS.FileOutputStream.$init.overload("java.lang.String", "boolean")
-            ],
             write: [
                 CLS.FileOutputStream.write.overload("[B"),
                 CLS.FileOutputStream.write.overload("int"),
@@ -778,6 +963,12 @@ export function install_file_system_hooks() {
         hook_file_input_stream_reads();
     } catch (error) {
         devlog(`[HOOK] Failed to install FileInputStream read hooks: ${error}`);
+    }
+
+    try {
+        hook_file_output_stream_constructors();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install FileOutputStream constructor hooks: ${error}`);
     }
 
     try {
