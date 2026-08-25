@@ -6,13 +6,14 @@ import android.util.Log;
 import java.io.File;
 import java.net.URI;
 
-// Triggers all four File.$init overloads declared in file_system_hooks.ts.
+// Triggers all File.$init overloads declared in file_system_hooks.ts.
 //
-// Hook status per overload:
-//   new[0] File(File, String)   - declared, NO implementation assigned
-//   new[1] File(String)         - declared, implementation present
-//   new[2] File(String, String) - declared, implementation present
-//   new[3] File(URI)            - declared, NO implementation assigned
+// Hook coverage:
+//   new[0] File(File, String)
+//   new[1] File(String)
+//   new[2] File(String, String)
+//   new[3] File(URI)
+
 public class FileConstructorTests {
 
     private static final String TAG = "FS_E2E";
@@ -35,7 +36,7 @@ public class FileConstructorTests {
         Log.i(TAG, "FileConstructorTests summary: " + passed + " passed, " + failed + " failed");
     }
 
-    // hook new[1]: File(String) - implementation present
+    // hook new[1]: File(String)
     private void testFile_String(File baseDir) {
         try {
             File f = new File(baseDir.getAbsolutePath() + "/ctor_string.log");
@@ -47,7 +48,7 @@ public class FileConstructorTests {
         }
     }
 
-    // hook new[0]: File(File, String) - NO implementation assigned in hook file
+    // hook new[0]: File(File, String)
     private void testFile_File_String(File baseDir) {
         try {
             File f = new File(baseDir, "ctor_file_string.log");
@@ -59,7 +60,7 @@ public class FileConstructorTests {
         }
     }
 
-    // hook new[2]: File(String, String) - implementation present
+    // hook new[2]: File(String, String)
     private void testFile_String_String(File baseDir) {
         try {
             File f = new File(baseDir.getAbsolutePath(), "ctor_str_str.log");
@@ -71,10 +72,15 @@ public class FileConstructorTests {
         }
     }
 
-    // hook new[3]: File(URI) - NO implementation assigned in hook file
+    // hook new[3]: File(URI)
     private void testFile_URI(File baseDir) {
         try {
-            URI uri = new File(baseDir.getAbsolutePath() + "/ctor_uri.log").toURI();
+            URI uri = new URI(
+                "file",
+                null,
+                baseDir.getAbsolutePath() + "/ctor_uri.log",
+                null
+            );
             File f = new File(uri);
             Log.i(TAG, "File(URI): " + f.getAbsolutePath());
             passed++;
