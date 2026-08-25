@@ -7,8 +7,7 @@ import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 
-// Triggers public FileOutputStream constructors and write overloads declared in
-// file_system_hooks.ts.
+// Triggers public FileOutputStream constructors and write overloads.
 //
 // Public SDK constructor coverage:
 //   new[0] FileOutputStream(File)
@@ -127,7 +126,7 @@ public class FileOutputStreamTests {
         }
     }
 
-    // hook write[0]: write(byte[])
+    // hook write[0]: FileOutputStream.write(byte[])
     private void testFOS_write_bytes() {
         try {
             File f = new File(ctx.getFilesDir(), "fos_write0.log");
@@ -142,7 +141,7 @@ public class FileOutputStreamTests {
         }
     }
 
-    // hook write[1]: write(int)
+    // hook write[1]: FileOutputStream.write(int)
     private void testFOS_write_int() {
         try {
             File f = new File(ctx.getFilesDir(), "fos_write1.log");
@@ -157,7 +156,7 @@ public class FileOutputStreamTests {
         }
     }
 
-    // hook write[2]: write(byte[],int,int)
+    // hook write[2]: FileOutputStream.write(byte[], int, int)
     private void testFOS_write_bytes_offset() {
         try {
             File f = new File(ctx.getFilesDir(), "fos_write2.xml");
