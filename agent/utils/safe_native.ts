@@ -298,6 +298,59 @@ export function safeReplace(
 }
 
 /**
+ * Installs a native replacement that deliberately does not call the original.
+ *
+ * Intended for explicit behavior-modifying hooks such as syscall blocking.
+ * Unlike safeReplace(), this uses Interceptor.replace() because no original
+ * call-through handle is required.
+ *
+ * On replacement-body failure, the configured fallback return value is used.
+ *
+ * @param target          Resolved function address, or null
+ * @param context         Hook context for error logging
+ * @param retType         Native return type
+ * @param argTypes        Native argument types
+ * @param replaceLogic    Replacement body receiving only native arguments
+ * @param fallbackReturn  Return value used if replacement logic throws
+ * @returns true if the replacement was installed, false otherwise
+ */
+export function safeReplaceNoCallThrough(
+  target: NativePointer | null,
+  context: string,
+  retType: NativeFunctionReturnType,
+  argTypes: NativeFunctionArgumentType[],
+  replaceLogic: (this: any, ...args: any[]) => any,
+  fallbackReturn: any
+): boolean {
+  if (!target || target.isNull()) {
+    hookError(context, new Error("Replace target is null or undefined"));
+    return false;
+  }
+
+  try {
+    const replacement = new NativeCallback(
+      function (this: any, ...args: any[]): any {
+        try {
+          return replaceLogic.apply(this, args);
+        } catch (error) {
+          hookError(context, error);
+          return fallbackReturn;
+        }
+      },
+      retType as NativeCallbackReturnType,
+      argTypes as NativeCallbackArgumentType[]
+    );
+
+    Interceptor.replace(target, replacement);
+    retained.push(replacement);
+    return true;
+  } catch (error) {
+    hookError(context, error);
+    return false;
+  }
+}
+
+/**
  * Convenience: resolve an export and replace it in one call.
  *
  * Mirror of safeAttachExport for the replace path — collapses safeResolveExport
