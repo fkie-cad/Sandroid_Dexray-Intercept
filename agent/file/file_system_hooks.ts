@@ -759,75 +759,217 @@ function hook_file_output_stream_constructors(): void {
     });
 }
 
-function hook_filesystem_accesses() {
-    Java.perform(function () {
+function hook_file_output_stream_writes(): void {
+    const writeDepths = new Map<number, number>();
 
-        var CLS = {
-            FileOutputStream: Java.use("java.io.FileOutputStream"),
-            FileDescriptor: Java.use("java.io.FileDescriptor")
-        };
-        var FileOuputStream = {
-            write: [
-                CLS.FileOutputStream.write.overload("[B"),
-                CLS.FileOutputStream.write.overload("int"),
-                CLS.FileOutputStream.write.overload("[B", "int", "int"),
-            ],
-        };
+    safePerform("file_system:output_stream_writes:install", () => {
+        const FileOutputStream = safeUse(
+            "java.io.FileOutputStream",
+            "file_system:output_stream_writes"
+        );
+        const FileDescriptor = safeUse(
+            "java.io.FileDescriptor",
+            "file_system:output_stream_writes"
+        );
 
-        // ============= Hook implementation
-
-        // =============== File Output Stream ============
-
-        FileOuputStream.write[2].implementation = function (a0, a1, a2) {
-            var fname = TraceFS["fd" + this.hashCode()];
-            var fd = null;
-            if (fname == null) {
-                fd = Java.cast(this.getFD(), CLS.FileDescriptor);
-                fname = TraceFD["fd" + fd.hashCode()]
-            }
-            if (fname == null) {
-                devlog("FileOuputStream.write[2]: fd-->" + fd);
-                fname = "[unknown]";
-            }
-
-            var result = FileOuputStream.write[2].call(this, a0, a1, a2);
-
-            if (!shouldSkipFile(fname)) {
-                // Determine content type for proper processing
-                const shouldDumpAscii = isPatternPresent(fname, CONFIG.dump_ascii_If_Path_contains);
-                const shouldDumpHex = !isPatternPresent(fname, CONFIG.dump_hex_If_Path_NOT_contains);
-                const isLargeData = a2 > CONFIG.max_output_length;
-                const java_stack_trace = collectJavaStackTrace();
-
-                // Special handling for different file types
-                const isApkDexJar = fname.endsWith(".apk") || fname.endsWith(".dex") || fname.endsWith(".jar");
-                const isXmlFile = fname.endsWith(".xml");
-
-                // Send full buffer hex (NO slicing here - Python will truncate using offset+length)
-                // We avoid slice() because it causes app freezing on Java arrays in Frida
-                createFileSystemEvent("file.write", {
-                    operation: "FileOutputStream.write",
-                    variant: 2,
-                    file_path: fname,
-                    buffer_size: a0.length,
-                    offset: a1,
-                    length: a2,
-                    data_hex: (shouldDumpHex || shouldDumpAscii || isApkDexJar || isXmlFile) ? bytesToHexSafe(a0) : null,
-                    should_dump_ascii: shouldDumpAscii,
-                    should_dump_hex: shouldDumpHex,
-                    is_large_data: isLargeData,
-                    max_display_length: CONFIG.max_output_length,
-                    file_type: isApkDexJar ? "binary" : (isXmlFile ? "xml" : "other"),
-                    method: "java.io.FileOutputStream.write(byte[], int, int)",
-                    ...(java_stack_trace ? { java_stack_trace } : {})
-                });
-            }
-
-            return result;
+        if (!FileOutputStream || !FileDescriptor) {
+            return;
         }
+
+        function resolveFilePath(stream: any): string {
+            let filePath = TraceFS["fd" + stream.hashCode()];
+
+            if (filePath != null) {
+                return filePath;
+            }
+
+            const descriptor = Java.cast(stream.getFD(), FileDescriptor);
+            filePath = TraceFD["fd" + descriptor.hashCode()];
+
+            return filePath || "[unknown]";
+        }
+
+        function emitWriteEvent(
+            stream: any,
+            variant: number,
+            method: string,
+            eventData: any
+        ): void {
+            let filePath = "[unknown]";
+
+            try {
+                filePath = resolveFilePath(stream);
+            } catch (error) {
+                devlog(`FileOutputStream write path resolution failed: ${error}`);
+            }
+
+            if (shouldSkipFile(filePath)) {
+                return;
+            }
+
+            const shouldDumpAscii = isPatternPresent(
+                filePath,
+                CONFIG.dump_ascii_If_Path_contains
+            );
+            const shouldDumpHex = !isPatternPresent(
+                filePath,
+                CONFIG.dump_hex_If_Path_NOT_contains
+            );
+            const isLargeData = eventData.length > CONFIG.max_output_length;
+            const isApkDexJar =
+                filePath.endsWith(".apk") ||
+                filePath.endsWith(".dex") ||
+                filePath.endsWith(".jar");
+            const isXmlFile = filePath.endsWith(".xml");
+            const java_stack_trace = collectJavaStackTrace();
+
+            createFileSystemEvent("file.write", {
+                operation: "FileOutputStream.write",
+                variant,
+                file_path: filePath,
+                method,
+                ...eventData,
+                data_hex: (
+                    shouldDumpHex ||
+                    shouldDumpAscii ||
+                    isApkDexJar ||
+                    isXmlFile
+                )
+                    ? eventData.data_hex
+                    : null,
+                should_dump_ascii: shouldDumpAscii,
+                should_dump_hex: shouldDumpHex,
+                is_large_data: isLargeData,
+                max_display_length: CONFIG.max_output_length,
+                file_type: isApkDexJar
+                    ? "binary"
+                    : (isXmlFile ? "xml" : "other"),
+                ...(java_stack_trace ? { java_stack_trace } : {})
+            });
+        }
+
+        function installWrite(
+            overload: any,
+            context: string,
+            variant: number,
+            method: string,
+            createEventData: (args: any[]) => any
+        ): void {
+            if (!overload) {
+                return;
+            }
+
+            overload.implementation = safeImplementation(
+                context,
+                overload,
+                function (original, ...args: any[]) {
+                    const threadId = Process.getCurrentThreadId();
+                    const depth = writeDepths.get(threadId) || 0;
+                    const isNested = depth > 0;
+                    writeDepths.set(threadId, depth + 1);
+
+                    try {
+                        try {
+                            original.apply(this, args);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
+
+                        if (!isNested) {
+                            try {
+                                emitWriteEvent(
+                                    this,
+                                    variant,
+                                    method,
+                                    createEventData(args)
+                                );
+                            } catch (error) {
+                                devlog(
+                                    `FileOutputStream write metadata failed: ${error}`
+                                );
+                            }
+                        }
+                    } finally {
+                        if (depth === 0) {
+                            writeDepths.delete(threadId);
+                        } else {
+                            writeDepths.set(threadId, depth);
+                        }
+                    }
+                }
+            );
+        }
+
+        installWrite(
+            safeOverload(
+                FileOutputStream.write,
+                "file_system:FileOutputStream.write(byte[])",
+                "[B"
+            ),
+            "file_system:FileOutputStream.write(byte[])",
+            0,
+            "java.io.FileOutputStream.write(byte[])",
+            (args) => {
+                const buffer = Java.array("byte", args[0]);
+
+                return {
+                    buffer_size: args[0].length,
+                    offset: 0,
+                    length: args[0].length,
+                    bytes_written: args[0].length,
+                    data_hex: bytesToHexSafe(buffer)
+                };
+            }
+        );
+
+        installWrite(
+            safeOverload(
+                FileOutputStream.write,
+                "file_system:FileOutputStream.write(int)",
+                "int"
+            ),
+            "file_system:FileOutputStream.write(int)",
+            1,
+            "java.io.FileOutputStream.write(int)",
+            (args) => {
+                const byteValue = args[0] & 0xff;
+
+                return {
+                    buffer_size: 1,
+                    offset: 0,
+                    length: 1,
+                    bytes_written: 1,
+                    byte_value: byteValue,
+                    data_hex: bytesToHexSafe([byteValue])
+                };
+            }
+        );
+
+        installWrite(
+            safeOverload(
+                FileOutputStream.write,
+                "file_system:FileOutputStream.write(byte[],int,int)",
+                "[B",
+                "int",
+                "int"
+            ),
+            "file_system:FileOutputStream.write(byte[],int,int)",
+            2,
+            "java.io.FileOutputStream.write(byte[], int, int)",
+            (args) => {
+                const buffer = Java.array("byte", args[0]);
+
+                return {
+                    buffer_size: args[0].length,
+                    offset: args[1],
+                    length: args[2],
+                    bytes_written: args[2],
+                    data_hex: bytesToHexSafe(buffer)
+                };
+            }
+        );
     });
 }
-
 
 function hook_filesystem_deletes(): void {
     var printedPaths: Set<string> = new Set();
@@ -972,9 +1114,9 @@ export function install_file_system_hooks() {
     }
 
     try {
-        hook_filesystem_accesses();
+        hook_file_output_stream_writes();
     } catch (error) {
-        devlog(`[HOOK] Failed to install filesystem access hooks: ${error}`);
+        devlog(`[HOOK] Failed to install FileOutputStream write hooks: ${error}`);
     }
 
     try {
