@@ -102,6 +102,10 @@ class ConsoleFormatter(BaseFormatter):
         if event.event_type == 'file.create':
             lines.append("\n[*] [File] File Creation:")
             lines.append(f"[*] Operation: {event.operation or 'Unknown'}")
+            if event.method:
+                lines.append(f"[*] Method: {event.method}")
+            if event.variant is not None:
+                lines.append(f"[*] Variant: {event.variant}")
             lines.append(f"[*] File Path: {event.file_path or 'Unknown'}")
             if event.parent_path:
                 lines.append(f"[*] Parent: {event.parent_path}")

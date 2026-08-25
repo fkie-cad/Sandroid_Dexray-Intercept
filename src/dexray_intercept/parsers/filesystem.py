@@ -65,6 +65,8 @@ class FileSystemParser(BaseParser):
         # Map JSON fields to event attributes
         field_mapping = {
             'operation': 'operation',
+            'method': 'method',
+            'variant': 'variant',
             'buffer_size': 'buffer_size',
             'offset': 'offset',
             'length': 'length',

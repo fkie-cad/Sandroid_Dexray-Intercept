@@ -42,6 +42,8 @@ class FileSystemEvent(Event):
         super().__init__(event_type, timestamp)
         self.file_path = file_path
         self.operation = None
+        self.method = None
+        self.variant = None
         self.buffer_size = 0
         self.offset = None
         self.length = None
@@ -65,7 +67,8 @@ class FileSystemEvent(Event):
         # Only include non-None values
         # hexdump_display is excluded - it's only for console display and contains ANSI codes
         optional_fields = [
-            'operation', 'buffer_size', 'offset', 'length', 'data_hex',
+            'operation', 'method', 'variant', 'buffer_size', 'offset',
+            'length', 'data_hex',
             'plaintext', 'file_type', 'is_large_data', 'fd', 'parent_path',
             'child_path', 'stream_type', 'bytes_read', 'bytes_written',
             'success', 'blocked'
