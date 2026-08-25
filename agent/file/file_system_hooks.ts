@@ -206,22 +206,177 @@ function hook_file_constructors(): void {
     });
 }
 
+function hook_file_input_stream_constructors(): void {
+    const createdFileStreams: Set<string> = new Set();
+    const constructorDepths = new Map<number, number>();
+
+    safePerform("file_system:input_stream_constructors:install", () => {
+        const FileInputStream = safeUse(
+            "java.io.FileInputStream",
+            "file_system:input_stream_constructors"
+        );
+        const FileDescriptor = safeUse(
+            "java.io.FileDescriptor",
+            "file_system:input_stream_constructors"
+        );
+
+        if (!FileInputStream || !FileDescriptor) {
+            return;
+        }
+
+        function resolveFilePath(variant: number, args: any[]): string {
+            if (variant === 0) {
+                return args[0].getAbsolutePath().toString();
+            }
+
+            if (variant === 2) {
+                return args[0].toString();
+            }
+
+            const descriptor = args[0];
+            return TraceFD["fd" + descriptor.hashCode()] || "[unknown]";
+        }
+
+        function installConstructor(
+            overload: any,
+            context: string,
+            variant: number,
+            method: string,
+            getDetails: (args: any[]) => any
+        ): void {
+            if (!overload) {
+                return;
+            }
+
+            overload.implementation = safeImplementation(
+                context,
+                overload,
+                function (original, ...args: any[]) {
+                    const threadId = Process.getCurrentThreadId();
+                    const depth = constructorDepths.get(threadId) || 0;
+                    const isNested = depth > 0;
+                    constructorDepths.set(threadId, depth + 1);
+
+                    try {
+                        let result;
+
+                        try {
+                            result = original.apply(this, args);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
+
+                        if (!isNested) {
+                            try {
+                                const filePath = resolveFilePath(variant, args);
+                                const descriptor = Java.cast(
+                                    this.getFD(),
+                                    FileDescriptor
+                                );
+                                const deduplicationKey = `${variant}:${filePath}`;
+
+                                if (
+                                    !createdFileStreams.has(deduplicationKey) &&
+                                    !shouldSkipFile(filePath)
+                                ) {
+                                    const java_stack_trace = collectJavaStackTrace();
+                                    createFileSystemEvent("file.stream.create", {
+                                        operation: "FileInputStream.new",
+                                        variant,
+                                        file_path: filePath,
+                                        stream_type: "input",
+                                        method,
+                                        ...getDetails(args),
+                                        ...(java_stack_trace
+                                            ? { java_stack_trace }
+                                            : {})
+                                    });
+                                    createdFileStreams.add(deduplicationKey);
+                                }
+
+                                TraceFS["fd" + this.hashCode()] = filePath;
+                                TraceFD["fd" + descriptor.hashCode()] = filePath;
+                            } catch (error) {
+                                devlog(
+                                    `FileInputStream constructor metadata failed: ${error}`
+                                );
+                            }
+                        }
+
+                        return result;
+                    } finally {
+                        if (depth === 0) {
+                            constructorDepths.delete(threadId);
+                        } else {
+                            constructorDepths.set(threadId, depth);
+                        }
+                    }
+                }
+            );
+        }
+
+        installConstructor(
+            safeOverload(
+                FileInputStream.$init,
+                "file_system:FileInputStream.init(File)",
+                "java.io.File"
+            ),
+            "file_system:FileInputStream.init(File)",
+            0,
+            "java.io.FileInputStream.init(File)",
+            () => ({})
+        );
+
+        installConstructor(
+            safeOverload(
+                FileInputStream.$init,
+                "file_system:FileInputStream.init(FileDescriptor)",
+                "java.io.FileDescriptor"
+            ),
+            "file_system:FileInputStream.init(FileDescriptor)",
+            1,
+            "java.io.FileInputStream.init(FileDescriptor)",
+            () => ({})
+        );
+
+        installConstructor(
+            safeOverload(
+                FileInputStream.$init,
+                "file_system:FileInputStream.init(String)",
+                "java.lang.String"
+            ),
+            "file_system:FileInputStream.init(String)",
+            2,
+            "java.io.FileInputStream.init(String)",
+            () => ({})
+        );
+
+        installConstructor(
+            safeOverload(
+                FileInputStream.$init,
+                "file_system:FileInputStream.init(FileDescriptor,boolean)",
+                "java.io.FileDescriptor",
+                "boolean"
+            ),
+            "file_system:FileInputStream.init(FileDescriptor,boolean)",
+            3,
+            "java.io.FileInputStream.init(FileDescriptor, boolean)",
+            (args) => ({
+                close_descriptor: Boolean(args[1])
+            })
+        );
+    });
+}
+
 function hook_filesystem_accesses() {
-    var createdFileStreams: Set<string> = new Set();
     Java.perform(function () {
 
         var CLS = {
-            File: Java.use("java.io.File"),
             FileInputStream: Java.use("java.io.FileInputStream"),
             FileOutputStream: Java.use("java.io.FileOutputStream"),
             FileDescriptor: Java.use("java.io.FileDescriptor")
         };
         var FileInputStream = {
-            new: [
-                CLS.FileInputStream.$init.overload("java.io.File"),
-                CLS.FileInputStream.$init.overload("java.io.FileDescriptor"),
-                CLS.FileInputStream.$init.overload("java.lang.String"),
-            ],
             read: [
                 CLS.FileInputStream.read.overload(),
                 CLS.FileInputStream.read.overload("[B"),
@@ -244,51 +399,6 @@ function hook_filesystem_accesses() {
         };
 
         // ============= Hook implementation
-
-        FileInputStream.new[0].implementation = function (a0) {
-            var file = Java.cast(a0, CLS.File);
-            var fname = TraceFile["f" + file.hashCode()];
-
-            if (fname == null) {
-                var p = file.getAbsolutePath();
-                if (p !== null)
-                    fname = TraceFile["f" + file.hashCode()] = p;
-            }
-            if (fname == null) {
-                devlog("FileInputStream.new[0]: p-->" + p);
-                devlog("FileInputStream.new[0]: file-->" + file);
-                fname = "[unknown]"
-                const filePath = file.toString();
-
-                if (isPatternPresent(filePath, ["/"])) {
-                    fname = filePath;
-                }
-            }
-
-            if (!shouldSkipFile(fname)) {
-                if (!createdFileStreams.has(fname)) {
-                    const java_stack_trace = collectJavaStackTrace();
-                    createFileSystemEvent("file.stream.create", {
-                        operation: "FileInputStream.new",
-                        variant: 0,
-                        file_path: fname,
-                        stream_type: "input",
-                        method: "java.io.FileInputStream.init(File)",
-                        ...(java_stack_trace ? { java_stack_trace } : {})
-                    });
-                    createdFileStreams.add(fname)
-                }
-            }
-
-            var fis = FileInputStream.new[0].call(this, a0)
-            TraceFS["fd" + this.hashCode()] = fname;
-
-            var fd = Java.cast(this.getFD(), CLS.FileDescriptor);
-
-            TraceFD["fd" + fd.hashCode()] = fname;
-
-            return fis;
-        }
 
         FileInputStream.read[1].implementation = function (a0) {
             var fname = TraceFS["fd" + this.hashCode()];
@@ -546,6 +656,12 @@ export function install_file_system_hooks() {
         hook_file_constructors();
     } catch (error) {
         devlog(`[HOOK] Failed to install file constructor hooks: ${error}`);
+    }
+
+    try {
+        hook_file_input_stream_constructors();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install FileInputStream constructor hooks: ${error}`);
     }
 
     try {
