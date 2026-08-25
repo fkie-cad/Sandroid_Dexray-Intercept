@@ -184,6 +184,9 @@ def parse_hook_config(parsed_args, use_interactive=False):
             'bypass_hooks': True
         })
 
+    if parsed_args.deactivate_unlink:
+        hook_config['file_system_hooks'] = True
+
     # Handle individual hook selections
     individual_hooks = {
         'enable_aes': 'aes_hooks',
@@ -343,6 +346,12 @@ Examples:
     hooks.add_argument("--enable-web", action="store_true", help="Enable web hooks")
     hooks.add_argument("--enable-sockets", action="store_true", help="Enable socket hooks")
     hooks.add_argument("--enable-filesystem", action="store_true", help="Enable filesystem hooks")
+    hooks.add_argument("--deactivate-unlink", action="store_true", help=(
+            "Prevent native unlink() calls from deleting files while returning "
+            "success to the target app. Changes target behavior and enables "
+            "filesystem hooks."
+        )
+    )
     hooks.add_argument("--enable-database", action="store_true", help="Enable database hooks")
     hooks.add_argument("--enable-dex-unpacking", action="store_true", help="Enable DEX unpacking hooks")
     hooks.add_argument("--enable-java-dex", action="store_true", help="Enable Java DEX hooks (may crash apps)")
@@ -498,7 +507,7 @@ Examples:
                 parsed.verbose,
                 output_format="CMD",
                 base_path=None,
-                deactivate_unlink=False,
+                deactivate_unlink=parsed.deactivate_unlink,
                 hook_config=hook_config,
                 enable_stacktrace=parsed.enable_full_stacktrace,
                 enable_fritap=parsed.enable_fritap,
