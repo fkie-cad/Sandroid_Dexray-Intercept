@@ -81,8 +81,132 @@ function shouldSkipFile(filePath: string): boolean {
     return !isFileFromInterest(filePath);
 }
 
+function hook_file_constructors(): void {
+    const createdFiles: Set<string> = new Set();
+
+    safePerform("file_system:constructors:install", () => {
+        const File = safeUse("java.io.File", "file_system:constructors");
+        if (!File) {
+            return;
+        }
+
+        const constructors = [
+            safeOverload(
+                File.$init,
+                "file_system:File.init(File,String)",
+                "java.io.File",
+                "java.lang.String"
+            ),
+            safeOverload(
+                File.$init,
+                "file_system:File.init(String)",
+                "java.lang.String"
+            ),
+            safeOverload(
+                File.$init,
+                "file_system:File.init(String,String)",
+                "java.lang.String",
+                "java.lang.String"
+            ),
+            safeOverload(
+                File.$init,
+                "file_system:File.init(URI)",
+                "java.net.URI"
+            )
+        ];
+
+        function installConstructor(
+            overload: any,
+            context: string,
+            variant: number,
+            method: string,
+            getDetails: (args: any[]) => any
+        ): void {
+            if (!overload) {
+                return;
+            }
+
+            overload.implementation = safeImplementation(
+                context,
+                overload,
+                function (original, ...args: any[]) {
+                    let result;
+
+                    try {
+                        result = original.apply(this, args);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+
+                    const filePath = this.getAbsolutePath().toString();
+
+                    if (
+                        !createdFiles.has(filePath) &&
+                        filePath.length > 2 &&
+                        !shouldSkipFile(filePath)
+                    ) {
+                        const java_stack_trace = collectJavaStackTrace();
+                        createFileSystemEvent("file.create", {
+                            operation: "File.new",
+                            variant,
+                            file_path: filePath,
+                            method,
+                            ...getDetails(args),
+                            ...(java_stack_trace ? { java_stack_trace } : {})
+                        });
+                        createdFiles.add(filePath);
+                    }
+
+                    TraceFile["f" + this.hashCode()] = filePath;
+
+                    return result;
+                }
+            );
+        }
+
+        installConstructor(
+            constructors[0],
+            "file_system:File.init(File,String)",
+            0,
+            "java.io.File.init(File, String)",
+            (args) => ({
+                parent_path: args[0]
+                    ? args[0].getAbsolutePath().toString()
+                    : null,
+                child_path: args[1].toString()
+            })
+        );
+
+        installConstructor(
+            constructors[1],
+            "file_system:File.init(String)",
+            1,
+            "java.io.File.init(String)",
+            () => ({})
+        );
+
+        installConstructor(
+            constructors[2],
+            "file_system:File.init(String,String)",
+            2,
+            "java.io.File.init(String, String)",
+            (args) => ({
+                parent_path: args[0].toString(),
+                child_path: args[1].toString()
+            })
+        );
+
+        installConstructor(
+            constructors[3],
+            "file_system:File.init(URI)",
+            3,
+            "java.io.File.init(URI)",
+            () => ({})
+        );
+    });
+}
+
 function hook_filesystem_accesses() {
-    var createdFiles: Set<string> = new Set();
     var createdFileStreams: Set<string> = new Set();
     Java.perform(function () {
 
@@ -90,20 +214,7 @@ function hook_filesystem_accesses() {
             File: Java.use("java.io.File"),
             FileInputStream: Java.use("java.io.FileInputStream"),
             FileOutputStream: Java.use("java.io.FileOutputStream"),
-            String: Java.use("java.lang.String"),
-            FileChannel: Java.use("java.nio.channels.FileChannel"),
-            FileDescriptor: Java.use("java.io.FileDescriptor"),
-            Thread: Java.use("java.lang.Thread"),
-            StackTraceElement: Java.use("java.lang.StackTraceElement"),
-            AndroidDbSQLite: Java.use("android.database.sqlite.SQLiteDatabase")
-        };
-        var File = {
-            new: [
-                CLS.File.$init.overload("java.io.File", "java.lang.String"),
-                CLS.File.$init.overload("java.lang.String"),
-                CLS.File.$init.overload("java.lang.String", "java.lang.String"),
-                CLS.File.$init.overload("java.net.URI"),
-            ]
+            FileDescriptor: Java.use("java.io.FileDescriptor")
         };
         var FileInputStream = {
             new: [
@@ -133,50 +244,6 @@ function hook_filesystem_accesses() {
         };
 
         // ============= Hook implementation
-
-        File.new[1].implementation = function (a0) {
-            var file_path = a0;
-            if (!createdFiles.has(file_path)) {
-                if (file_path.length > 2 && !shouldSkipFile(file_path)) {
-                    const java_stack_trace = collectJavaStackTrace();
-                    createFileSystemEvent("file.create", {
-                        operation: "File.new",
-                        variant: 1,
-                        file_path: file_path,
-                        method: "java.io.File.init(String)",
-                        ...(java_stack_trace ? { java_stack_trace } : {})
-                    });
-                    createdFiles.add(file_path);
-                }
-            }
-
-            var ret = File.new[1].call(this, file_path);
-            TraceFile["f" + this.hashCode()] = file_path;
-
-            return ret;
-        }
-
-        File.new[2].implementation = function (a0, a1) {
-            var file_path = a0 + "/" + a1;
-            if (!createdFiles.has(file_path) && file_path.length > 3 && !shouldSkipFile(file_path)) {
-                const java_stack_trace = collectJavaStackTrace();
-                createFileSystemEvent("file.create", {
-                    operation: "File.new",
-                    variant: 2,
-                    file_path: file_path,
-                    parent_path: a0,
-                    child_path: a1,
-                    method: "java.io.File.init(String, String)",
-                    ...(java_stack_trace ? { java_stack_trace } : {})
-                });
-                createdFiles.add(file_path);
-            }
-
-            var ret = File.new[2].call(this, a0, a1);
-            TraceFile["f" + this.hashCode()] = file_path;
-
-            return ret;
-        }
 
         FileInputStream.new[0].implementation = function (a0) {
             var file = Java.cast(a0, CLS.File);
@@ -474,6 +541,12 @@ function hook_filesystem_deletes(): void {
 export function install_file_system_hooks() {
     devlog("\n")
     devlog("install filesystem hooks");
+
+    try {
+        hook_file_constructors();
+    } catch (error) {
+        devlog(`[HOOK] Failed to install file constructor hooks: ${error}`);
+    }
 
     try {
         hook_filesystem_accesses();
