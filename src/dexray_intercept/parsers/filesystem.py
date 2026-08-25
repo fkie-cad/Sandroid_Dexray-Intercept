@@ -78,6 +78,7 @@ class FileSystemParser(BaseParser):
             'bytes_read': 'bytes_read',
             'bytes_written': 'bytes_written',
             'success': 'success',
+            'blocked': 'blocked',
             'should_dump_ascii': None,  # Used for processing
             'should_dump_hex': None,    # Used for processing
             'max_display_length': None, # Used for processing

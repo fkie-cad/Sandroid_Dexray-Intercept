@@ -169,6 +169,8 @@ class ConsoleFormatter(BaseFormatter):
             lines.append(f"[*] File Path: {event.file_path or 'Unknown'}")
             if event.success is not None:
                 lines.append(f"[*] Success: {event.success}")
+            if event.blocked:
+                lines.append("[*] Blocked: True")
 
         else:
             # Fallback for unknown filesystem events
