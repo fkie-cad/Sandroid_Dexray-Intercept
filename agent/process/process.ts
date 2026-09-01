@@ -1,5 +1,5 @@
 import { devlog, am_send } from "../utils/logging.js"
-import { safePerform, safeUse, safeImplementation } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeImplementation, PropagateException } from "../utils/safe_java.js"
 import { safeAttachExport } from "../utils/safe_native.js"
 import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
@@ -49,7 +49,11 @@ function hook_java_process_creation() {
                         zygote_args: zygoteArgs ? zygoteArgs.toString() : null,
                         ...(java_stack_trace ? { java_stack_trace } : {})
                     });
-                    return original.apply(this, args);
+                    try {
+                        return original.apply(this, args);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
                 }
             );
         }
@@ -65,7 +69,11 @@ function hook_java_process_creation() {
                         method: 'killProcess',
                         target_pid: pid
                     });
-                    return original.call(this, pid);
+                    try {
+                        return original.call(this, pid);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
                 }
             );
         }
@@ -82,7 +90,11 @@ function hook_java_process_creation() {
                         target_pid: pid,
                         signal: signal
                     });
-                    return original.call(this, pid, signal);
+                    try {
+                        return original.call(this, pid, signal);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
                 }
             );
         }

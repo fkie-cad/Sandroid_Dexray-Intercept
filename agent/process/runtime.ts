@@ -1,7 +1,5 @@
 import { devlog, am_send } from "../utils/logging.js"
-import { java_stack_trace } from "../utils/android_runtime_requests.js"
-import { Java } from "../utils/javalib.js"
-import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeOverload, safeImplementation, PropagateException } from "../utils/safe_java.js"
 import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "RUNTIME_HOOKS"
@@ -56,7 +54,11 @@ function hook_runtime() {
                         ...(java_stack_trace ? { java_stack_trace } : {})
                     });
 
-                    return original.apply(this, args);
+                    try {
+                        return original.apply(this, args);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
                 }
             );
         });
@@ -75,7 +77,11 @@ function hook_runtime() {
                         library_name: libname ? libname.toString() : null,
                         ...(java_stack_trace ? { java_stack_trace } : {})
                     });
-                    return original.call(this, libname);
+                    try {
+                        return original.call(this, libname);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
                 }
             );
         });
@@ -94,7 +100,11 @@ function hook_runtime() {
                         filename: filename ? filename.toString() : null,
                         ...(java_stack_trace ? { java_stack_trace } : {})
                     });
-                    return original.call(this, filename);
+                    try {
+                        return original.call(this, filename);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
                 }
             );
         });
@@ -121,7 +131,12 @@ function trace_reflection() {
                     "runtime:Class.getMethod",
                     getMethod,
                     function(original, methodName: string, paramTypes: any) {
-                        const method = original.call(this, methodName, paramTypes);
+                        let method;
+                        try {
+                            method = original.call(this, methodName, paramTypes);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
                         const java_stack_trace = collectJavaStackTrace();
                         createRuntimeEvent("reflection.get_method", {
                             library: 'java.lang.Class',
@@ -148,7 +163,12 @@ function trace_reflection() {
                     "runtime:Class.getDeclaredMethod",
                     getDeclaredMethod,
                     function(original, methodName: string, paramTypes: any) {
-                        const method = original.call(this, methodName, paramTypes);
+                        let method;
+                        try {
+                            method = original.call(this, methodName, paramTypes);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
                         const java_stack_trace = collectJavaStackTrace();
                         createRuntimeEvent("reflection.get_declared_method", {
                             library: 'java.lang.Class',
@@ -194,7 +214,11 @@ function trace_reflection() {
                                 ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
-                        return original.call(this, class_name, flag, class_loader);
+                        try {
+                            return original.call(this, class_name, flag, class_loader);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
                     }
                 );
             }
@@ -230,7 +254,11 @@ function trace_reflection() {
                                 ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                         }
-                        return original.call(this, class_name, resolve);
+                        try {
+                            return original.call(this, class_name, resolve);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
                     }
                 );
             }
@@ -249,7 +277,12 @@ function trace_reflection() {
                     invoke,
                     function(original, instance: any, args: any) {
                         const java_stack_trace = collectJavaStackTrace();
-                        const result = original.call(this, instance, args);
+                        let result;
+                        try {
+                            result = original.call(this, instance, args);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
 
                         let argumentsStr = null;
                         if (args) {
