@@ -165,7 +165,14 @@ class ConsoleFormatter(BaseFormatter):
             if event.byte_value is not None:
                 lines.append(f"[*] Byte Value: {event.byte_value}")
             if event.is_large_data:
-                lines.append(f"[*] Data truncated (showing {getattr(event, 'displayed_length', 0)} of {getattr(event, 'original_length', 0)} bytes)")
+                original_length = event.metadata.get(
+                    "original_length",
+                    event.bytes_written or event.length or 0
+                )
+                lines.append(
+                    f"[*] Large Data: {original_length} bytes "
+                    "(console preview below)"
+                )
 
             # Display data based on file type (truncated for terminal)
             if event.file_type == 'xml' and event.plaintext:
