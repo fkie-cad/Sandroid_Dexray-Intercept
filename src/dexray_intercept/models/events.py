@@ -206,6 +206,9 @@ class ProcessEvent(Event):
         self.target_sdk_version = None
         self.abi = None
         self.target_pid = None
+        self.target_uid = None
+        self.target_gid = None
+        self.new_name = None
         self.signal = None
         self.caller_pid = None
         self.child_pid = None
@@ -223,7 +226,8 @@ class ProcessEvent(Event):
 
         fields = [
             'nice_name', 'uid', 'gid', 'target_sdk_version', 'abi',
-            'target_pid', 'signal', 'caller_pid', 'child_pid', 'success',
+            'target_pid', 'target_uid', 'target_gid', 'new_name',
+            'signal', 'caller_pid', 'child_pid', 'success',
             'command', 'return_value', 'library_name', 'filename',
             'working_directory', 'environment', 'event_description'
         ]
