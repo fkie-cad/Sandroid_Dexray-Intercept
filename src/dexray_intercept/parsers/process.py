@@ -135,7 +135,22 @@ class RuntimeParser(BaseParser):
                 event.event_description = 'Reflection method retrieval (getDeclaredMethod)'
             elif event_type == 'reflection.method_invoke':
                 event.event_description = 'Reflection method invocation'
-        
+        elif event_type == 'runtime.add_shutdown_hook':
+            event.event_description = 'Runtime shutdown hook registration'
+        elif event_type == 'runtime.remove_shutdown_hook':
+            event.event_description = 'Runtime shutdown hook removal'
+        elif event_type == 'runtime.exit':
+            event.event_description = 'Runtime process exit'
+        elif event_type == 'runtime.halt':
+            event.event_description = 'Runtime process halt'
+
+        # Preserve fields not explicitly mapped above (e.g. method name,
+        # overload index, and reflection-specific detail fields) as
+        # metadata rather than dropping them.
+        for key, value in data.items():
+            if key not in ['event_type', 'timestamp'] and not hasattr(event, key):
+                event.add_metadata(key, value)
+
         return event
     
     def parse_legacy_data(self, raw_data: str, timestamp: str) -> Optional[ProcessEvent]:
@@ -176,7 +191,11 @@ class NativeLibParser(BaseParser):
             'filename': 'filename',
             'loaded_library': 'library_name',  # Legacy field
             'method': 'method',
-            'loader_type': 'loader_type'
+            'loader_type': 'loader_type',
+            'success': 'success',
+            'handle': 'handle',
+            'error': 'error',
+            'load_method': 'load_method',
         }
         
         for json_field, event_field in field_mapping.items():
