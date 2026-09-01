@@ -14,6 +14,39 @@ function createProcessEvent(eventType: string, data: any): void {
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
 }
 
+// Converts a Frida-wrapped Java array (or null) to a plain JS array for
+// JSON serialization. Used for /proc-scanning output parameters, whose
+// contents are only meaningful after the real call has populated them.
+function javaArrayToJsArray(javaArray: any): any[] | null {
+    if (!javaArray) return null;
+    try {
+        const length = javaArray.length;
+        const out: any[] = [];
+        for (let i = 0; i < length; i++) {
+            out.push(normalizeJavaArrayElement(javaArray[i]));
+        }
+        return out;
+    } catch (error) {
+        return null;
+    }
+}
+
+// Java `long` array elements arrive as Int64/UInt64 wrapper objects rather
+// than native JS numbers, which JSON.stringify otherwise renders as
+// strings. Converts to a real number when safe; values handled here (pids,
+// byte counts, format flags) never approach JS's safe integer limit.
+function normalizeJavaArrayElement(value: any): any {
+    if (value === null || value === undefined) return value;
+    if (typeof value === "object" && typeof value.toNumber === "function") {
+        try {
+            return value.toNumber();
+        } catch (error) {
+            return value.toString();
+        }
+    }
+    return value;
+}
+
 // Tracks OS thread IDs currently executing a killProcess() call. killProcess()
 // internally delegates to sendSignal(pid, SIGKILL) on the same thread; this
 // guard suppresses the resulting nested process.signal event while leaving
@@ -285,6 +318,142 @@ function hook_java_process_creation() {
                     } catch (error) {
                         throw new PropagateException(error);
                     }
+                }
+            );
+        }
+
+        if (Process.getPids) {
+            const getPidsRef = Process.getPids;
+            getPidsRef.implementation = safeImplementation(
+                "process:Process.getPids",
+                getPidsRef,
+                function(original, path: string, outStatus: any) {
+                    let result;
+                    try {
+                        result = original.call(this, path, outStatus);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                    const java_stack_trace = collectJavaStackTrace();
+                    createProcessEvent("process.proc_scan.get_pids", {
+                        library: 'android.os.Process',
+                        method: 'getPids',
+                        proc_path: path,
+                        matched_pids: javaArrayToJsArray(result),
+                        out_status: javaArrayToJsArray(outStatus),
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    return result;
+                }
+            );
+        }
+
+        if (Process.getPidsForCommands) {
+            const getPidsForCommandsRef = Process.getPidsForCommands;
+            getPidsForCommandsRef.implementation = safeImplementation(
+                "process:Process.getPidsForCommands",
+                getPidsForCommandsRef,
+                function(original, cmdlineNames: any) {
+                    let result;
+                    try {
+                        result = original.call(this, cmdlineNames);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                    const java_stack_trace = collectJavaStackTrace();
+                    createProcessEvent("process.proc_scan.get_pids_for_commands", {
+                        library: 'android.os.Process',
+                        method: 'getPidsForCommands',
+                        commands: javaArrayToJsArray(cmdlineNames),
+                        matched_pids: javaArrayToJsArray(result),
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    return result;
+                }
+            );
+        }
+
+        if (Process.readProcFile) {
+            const readProcFileRef = Process.readProcFile;
+            readProcFileRef.implementation = safeImplementation(
+                "process:Process.readProcFile",
+                readProcFileRef,
+                function(original, path: string, format: any, outStrings: any, outLongs: any, outFloats: any) {
+                    let result;
+                    try {
+                        result = original.call(this, path, format, outStrings, outLongs, outFloats);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                    const java_stack_trace = collectJavaStackTrace();
+                    createProcessEvent("process.proc_scan.read_file", {
+                        library: 'android.os.Process',
+                        method: 'readProcFile',
+                        proc_path: path,
+                        format: javaArrayToJsArray(format),
+                        result_strings: javaArrayToJsArray(outStrings),
+                        result_longs: javaArrayToJsArray(outLongs),
+                        result_floats: javaArrayToJsArray(outFloats),
+                        success: result,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    return result;
+                }
+            );
+        }
+
+        if (Process.readProcLines) {
+            const readProcLinesRef = Process.readProcLines;
+            readProcLinesRef.implementation = safeImplementation(
+                "process:Process.readProcLines",
+                readProcLinesRef,
+                function(original, path: string, matchingLines: any, outSizes: any) {
+                    try {
+                        const callResult = original.call(this, path, matchingLines, outSizes);
+                        const java_stack_trace = collectJavaStackTrace();
+                        createProcessEvent("process.proc_scan.read_lines", {
+                            library: 'android.os.Process',
+                            method: 'readProcLines',
+                            proc_path: path,
+                            requested_fields: javaArrayToJsArray(matchingLines),
+                            result_longs: javaArrayToJsArray(outSizes),
+                            ...(java_stack_trace ? { java_stack_trace } : {})
+                        });
+                        return callResult;
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                }
+            );
+        }
+
+        if (Process.parseProcLine) {
+            const parseProcLineRef = Process.parseProcLine;
+            parseProcLineRef.implementation = safeImplementation(
+                "process:Process.parseProcLine",
+                parseProcLineRef,
+                function(original, buffer: any, startIndex: number, endIndex: number, format: any, outStrings: any, outLongs: any, outFloats: any) {
+                    let result;
+                    try {
+                        result = original.call(this, buffer, startIndex, endIndex, format, outStrings, outLongs, outFloats);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                    const java_stack_trace = collectJavaStackTrace();
+                    createProcessEvent("process.proc_scan.parse_line", {
+                        library: 'android.os.Process',
+                        method: 'parseProcLine',
+                        buffer_length: buffer ? buffer.length : null,
+                        start_index: startIndex,
+                        end_index: endIndex,
+                        format: javaArrayToJsArray(format),
+                        result_strings: javaArrayToJsArray(outStrings),
+                        result_longs: javaArrayToJsArray(outLongs),
+                        result_floats: javaArrayToJsArray(outFloats),
+                        success: result,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    return result;
                 }
             );
         }
