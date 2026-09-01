@@ -56,7 +56,15 @@ class ProcessParser(BaseParser):
             event.event_description = 'Process exec operation'
         elif event_type.startswith('process.system'):
             event.event_description = 'System command execution'
-        
+        elif event_type.startswith('process.proc_scan'):
+            event.event_description = 'Process /proc inspection'
+
+        # Preserve fields not explicitly mapped above (e.g. dynamic
+        # /proc-scanning arrays) as metadata rather than dropping them.
+        for key, value in data.items():
+            if key not in ['event_type', 'timestamp'] and not hasattr(event, key):
+                event.add_metadata(key, value)
+
         return event
     
     def parse_legacy_data(self, raw_data: str, timestamp: str) -> Optional[ProcessEvent]:
