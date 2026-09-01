@@ -14,6 +14,12 @@ function createProcessEvent(eventType: string, data: any): void {
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
 }
 
+// Tracks OS thread IDs currently executing a killProcess() call. killProcess()
+// internally delegates to sendSignal(pid, SIGKILL) on the same thread; this
+// guard suppresses the resulting nested process.signal event while leaving
+// the original call-through and its actual signal delivery unaffected.
+const activeKillProcessThreads = new Set<number>();
+
 function hook_java_process_creation() {
     safePerform("process:hook_java_process_creation", () => {
         const Process = safeUse('android.os.Process', "process:hook_java_process_creation");
@@ -64,15 +70,22 @@ function hook_java_process_creation() {
                 "process:Process.killProcess",
                 killProcessRef,
                 function(original, pid: number) {
+                    const java_stack_trace = collectJavaStackTrace();
                     createProcessEvent("process.kill", {
                         library: 'android.os.Process',
                         method: 'killProcess',
-                        target_pid: pid
+                        target_pid: pid,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
                     });
+
+                    const threadId = Process.myTid();
+                    activeKillProcessThreads.add(threadId);
                     try {
                         return original.call(this, pid);
                     } catch (error) {
                         throw new PropagateException(error);
+                    } finally {
+                        activeKillProcessThreads.delete(threadId);
                     }
                 }
             );
@@ -84,12 +97,19 @@ function hook_java_process_creation() {
                 "process:Process.sendSignal",
                 sendSignalRef,
                 function(original, pid: number, signal: number) {
-                    createProcessEvent("process.signal", {
-                        library: 'android.os.Process',
-                        method: 'sendSignal',
-                        target_pid: pid,
-                        signal: signal
-                    });
+                    // Suppress the event when this call is killProcess()'s
+                    // internal delegation on the same thread; the actual
+                    // signal delivery via original.call() is unaffected.
+                    if (!activeKillProcessThreads.has(Process.myTid())) {
+                        const java_stack_trace = collectJavaStackTrace();
+                        createProcessEvent("process.signal", {
+                            library: 'android.os.Process',
+                            method: 'sendSignal',
+                            target_pid: pid,
+                            signal: signal,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
+                        });
+                    }
                     try {
                         return original.call(this, pid, signal);
                     } catch (error) {
