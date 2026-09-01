@@ -14,6 +14,21 @@ public class MainActivity extends Activity {
 
         Log.i(TAG, "ProcessE2E started");
 
+        // Opt-in destructive triggers, checked before anything else runs.
+        // These terminate the process and must never run as part of the
+        // default automatic sequence below.
+        if (getIntent().getBooleanExtra("process_e2e_trigger_exit", false)) {
+            Log.i(TAG, "process_e2e_trigger_exit set - calling Runtime.exit(0)");
+            Runtime.getRuntime().exit(0);
+            return;
+        }
+
+        if (getIntent().getBooleanExtra("process_e2e_trigger_halt", false)) {
+            Log.i(TAG, "process_e2e_trigger_halt set - calling Runtime.halt(0)");
+            Runtime.getRuntime().halt(0);
+            return;
+        }
+
         // All test modules run synchronously on the main thread before onCreate()
         // returns. This satisfies the Theme.NoDisplay contract on Android 11+:
         // finish() must be called before onResume() completes.
@@ -59,6 +74,17 @@ public class MainActivity extends Activity {
                 Log.i(TAG, "ReflectionTests completed");
             } catch (Throwable t) {
                 Log.e(TAG, "ReflectionTests failed", t);
+            }
+
+            // 6) Runtime.addShutdownHook / removeShutdownHook.
+            //    Runtime.exit / Runtime.halt are covered separately via the
+            //    opt-in Intent triggers above, since either terminates the
+            //    process and cannot run as part of this default sequence.
+            try {
+                new ShutdownHookTests().runTests();
+                Log.i(TAG, "ShutdownHookTests completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "ShutdownHookTests failed", t);
             }
 
         } catch (Throwable t) {
