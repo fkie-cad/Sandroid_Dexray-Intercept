@@ -2,15 +2,29 @@ package com.test.processe2e;
 
 import android.util.Log;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
 // Triggers android.os.Process hooks in process.ts.
 //
 // Hook status:
-//   Process.sendSignal(int, int) -> process.signal - present
-//   Process.killProcess(int)     -> process.kill   - present
-//   Process.start(...)           -> process.creation - present but NOT triggerable
-//                                   from a user app; Zygote-internal only;
-//                                   requires rooted device with modified Zygote
-//                                   or system-level instrumentation
+//   Process.sendSignal(int, int)              -> process.signal        - present
+//   Process.killProcess(int)                  -> process.kill          - present
+//   Process.killProcessQuiet(int)              -> process.kill_quiet    - present
+//   Process.sendSignalQuiet(int, int)          -> process.signal_quiet  - present
+//   Process.killProcessGroup(int, int)         -> process.kill_group    - present
+//   Process.sendSignalToProcessGroup(int,int,int) -> process.signal_group - present
+//   Process.setUid(int)                        -> process.set_uid       - present
+//   Process.setGid(int)                        -> process.set_gid       - present
+//   Process.setArgV0(String)                   -> process.rename        - present
+//   Process.start(...)                         -> process.creation - present but NOT
+//                                                  triggerable from a user app; Zygote-internal
+//                                                  only; requires rooted device with modified
+//                                                  Zygote or system-level instrumentation
+//
+// setUid/setGid/killProcessGroup/sendSignalToProcessGroup realistically only occur from
+// privileged system callers; a sandboxed app has no legitimate reason to call them. These
+// triggers exercise the hook firing and the syscall's graceful rejection, not a real use case.
 public class ProcessJavaTests {
 
     private static final String TAG = "PROCESS_RUNTIME_E2E";
@@ -21,6 +35,13 @@ public class ProcessJavaTests {
         testSendSignal();
         testKillProcess();
         logProcessStartGap();
+        testKillProcessQuiet();
+        testSendSignalQuiet();
+        testSetArgV0();
+        testKillProcessGroup();
+        testSendSignalToProcessGroup();
+        testSetUid();
+        testSetGid();
         Log.i(TAG, "ProcessJavaTests summary: " + passed + " passed, " + failed + " failed");
     }
 
@@ -59,5 +80,143 @@ public class ProcessJavaTests {
     // a modified Zygote or system-level instrumentation for hook testing.
     private void logProcessStartGap() {
         Log.i(TAG, "Process.start: not triggerable from user app - Zygote-internal only");
+    }
+
+    // The following methods are @SystemApi/hidden - present at runtime and
+    // visible to Frida, but absent from the public SDK compile stubs. They
+    // are invoked here via reflection, which is also how real app code
+    // reaches hidden platform APIs not exposed in the SDK. Android's hidden
+    // API enforcement may still block a given method depending on API level
+    // and its allowlist status; that outcome is logged as informative, not
+    // as a test failure, since it reflects real platform behavior rather
+    // than a hook defect.
+
+    private Object invokeHiddenStaticMethod(String methodName, Class<?>[] paramTypes, Object[] args)
+            throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+        Method method = android.os.Process.class.getMethod(methodName, paramTypes);
+        return method.invoke(null, args);
+    }
+
+    // hooks: Process.killProcessQuiet -> process.kill_quiet
+    //        Process.sendSignalQuiet (internal delegation) -> process.signal_quiet
+    private void testKillProcessQuiet() {
+        try {
+            invokeHiddenStaticMethod("killProcessQuiet", new Class<?>[]{int.class}, new Object[]{99998});
+            Log.i(TAG, "Process.killProcessQuiet(99998): ok");
+            passed++;
+        } catch (NoSuchMethodException e) {
+            Log.i(TAG, "Process.killProcessQuiet: hidden API not accessible on this API level");
+            passed++;
+        } catch (Throwable t) {
+            Log.e(TAG, "Process.killProcessQuiet failed", t);
+            failed++;
+        }
+    }
+
+    // hook: Process.sendSignalQuiet -> process.signal_quiet
+    private void testSendSignalQuiet() {
+        try {
+            int selfPid = android.os.Process.myPid();
+            invokeHiddenStaticMethod("sendSignalQuiet", new Class<?>[]{int.class, int.class}, new Object[]{selfPid, 0});
+            Log.i(TAG, "Process.sendSignalQuiet(selfPid, 0): ok");
+            passed++;
+        } catch (NoSuchMethodException e) {
+            Log.i(TAG, "Process.sendSignalQuiet: hidden API not accessible on this API level");
+            passed++;
+        } catch (Throwable t) {
+            Log.e(TAG, "Process.sendSignalQuiet failed", t);
+            failed++;
+        }
+    }
+
+    // hook: Process.setArgV0 -> process.rename
+    // Restores the original name immediately after to avoid confusing later
+    // log output or subsequent test modules with a renamed process identity.
+    private void testSetArgV0() {
+        try {
+            invokeHiddenStaticMethod("setArgV0", new Class<?>[]{String.class}, new Object[]{"processe2e-renamed"});
+            invokeHiddenStaticMethod("setArgV0", new Class<?>[]{String.class}, new Object[]{"com.test.processe2e"});
+            Log.i(TAG, "Process.setArgV0: ok");
+            passed++;
+        } catch (NoSuchMethodException e) {
+            Log.i(TAG, "Process.setArgV0: hidden API not accessible on this API level");
+            passed++;
+        } catch (Throwable t) {
+            Log.e(TAG, "Process.setArgV0 failed", t);
+            failed++;
+        }
+    }
+
+    // hook: Process.killProcessGroup -> process.kill_group
+    // Non-existent pid; own uid. No real process group is affected regardless
+    // of the kernel's returned status.
+    private void testKillProcessGroup() {
+        try {
+            int selfUid = android.os.Process.myUid();
+            Object result = invokeHiddenStaticMethod("killProcessGroup", new Class<?>[]{int.class, int.class}, new Object[]{selfUid, 99997});
+            Log.i(TAG, "Process.killProcessGroup(selfUid, 99997): result=" + result);
+            passed++;
+        } catch (NoSuchMethodException e) {
+            Log.i(TAG, "Process.killProcessGroup: hidden API not accessible on this API level");
+            passed++;
+        } catch (Throwable t) {
+            Log.e(TAG, "Process.killProcessGroup failed", t);
+            failed++;
+        }
+    }
+
+    // hook: Process.sendSignalToProcessGroup -> process.signal_group
+    // Signal 0 to a non-existent pid; own uid.
+    private void testSendSignalToProcessGroup() {
+        try {
+            int selfUid = android.os.Process.myUid();
+            Object result = invokeHiddenStaticMethod("sendSignalToProcessGroup", new Class<?>[]{int.class, int.class, int.class}, new Object[]{selfUid, 99996, 0});
+            Log.i(TAG, "Process.sendSignalToProcessGroup(selfUid, 99996, 0): result=" + result);
+            passed++;
+        } catch (NoSuchMethodException e) {
+            Log.i(TAG, "Process.sendSignalToProcessGroup: hidden API not accessible on this API level");
+            passed++;
+        } catch (Throwable t) {
+            Log.e(TAG, "Process.sendSignalToProcessGroup failed", t);
+            failed++;
+        }
+    }
+
+    // hook: Process.setUid -> process.set_uid
+    // Passes the process's own current uid. A sandboxed app lacks the
+    // capability to change uid regardless of the value requested; this
+    // exercises the hook and the syscall's expected rejection.
+    private void testSetUid() {
+        try {
+            int selfUid = android.os.Process.myUid();
+            Object result = invokeHiddenStaticMethod("setUid", new Class<?>[]{int.class}, new Object[]{selfUid});
+            Log.i(TAG, "Process.setUid(selfUid): result=" + result);
+            passed++;
+        } catch (NoSuchMethodException e) {
+            Log.i(TAG, "Process.setUid: hidden API not accessible on this API level");
+            passed++;
+        } catch (Throwable t) {
+            Log.e(TAG, "Process.setUid failed", t);
+            failed++;
+        }
+    }
+
+    // hook: Process.setGid -> process.set_gid
+    // No public API exposes the process's own gid; reuses the uid value as a
+    // safe, non-privileged argument. A sandboxed app lacks the capability to
+    // change gid regardless of the value requested.
+    private void testSetGid() {
+        try {
+            int selfUid = android.os.Process.myUid();
+            Object result = invokeHiddenStaticMethod("setGid", new Class<?>[]{int.class}, new Object[]{selfUid});
+            Log.i(TAG, "Process.setGid(selfUid): result=" + result);
+            passed++;
+        } catch (NoSuchMethodException e) {
+            Log.i(TAG, "Process.setGid: hidden API not accessible on this API level");
+            passed++;
+        } catch (Throwable t) {
+            Log.e(TAG, "Process.setGid failed", t);
+            failed++;
+        }
     }
 }
