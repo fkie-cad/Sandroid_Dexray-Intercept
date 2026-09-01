@@ -131,6 +131,44 @@ function hook_runtime() {
     });
 }
 
+// Tracks per-thread nested-call depth shared across both Class.forName
+// hooks below. The 1-arg hook redirects into the 3-arg overload instead of
+// calling its own original; this guard prevents that redirect from emitting
+// a second event.
+const activeForNameDepth = new Map<number, number>();
+
+// Resolves the classloader of the immediate Java caller on the current
+// thread, skipping frames belonging to stack trace collection and to the
+// forName call chain itself.
+function resolveImmediateCallerClassLoader(context: string): any {
+    const threadDef = safeUse('java.lang.Thread', context);
+    if (!threadDef) return null;
+
+    let frames: any[];
+    try {
+        frames = threadDef.currentThread().getStackTrace();
+    } catch (error) {
+        return null;
+    }
+
+    for (let i = 0; i < frames.length; i++) {
+        const frameClassName = frames[i].getClassName();
+        if (
+            frameClassName === 'dalvik.system.VMStack' ||
+            frameClassName === 'java.lang.Thread' ||
+            frameClassName === 'java.lang.Class'
+        ) {
+            continue;
+        }
+
+        const CallerClass = safeUse(frameClassName, context);
+        if (!CallerClass) return null;
+        return CallerClass.class.getClassLoader();
+    }
+
+    return null;
+}
+
 function trace_reflection() {
     safePerform("runtime:trace_reflection", () => {
         const internalClasses: string[] = ["android.", "com.android", "java.lang", "java.io"];
@@ -204,7 +242,9 @@ function trace_reflection() {
                 );
             }
 
-            // Hook Class.forName
+            // Hook Class.forName(String, boolean, ClassLoader).
+            // Explicit classloader argument avoids the caller-sensitivity
+            // issue affecting the 1-arg overload below.
             const forName = safeOverload(
                 classDef.forName,
                 "runtime:Class.forName",
@@ -215,29 +255,110 @@ function trace_reflection() {
                     "runtime:Class.forName",
                     forName,
                     function(original, class_name: string, flag: boolean, class_loader: any) {
-                        let isInternal = false;
-                        for (const internalClass of internalClasses) {
-                            if (class_name.startsWith(internalClass)) {
-                                isInternal = true;
-                                break;
+                        const threadId = Process.getCurrentThreadId();
+                        const depth = activeForNameDepth.get(threadId) || 0;
+                        const isOutermost = depth === 0;
+                        activeForNameDepth.set(threadId, depth + 1);
+
+                        if (isOutermost) {
+                            let isInternal = false;
+                            for (const internalClass of internalClasses) {
+                                if (class_name.startsWith(internalClass)) {
+                                    isInternal = true;
+                                    break;
+                                }
+                            }
+                            if (!isInternal) {
+                                const java_stack_trace = collectJavaStackTrace();
+                                createRuntimeEvent("reflection.class_for_name", {
+                                    library: 'java.lang.Class',
+                                    method: 'forName',
+                                    overload_signature: 'forName(java.lang.String,boolean,java.lang.ClassLoader)',
+                                    class_name: class_name,
+                                    initialize: flag,
+                                    class_loader: class_loader ? class_loader.toString() : null,
+                                    is_internal: isInternal,
+                                    ...(java_stack_trace ? { java_stack_trace } : {})
+                                });
                             }
                         }
-                        if (!isInternal) {
-                            const java_stack_trace = collectJavaStackTrace();
-                            createRuntimeEvent("reflection.class_for_name", {
-                                library: 'java.lang.Class',
-                                method: 'forName',
-                                class_name: class_name,
-                                initialize: flag,
-                                class_loader: class_loader ? class_loader.toString() : null,
-                                is_internal: isInternal,
-                                ...(java_stack_trace ? { java_stack_trace } : {})
-                            });
-                        }
+
                         try {
                             return original.call(this, class_name, flag, class_loader);
                         } catch (error) {
                             throw new PropagateException(error);
+                        } finally {
+                            const remaining = activeForNameDepth.get(threadId)! - 1;
+                            if (remaining <= 0) {
+                                activeForNameDepth.delete(threadId);
+                            } else {
+                                activeForNameDepth.set(threadId, remaining);
+                            }
+                        }
+                    }
+                );
+            }
+
+            // Hook Class.forName(String).
+            // - forName(String) resolves its caller's classloader via a
+            //   native, caller-sensitive stack lookup.
+            // - Replacing this overload's implementation breaks that lookup,
+            //   since the runtime sees our trampoline as the caller instead
+            //   of the real application code.
+            // - Resolves the real caller's classloader itself and redirects
+            //   to the explicit-classloader overload above instead of
+            //   calling through to the unsafe original.
+            // - The depth guard shared with the hook above prevents this
+            //   redirect from emitting a second event.
+            const forNameOneArg = safeOverload(
+                classDef.forName,
+                "runtime:Class.forName[1-arg]",
+                'java.lang.String'
+            );
+            if (forNameOneArg) {
+                forNameOneArg.implementation = safeImplementation(
+                    "runtime:Class.forName[1-arg]",
+                    forNameOneArg,
+                    function(original, class_name: string) {
+                        const threadId = Process.getCurrentThreadId();
+                        const depth = activeForNameDepth.get(threadId) || 0;
+                        const isOutermost = depth === 0;
+                        activeForNameDepth.set(threadId, depth + 1);
+
+                        if (isOutermost) {
+                            let isInternal = false;
+                            for (const internalClass of internalClasses) {
+                                if (class_name.startsWith(internalClass)) {
+                                    isInternal = true;
+                                    break;
+                                }
+                            }
+                            if (!isInternal) {
+                                const java_stack_trace = collectJavaStackTrace();
+                                createRuntimeEvent("reflection.class_for_name", {
+                                    library: 'java.lang.Class',
+                                    method: 'forName',
+                                    overload_signature: 'forName(java.lang.String)',
+                                    class_name: class_name,
+                                    initialize: true,
+                                    is_internal: isInternal,
+                                    ...(java_stack_trace ? { java_stack_trace } : {})
+                                });
+                            }
+                        }
+
+                        try {
+                            const callerClassLoader = resolveImmediateCallerClassLoader("runtime:Class.forName[1-arg]");
+                            return classDef.forName(class_name, true, callerClassLoader);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        } finally {
+                            const remaining = activeForNameDepth.get(threadId)! - 1;
+                            if (remaining <= 0) {
+                                activeForNameDepth.delete(threadId);
+                            } else {
+                                activeForNameDepth.set(threadId, remaining);
+                            }
                         }
                     }
                 );
