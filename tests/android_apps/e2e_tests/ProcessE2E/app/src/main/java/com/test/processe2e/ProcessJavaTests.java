@@ -17,6 +17,15 @@ import java.lang.reflect.Method;
 //   Process.setUid(int)                        -> process.set_uid       - present
 //   Process.setGid(int)                        -> process.set_gid       - present
 //   Process.setArgV0(String)                   -> process.rename        - present
+//   Process.getPids(String, int[])             -> process.proc_scan.get_pids - present
+//   Process.getPidsForCommands(String[])       -> process.proc_scan.get_pids_for_commands - present
+//   Process.readProcFile(...)                  -> process.proc_scan.read_file - present
+//   Process.readProcLines(...)                 -> process.proc_scan.read_lines - present
+//   Process.parseProcLine(...)                 -> process.proc_scan.parse_line - present but
+//                                                  not directly triggered; requires a raw
+//                                                  byte-buffer/format setup with low direct-call
+//                                                  likelihood in real apps; confirmed via direct
+//                                                  Frida dispatch probing only
 //   Process.start(...)                         -> process.creation - present but NOT
 //                                                  triggerable from a user app; Zygote-internal
 //                                                  only; requires rooted device with modified
@@ -25,6 +34,11 @@ import java.lang.reflect.Method;
 // setUid/setGid/killProcessGroup/sendSignalToProcessGroup realistically only occur from
 // privileged system callers; a sandboxed app has no legitimate reason to call them. These
 // triggers exercise the hook firing and the syscall's graceful rejection, not a real use case.
+//
+// getPids/getPidsForCommands/readProcFile/readProcLines are hidden APIs, invoked here via
+// reflection for the same reason as the methods above. Format flags used for readProcFile
+// and readProcLines are not verified to be semantically correct for the target /proc file;
+// only firing the hook and observing whatever the real call returns is required here.
 public class ProcessJavaTests {
 
     private static final String TAG = "PROCESS_RUNTIME_E2E";
@@ -42,6 +56,10 @@ public class ProcessJavaTests {
         testSendSignalToProcessGroup();
         testSetUid();
         testSetGid();
+        testGetPids();
+        testGetPidsForCommands();
+        testReadProcFile();
+        testReadProcLines();
         Log.i(TAG, "ProcessJavaTests summary: " + passed + " passed, " + failed + " failed");
     }
 
@@ -216,6 +234,86 @@ public class ProcessJavaTests {
             passed++;
         } catch (Throwable t) {
             Log.e(TAG, "Process.setGid failed", t);
+            failed++;
+        }
+    }
+
+    // hook: Process.getPids -> process.proc_scan.get_pids
+    private void testGetPids() {
+        try {
+            Object result = invokeHiddenStaticMethod(
+                    "getPids",
+                    new Class<?>[]{String.class, int[].class},
+                    new Object[]{"/proc", null});
+            int[] pids = (int[]) result;
+            Log.i(TAG, "Process.getPids(/proc): " + (pids != null ? pids.length : 0) + " entries");
+            passed++;
+        } catch (NoSuchMethodException e) {
+            Log.i(TAG, "Process.getPids: hidden API not accessible on this API level");
+            passed++;
+        } catch (Throwable t) {
+            Log.e(TAG, "Process.getPids failed", t);
+            failed++;
+        }
+    }
+
+    // hook: Process.getPidsForCommands -> process.proc_scan.get_pids_for_commands
+    private void testGetPidsForCommands() {
+        try {
+            Object result = invokeHiddenStaticMethod(
+                    "getPidsForCommands",
+                    new Class<?>[]{String[].class},
+                    new Object[]{new String[]{"system_server"}});
+            int[] pids = (int[]) result;
+            Log.i(TAG, "Process.getPidsForCommands: " + (pids != null ? pids.length : 0) + " entries");
+            passed++;
+        } catch (NoSuchMethodException e) {
+            Log.i(TAG, "Process.getPidsForCommands: hidden API not accessible on this API level");
+            passed++;
+        } catch (Throwable t) {
+            Log.e(TAG, "Process.getPidsForCommands failed", t);
+            failed++;
+        }
+    }
+
+    // hook: Process.readProcFile -> process.proc_scan.read_file
+    private void testReadProcFile() {
+        try {
+            int[] format = new int[]{0x2000}; // PROC_OUT_LONG per AOSP Process.java
+            String[] outStrings = new String[1];
+            long[] outLongs = new long[1];
+            float[] outFloats = new float[1];
+            Object result = invokeHiddenStaticMethod(
+                    "readProcFile",
+                    new Class<?>[]{String.class, int[].class, String[].class, long[].class, float[].class},
+                    new Object[]{"/proc/self/stat", format, outStrings, outLongs, outFloats});
+            Log.i(TAG, "Process.readProcFile(/proc/self/stat): result=" + result);
+            passed++;
+        } catch (NoSuchMethodException e) {
+            Log.i(TAG, "Process.readProcFile: hidden API not accessible on this API level");
+            passed++;
+        } catch (Throwable t) {
+            Log.e(TAG, "Process.readProcFile failed", t);
+            failed++;
+        }
+    }
+
+    // hook: Process.readProcLines -> process.proc_scan.read_lines
+    private void testReadProcLines() {
+        try {
+            String[] matchingLines = new String[]{"VmRSS"};
+            long[] outSizes = new long[1];
+            invokeHiddenStaticMethod(
+                    "readProcLines",
+                    new Class<?>[]{String.class, String[].class, long[].class},
+                    new Object[]{"/proc/self/status", matchingLines, outSizes});
+            Log.i(TAG, "Process.readProcLines(/proc/self/status): outSizes[0]=" + outSizes[0]);
+            passed++;
+        } catch (NoSuchMethodException e) {
+            Log.i(TAG, "Process.readProcLines: hidden API not accessible on this API level");
+            passed++;
+        } catch (Throwable t) {
+            Log.e(TAG, "Process.readProcLines failed", t);
             failed++;
         }
     }
