@@ -1,5 +1,5 @@
 import { Java, JavaWrapper } from "./javalib.js";
-import { hookError } from "./error_utils.js";
+import { hookError, hookPropagate } from "./error_utils.js";
 
 /**
  * Wraps Java.perform with availability check and error isolation.
@@ -134,6 +134,7 @@ export function safeImplementation(
             // deliberately rethrows the original exception; do not treat as failure,
             // do not call original again, just propagate the wrapped cause
             if (error instanceof PropagateException) {
+                hookPropagate(context, error.cause);
                 throw error.cause;
             }
             hookError(context, error);
