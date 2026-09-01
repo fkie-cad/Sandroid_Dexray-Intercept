@@ -20,6 +20,11 @@ function createProcessEvent(eventType: string, data: any): void {
 // the original call-through and its actual signal delivery unaffected.
 const activeKillProcessThreads = new Set<number>();
 
+// Same pattern as activeKillProcessThreads, scoped to the quiet variants.
+// killProcessQuiet() delegates to sendSignalQuiet(pid, SIGKILL); the two
+// families never delegate into each other, so each needs its own guard.
+const activeKillProcessQuietThreads = new Set<number>();
+
 function hook_java_process_creation() {
     safePerform("process:hook_java_process_creation", () => {
         const Process = safeUse('android.os.Process', "process:hook_java_process_creation");
@@ -112,6 +117,171 @@ function hook_java_process_creation() {
                     }
                     try {
                         return original.call(this, pid, signal);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                }
+            );
+        }
+
+        if (Process.killProcessQuiet) {
+            const killProcessQuietRef = Process.killProcessQuiet;
+            killProcessQuietRef.implementation = safeImplementation(
+                "process:Process.killProcessQuiet",
+                killProcessQuietRef,
+                function(original, pid: number) {
+                    const java_stack_trace = collectJavaStackTrace();
+                    createProcessEvent("process.kill_quiet", {
+                        library: 'android.os.Process',
+                        method: 'killProcessQuiet',
+                        target_pid: pid,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+
+                    const threadId = Process.myTid();
+                    activeKillProcessQuietThreads.add(threadId);
+                    try {
+                        return original.call(this, pid);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    } finally {
+                        activeKillProcessQuietThreads.delete(threadId);
+                    }
+                }
+            );
+        }
+
+        if (Process.sendSignalQuiet) {
+            const sendSignalQuietRef = Process.sendSignalQuiet;
+            sendSignalQuietRef.implementation = safeImplementation(
+                "process:Process.sendSignalQuiet",
+                sendSignalQuietRef,
+                function(original, pid: number, signal: number) {
+                    if (!activeKillProcessQuietThreads.has(Process.myTid())) {
+                        const java_stack_trace = collectJavaStackTrace();
+                        createProcessEvent("process.signal_quiet", {
+                            library: 'android.os.Process',
+                            method: 'sendSignalQuiet',
+                            target_pid: pid,
+                            signal: signal,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
+                        });
+                    }
+                    try {
+                        return original.call(this, pid, signal);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                }
+            );
+        }
+
+        if (Process.killProcessGroup) {
+            const killProcessGroupRef = Process.killProcessGroup;
+            killProcessGroupRef.implementation = safeImplementation(
+                "process:Process.killProcessGroup",
+                killProcessGroupRef,
+                function(original, uid: number, pid: number) {
+                    const java_stack_trace = collectJavaStackTrace();
+                    createProcessEvent("process.kill_group", {
+                        library: 'android.os.Process',
+                        method: 'killProcessGroup',
+                        target_uid: uid,
+                        target_pid: pid,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    try {
+                        return original.call(this, uid, pid);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                }
+            );
+        }
+
+        if (Process.sendSignalToProcessGroup) {
+            const sendSignalToProcessGroupRef = Process.sendSignalToProcessGroup;
+            sendSignalToProcessGroupRef.implementation = safeImplementation(
+                "process:Process.sendSignalToProcessGroup",
+                sendSignalToProcessGroupRef,
+                function(original, uid: number, pid: number, signal: number) {
+                    const java_stack_trace = collectJavaStackTrace();
+                    createProcessEvent("process.signal_group", {
+                        library: 'android.os.Process',
+                        method: 'sendSignalToProcessGroup',
+                        target_uid: uid,
+                        target_pid: pid,
+                        signal: signal,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    try {
+                        return original.call(this, uid, pid, signal);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                }
+            );
+        }
+
+        if (Process.setUid) {
+            const setUidRef = Process.setUid;
+            setUidRef.implementation = safeImplementation(
+                "process:Process.setUid",
+                setUidRef,
+                function(original, uid: number) {
+                    const java_stack_trace = collectJavaStackTrace();
+                    createProcessEvent("process.set_uid", {
+                        library: 'android.os.Process',
+                        method: 'setUid',
+                        target_uid: uid,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    try {
+                        return original.call(this, uid);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                }
+            );
+        }
+
+        if (Process.setGid) {
+            const setGidRef = Process.setGid;
+            setGidRef.implementation = safeImplementation(
+                "process:Process.setGid",
+                setGidRef,
+                function(original, gid: number) {
+                    const java_stack_trace = collectJavaStackTrace();
+                    createProcessEvent("process.set_gid", {
+                        library: 'android.os.Process',
+                        method: 'setGid',
+                        target_gid: gid,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    try {
+                        return original.call(this, gid);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                }
+            );
+        }
+
+        if (Process.setArgV0) {
+            const setArgV0Ref = Process.setArgV0;
+            setArgV0Ref.implementation = safeImplementation(
+                "process:Process.setArgV0",
+                setArgV0Ref,
+                function(original, name: string) {
+                    const java_stack_trace = collectJavaStackTrace();
+                    createProcessEvent("process.rename", {
+                        library: 'android.os.Process',
+                        method: 'setArgV0',
+                        new_name: name,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    try {
+                        return original.call(this, name);
                     } catch (error) {
                         throw new PropagateException(error);
                     }
