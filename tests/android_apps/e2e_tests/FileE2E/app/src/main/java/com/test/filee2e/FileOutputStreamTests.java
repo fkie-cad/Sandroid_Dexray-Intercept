@@ -44,6 +44,7 @@ public class FileOutputStreamTests {
         testFOS_write_bytes();
         testFOS_write_int();
         testFOS_write_bytes_offset();
+        testFOS_write_large();
 
         Log.i(TAG, "FileOutputStreamTests summary: " + passed + " passed, " + failed + " failed");
     }
@@ -171,4 +172,38 @@ public class FileOutputStreamTests {
             failed++;
         }
     }
+
+    // Large write for console preview truncation coverage
+    private void testFOS_write_large() {
+        try {
+            File f = new File(ctx.getFilesDir(), "fos_large.bin");
+            byte[] data = new byte[2048];
+
+            for (int index = 0; index < data.length; index++) {
+                data[index] = (byte) (index & 0xff);
+            }
+
+            FileOutputStream fos = new FileOutputStream(f);
+            fos.write(data, 0, data.length);
+            fos.close();
+
+            long fileSize = f.length();
+            Log.i(TAG, "FileOutputStream large write: " + fileSize + " bytes");
+
+            if (fileSize == data.length) {
+                passed++;
+            } else {
+                Log.e(
+                    TAG,
+                    "FileOutputStream large write has unexpected size: " +
+                    fileSize
+                );
+                failed++;
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "FileOutputStream large write failed", t);
+            failed++;
+        }
+    }
+
 }
