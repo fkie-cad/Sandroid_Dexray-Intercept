@@ -18,6 +18,12 @@ function createRuntimeEvent(eventType: string, data: any): void {
  * https://github.com/Ch0pin/medusa/blob/master/modules/runtime/runtime.med
  */
 
+// Tracks per-thread nested-call depth for Runtime.exec. Some exec() overloads
+// internally delegate to other exec() overloads on the same thread before
+// reaching the real implementation; this guard emits only the outermost,
+// application-facing call while leaving every internal call-through intact.
+const activeExecDepth = new Map<number, number>();
+
 function hook_runtime() {
     safePerform("runtime:hook_runtime", () => {
         const Runtime = safeUse('java.lang.Runtime', "runtime:hook_runtime");
@@ -29,35 +35,49 @@ function hook_runtime() {
                 `runtime:Runtime.exec[${index}]`,
                 overload,
                 function(original, ...args: any[]) {
-                    const java_stack_trace = collectJavaStackTrace();
+                    const threadId = Process.getCurrentThreadId();
+                    const depth = activeExecDepth.get(threadId) || 0;
+                    const isOutermost = depth === 0;
+                    activeExecDepth.set(threadId, depth + 1);
 
-                    let commandStr = null;
-                    const command = args[0];
-                    const envp = args[1];
-                    const dir = args[2];
+                    if (isOutermost) {
+                        const java_stack_trace = collectJavaStackTrace();
 
-                    if (command) {
-                        if (Array.isArray(command)) {
-                            commandStr = command.join(' ');
-                        } else {
-                            commandStr = command.toString();
+                        let commandStr = null;
+                        const command = args[0];
+                        const envp = args[1];
+                        const dir = args[2];
+
+                        if (command) {
+                            if (Array.isArray(command)) {
+                                commandStr = command.join(' ');
+                            } else {
+                                commandStr = command.toString();
+                            }
                         }
-                    }
 
-                    createRuntimeEvent("runtime.exec", {
-                        library: 'java.lang.Runtime',
-                        method: 'exec',
-                        overload_index: index,
-                        command: commandStr,
-                        environment: envp ? envp.toString() : null,
-                        working_directory: dir ? dir.toString() : null,
-                        ...(java_stack_trace ? { java_stack_trace } : {})
-                    });
+                        createRuntimeEvent("runtime.exec", {
+                            library: 'java.lang.Runtime',
+                            method: 'exec',
+                            overload_index: index,
+                            command: commandStr,
+                            environment: envp ? envp.toString() : null,
+                            working_directory: dir ? dir.toString() : null,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
+                        });
+                    }
 
                     try {
                         return original.apply(this, args);
                     } catch (error) {
                         throw new PropagateException(error);
+                    } finally {
+                        const remaining = activeExecDepth.get(threadId)! - 1;
+                        if (remaining <= 0) {
+                            activeExecDepth.delete(threadId);
+                        } else {
+                            activeExecDepth.set(threadId, remaining);
+                        }
                     }
                 }
             );
