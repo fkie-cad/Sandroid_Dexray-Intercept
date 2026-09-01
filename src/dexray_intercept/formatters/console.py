@@ -459,13 +459,50 @@ class ConsoleFormatter(BaseFormatter):
             if event.abi:
                 lines.append(f"[*] ABI: {event.abi}")
 
-        elif event.event_type in ['process.kill', 'process.signal']:
-            action = 'Kill Process' if event.event_type == 'process.kill' else 'Send Signal'
-            lines.append(f"\n[*] [Process] {action}:")
+        elif event.event_type in ['process.kill', 'process.signal', 'process.kill_quiet', 'process.signal_quiet']:
+            action = 'Kill Process' if event.event_type in ['process.kill', 'process.kill_quiet'] else 'Send Signal'
+            lines.append(f"\n[*] [Process] {action} ({event.event_type}):")
             if event.target_pid:
                 lines.append(f"[*] Target PID: {event.target_pid}")
             if event.signal:
                 lines.append(f"[*] Signal: {event.signal}")
+
+        elif event.event_type in ['process.kill_group', 'process.signal_group']:
+            action = 'Kill Process Group' if event.event_type == 'process.kill_group' else 'Send Signal to Process Group'
+            lines.append(f"\n[*] [Process] {action}:")
+            if event.target_uid is not None:
+                lines.append(f"[*] Target UID: {event.target_uid}")
+            if event.target_pid is not None:
+                lines.append(f"[*] Target PID: {event.target_pid}")
+            if event.signal:
+                lines.append(f"[*] Signal: {event.signal}")
+
+        elif event.event_type == 'process.set_uid':
+            lines.append("\n[*] [Process] Set UID:")
+            if event.target_uid is not None:
+                lines.append(f"[*] Target UID: {event.target_uid}")
+
+        elif event.event_type == 'process.set_gid':
+            lines.append("\n[*] [Process] Set GID:")
+            if event.target_gid is not None:
+                lines.append(f"[*] Target GID: {event.target_gid}")
+
+        elif event.event_type == 'process.rename':
+            lines.append("\n[*] [Process] Rename (setArgV0):")
+            if event.new_name:
+                lines.append(f"[*] New Name: {event.new_name}")
+
+        elif event.event_type.startswith('process.proc_scan.'):
+            lines.append(f"\n[*] [Process] /proc Inspection ({event.event_type}):")
+            proc_path = event.metadata.get('proc_path')
+            if proc_path:
+                lines.append(f"[*] Path: {proc_path}")
+            for key in ('matched_pids', 'result_strings', 'result_longs', 'result_floats', 'commands', 'requested_fields'):
+                value = event.metadata.get(key)
+                if value:
+                    lines.append(f"[*] {key.replace('_', ' ').title()}: {value}")
+            if event.success is not None:
+                lines.append(f"[*] Success: {event.success}")
 
         elif event.event_type.startswith('process.fork'):
             lines.append(f"\n[*] [Process] Fork Operation ({event.event_type}):")
@@ -473,6 +510,18 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Caller PID: {event.caller_pid}")
             if event.child_pid:
                 lines.append(f"[*] Child PID: {event.child_pid}")
+            if event.success is not None:
+                lines.append(f"[*] Success: {event.success}")
+
+        elif event.event_type.startswith('process.execve'):
+            lines.append(f"\n[*] [Process] Exec Operation ({event.event_type}):")
+            pathname = event.metadata.get('pathname')
+            if pathname:
+                lines.append(f"[*] Pathname: {pathname}")
+            if event.caller_pid:
+                lines.append(f"[*] Caller PID: {event.caller_pid}")
+            if event.return_value is not None:
+                lines.append(f"[*] Return Value: {event.return_value}")
             if event.success is not None:
                 lines.append(f"[*] Success: {event.success}")
 
@@ -500,12 +549,58 @@ class ConsoleFormatter(BaseFormatter):
             if event.filename:
                 lines.append(f"[*] Filename: {event.filename}")
 
+        elif event.event_type in ['runtime.add_shutdown_hook', 'runtime.remove_shutdown_hook']:
+            action = 'Add Shutdown Hook' if event.event_type == 'runtime.add_shutdown_hook' else 'Remove Shutdown Hook'
+            lines.append(f"\n[*] [Runtime] {action}:")
+            thread_name = event.metadata.get('thread_name')
+            if thread_name:
+                lines.append(f"[*] Thread: {thread_name}")
+            removed = event.metadata.get('removed')
+            if removed is not None:
+                lines.append(f"[*] Removed: {removed}")
+
+        elif event.event_type in ['runtime.exit', 'runtime.halt']:
+            action = 'Exit' if event.event_type == 'runtime.exit' else 'Halt'
+            lines.append(f"\n[*] [Runtime] {action}:")
+            exit_code = event.metadata.get('exit_code')
+            if exit_code is not None:
+                lines.append(f"[*] Exit Code: {exit_code}")
+
+        elif event.event_type == 'native.library.load':
+            lines.append("\n[*] [Process] Native Library Load Attempt:")
+            if event.library_name:
+                lines.append(f"[*] Library: {event.library_name}")
+            if event.load_method:
+                lines.append(f"[*] Method: {event.load_method}")
+            if event.library_path:
+                lines.append(f"[*] Path: {event.library_path}")
+
+        elif event.event_type == 'native.library.loaded':
+            lines.append("\n[*] [Process] Native Library Loaded:")
+            if event.library_name:
+                lines.append(f"[*] Library: {event.library_name}")
+            if event.load_method:
+                lines.append(f"[*] Method: {event.load_method}")
+            if event.handle:
+                lines.append(f"[*] Handle: {event.handle}")
+            if event.success is not None:
+                lines.append(f"[*] Success: {event.success}")
+
+        elif event.event_type == 'native.library.load_failed':
+            lines.append("\n[*] [Process] Native Library Load Failed:")
+            if event.library_name:
+                lines.append(f"[*] Library: {event.library_name}")
+            if event.load_method:
+                lines.append(f"[*] Method: {event.load_method}")
+            if event.error:
+                lines.append(f"[*] Error: {event.error}")
+
         elif event.event_type.startswith('reflection.'):
             lines.extend(self._format_reflection_event(event))
 
         else:
             lines.append(f"[*] [Process] {event.event_type}: {event.command or event.library_name or 'Unknown'}")
-
+            
         lines.append("")  # Empty line
         return '\n'.join(lines)
 
