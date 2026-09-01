@@ -128,6 +128,101 @@ function hook_runtime() {
                 }
             );
         });
+
+        // addShutdownHook / removeShutdownHook: confirmed via direct dispatch
+        // probing to never delegate into each other; no reentrancy guard needed.
+        if (Runtime.addShutdownHook) {
+            const addShutdownHookRef = Runtime.addShutdownHook;
+            addShutdownHookRef.implementation = safeImplementation(
+                "runtime:Runtime.addShutdownHook",
+                addShutdownHookRef,
+                function(original, hook: any) {
+                    const java_stack_trace = collectJavaStackTrace();
+                    createRuntimeEvent("runtime.add_shutdown_hook", {
+                        library: 'java.lang.Runtime',
+                        method: 'addShutdownHook',
+                        thread_name: hook ? hook.getName() : null,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    try {
+                        return original.call(this, hook);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                }
+            );
+        }
+
+        if (Runtime.removeShutdownHook) {
+            const removeShutdownHookRef = Runtime.removeShutdownHook;
+            removeShutdownHookRef.implementation = safeImplementation(
+                "runtime:Runtime.removeShutdownHook",
+                removeShutdownHookRef,
+                function(original, hook: any) {
+                    let removed;
+                    try {
+                        removed = original.call(this, hook);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                    const java_stack_trace = collectJavaStackTrace();
+                    createRuntimeEvent("runtime.remove_shutdown_hook", {
+                        library: 'java.lang.Runtime',
+                        method: 'removeShutdownHook',
+                        thread_name: hook ? hook.getName() : null,
+                        removed: removed,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    return removed;
+                }
+            );
+        }
+
+        // exit / halt: the original call never returns on the normal path, so
+        // the event is emitted before the call-through rather than after.
+        if (Runtime.exit) {
+            const exitRef = Runtime.exit;
+            exitRef.implementation = safeImplementation(
+                "runtime:Runtime.exit",
+                exitRef,
+                function(original, code: number) {
+                    const java_stack_trace = collectJavaStackTrace();
+                    createRuntimeEvent("runtime.exit", {
+                        library: 'java.lang.Runtime',
+                        method: 'exit',
+                        exit_code: code,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    try {
+                        return original.call(this, code);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                }
+            );
+        }
+
+        if (Runtime.halt) {
+            const haltRef = Runtime.halt;
+            haltRef.implementation = safeImplementation(
+                "runtime:Runtime.halt",
+                haltRef,
+                function(original, code: number) {
+                    const java_stack_trace = collectJavaStackTrace();
+                    createRuntimeEvent("runtime.halt", {
+                        library: 'java.lang.Runtime',
+                        method: 'halt',
+                        exit_code: code,
+                        ...(java_stack_trace ? { java_stack_trace } : {})
+                    });
+                    try {
+                        return original.call(this, code);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+                }
+            );
+        }
     });
 }
 
