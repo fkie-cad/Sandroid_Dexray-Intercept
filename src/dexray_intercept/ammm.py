@@ -73,9 +73,13 @@ def interactive_hook_selection():
         },
         'process': {
             'name': 'Process Hooks',
-            'description': 'Native libraries, runtime, DEX unpacking',
-            'hooks': ['dex_unpacking_hooks', 'java_dex_unpacking_hooks', 'native_library_hooks', 'process_hooks',
-                      'runtime_hooks']
+            'description': 'Native libraries, runtime',
+            'hooks': ['native_library_hooks', 'process_hooks', 'runtime_hooks']
+        },
+        'dex': {
+            'name': 'DEX Hooks',
+            'description': 'DEX unpacking',
+            'hooks': ['dex_unpacking_hooks', 'java_dex_unpacking_hooks']
         },
         'services': {
             'name': 'Service Hooks',
@@ -163,11 +167,15 @@ def parse_hook_config(parsed_args, use_interactive=False):
 
     if parsed_args.hooks_process:
         hook_config.update({
-            'dex_unpacking_hooks': True,
-            'java_dex_unpacking_hooks': True,
             'native_library_hooks': True,
             'process_hooks': True,
             'runtime_hooks': True
+        })
+
+    if parsed_args.hooks_dex:
+        hook_config.update({
+            'dex_unpacking_hooks': True,
+            'java_dex_unpacking_hooks': True
         })
 
     if parsed_args.hooks_services:
@@ -314,7 +322,9 @@ Examples:
     hooks.add_argument("--hooks-ipc", required=False, action="store_const", const=True, default=False,
                        help="Enable IPC hooks (binder, intents, broadcasts, shared prefs)")
     hooks.add_argument("--hooks-process", required=False, action="store_const", const=True, default=False,
-                       help="Enable process hooks (native libs, runtime, DEX unpacking)")
+                       help="Enable process hooks (native libs, runtime)")
+    hooks.add_argument("--hooks-dex", required=False, action="store_const", const=True, default=False,
+                       help="Enable DEX unpacking hooks")
     hooks.add_argument("--hooks-services", required=False, action="store_const", const=True, default=False,
                        help="Enable service hooks (bluetooth, camera, clipboard, location, telephony)")
     hooks.add_argument("--hooks-bypass", required=False, action="store_const", const=True, default=False,
