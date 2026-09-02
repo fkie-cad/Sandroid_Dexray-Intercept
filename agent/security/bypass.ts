@@ -1,9 +1,15 @@
 import { log, devlog, am_send } from "../utils/logging.js"
 import { Where } from "../utils/misc.js"
 import { Java } from "../utils/javalib.js"
-import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeOverload, safeImplementation, PropagateException } from "../utils/safe_java.js"
 
 const PROFILE_HOOKING_TYPE: string = "BYPASS_DETECTION"
+
+// PackageManager's legacy integer overload can delegate to the newer
+// flags-object overload. Emit and alter the returned result only for the
+// outer public call.
+const activeInstalledPackagesDepth = new Map<number, number>();
+const activeApplicationInfoDepth = new Map<number, number>();
 
 function createBypassEvent(eventType: string, data: any): void {
     const event = {
@@ -34,19 +40,29 @@ export function install_root_detection_bypass() {
     safePerform("bypass:install_root_detection_bypass", () => {
         // Hook common root detection methods
 
-        // 1. File.exists() - commonly used to check for su binary and root apps
-        const File = safeUse("java.io.File", "bypass:root:file");
+        // 1. File.exists() - common root and Frida artifact checks.
+        // Root and Frida detection share one implementation so neither
+        // category overwrites the other.
+        const File = safeUse("java.io.File", "bypass:file");
         if (File) {
-            const existsRef = File.exists;
+            const existsRef = safeOverload(
+                File.exists,
+                "bypass:File.exists"
+            );
             if (existsRef) {
                 existsRef.implementation = safeImplementation(
-                    "bypass:File.exists[root]",
+                    "bypass:File.exists",
                     existsRef,
                     function (original) {
-                        const path = this.getAbsolutePath();
-                        const result = original.call(this);
+                        const path = this.getAbsolutePath().toString();
+                        const normalizedPath = path.replace(/\/+$/, "");
+                        let result: boolean;
+                        try {
+                            result = original.call(this);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
 
-                        // Common root detection paths
                         const rootPaths = [
                             "/system/bin/su", "/system/xbin/su", "/sbin/su",
                             "/system/app/Superuser.apk", "/system/app/SuperSU.apk",
@@ -55,17 +71,33 @@ export function install_root_detection_bypass() {
                             "/data/data/eu.chainfire.supersu",
                             "/system/xbin/busybox", "/system/bin/busybox",
                             "/system/app/RootCloak.apk",
-                            "/dev/com.koushikdutta.superuser.daemon/"
+                            "/dev/com.koushikdutta.superuser.daemon"
                         ];
 
-                        if (rootPaths.some(rootPath => path.includes(rootPath))) {
+                        const fridaPaths = [
+                            "/data/local/tmp/frida-server",
+                            "/data/local/tmp/re.frida.server",
+                            "/system/lib/libfrida-gadget.so",
+                            "/system/lib64/libfrida-gadget.so"
+                        ];
+
+                        if (rootPaths.includes(normalizedPath)) {
                             createBypassEvent("bypass.root.file_check", {
                                 file_path: path,
                                 original_result: result,
                                 bypassed_result: false,
                                 detection_method: "File.exists()"
                             });
-                            // Bypass by returning false
+                            return false;
+                        }
+
+                        if (fridaPaths.includes(normalizedPath)) {
+                            createBypassEvent("bypass.frida.file_check", {
+                                file_path: path,
+                                original_result: result,
+                                bypassed_result: false,
+                                detection_method: "File.exists()"
+                            });
                             return false;
                         }
 
@@ -92,17 +124,23 @@ export function install_root_detection_bypass() {
                     function (original, command: string) {
                         const rootCommands = ["su", "which su", "busybox", "id"];
 
-                        if (rootCommands.some(cmd => command.includes(cmd))) {
-                            createBypassEvent("bypass.root.command_execution", {
-                                command: command,
-                                detection_method: "Runtime.exec(String)",
-                                action: "blocked"
-                            });
-                            // Return a fake process that indicates command not found
-                            return original.call(this, "echo 'command not found'");
-                        }
+                        try {
+                            if (rootCommands.some(cmd => command.includes(cmd))) {
+                                createBypassEvent("bypass.root.command_execution", {
+                                    command: command,
+                                    detection_method: "Runtime.exec(String)",
+                                    action: "blocked"
+                                });
+                                return original.call(
+                                    this,
+                                    "echo 'command not found'"
+                                );
+                            }
 
-                        return original.call(this, command);
+                            return original.call(this, command);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
                     }
                 );
             }
@@ -121,17 +159,21 @@ export function install_root_detection_bypass() {
                         const commandStr = commands.join(" ");
                         const rootCommands = ["su", "which", "busybox", "id"];
 
-                        if (rootCommands.some(cmd => commandStr.includes(cmd))) {
-                            createBypassEvent("bypass.root.command_execution", {
-                                command: commandStr,
-                                detection_method: "Runtime.exec(String[])",
-                                action: "blocked"
-                            });
-                            const fake = ["echo", "command not found"];
-                            return original.call(this, fake);
-                        }
+                        try {
+                            if (rootCommands.some(cmd => commandStr.includes(cmd))) {
+                                createBypassEvent("bypass.root.command_execution", {
+                                    command: commandStr,
+                                    detection_method: "Runtime.exec(String[])",
+                                    action: "blocked"
+                                });
+                                const fake = ["echo", "command not found"];
+                                return original.call(this, fake);
+                            }
 
-                        return original.call(this, commands);
+                            return original.call(this, commands);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
                     }
                 );
             }
@@ -153,108 +195,121 @@ export function install_root_detection_bypass() {
             }
         }
 
-        // 4. PackageManager.getInstalledPackages(int)
-        // 4. PackageManager - check for root apps
-        const PackageManager = safeUse(
-            "android.content.pm.PackageManager",
-            "bypass:root:pm"
+        // 4. ApplicationPackageManager.getInstalledPackages(...)
+        const ApplicationPackageManager = safeUse(
+            "android.app.ApplicationPackageManager",
+            "bypass:root:ApplicationPackageManager"
         );
-        const ApplicationInfo = safeUse(
-            "android.content.pm.ApplicationInfo",
-            "bypass:root:appinfo"
+        const PackageInfo = safeUse(
+            "android.content.pm.PackageInfo",
+            "bypass:root:PackageInfo"
         );
-        if (PackageManager && ApplicationInfo) {
-            const getInstalledPackagesRef = safeOverload(
-                PackageManager.getInstalledPackages,
-                "bypass:PackageManager.getInstalledPackages",
-                "int"
-            );
-            if (getInstalledPackagesRef) {
-                getInstalledPackagesRef.implementation = safeImplementation(
-                    "bypass:PackageManager.getInstalledPackages",
-                    getInstalledPackagesRef,
-                    function (original, flags: number) {
-                        const packages = original.call(this, flags);
-                        const rootApps = [
-                            "com.noshufou.android.su", "com.koushikdutta.superuser",
-                            "eu.chainfire.supersu", "com.saurik.substrate",
-                            "com.zachspong.temprootremovejb", "com.ramdroid.appquarantine",
-                            "com.topjohnwu.magisk", "com.kingroot.kinguser"
-                        ];
 
-                        const list = Java.cast(packages, Java.use("java.util.List"));
-                        for (let i = list.size() - 1; i >= 0; i--) {
-                            const packageInfo = list.get(i);
-                            const packageName = packageInfo.packageName.value;
+        if (ApplicationPackageManager && PackageInfo) {
+            ApplicationPackageManager.getInstalledPackages.overloads.forEach(
+                (overload: any, index: number) => {
+                    overload.implementation = safeImplementation(
+                        `bypass:ApplicationPackageManager.getInstalledPackages[${index}]`,
+                        overload,
+                        function (original, ...args: any[]) {
+                            const threadId = Process.getCurrentThreadId();
+                            const depth =
+                                activeInstalledPackagesDepth.get(threadId) || 0;
+                            const isOutermost = depth === 0;
 
-                            if (rootApps.includes(packageName)) {
-                                createBypassEvent("bypass.root.package_check", {
-                                    package_name: packageName,
-                                    detection_method: "PackageManager.getInstalledPackages()",
-                                    action: "removed_from_list"
-                                });
-                                list.remove(i);
+                            activeInstalledPackagesDepth.set(
+                                threadId,
+                                depth + 1
+                            );
+
+                            try {
+                                const packages = original.apply(this, args);
+
+                                if (isOutermost && packages !== null) {
+                                    const rootApps = [
+                                        "com.noshufou.android.su",
+                                        "com.koushikdutta.superuser",
+                                        "eu.chainfire.supersu",
+                                        "com.saurik.substrate",
+                                        "com.zachspong.temprootremovejb",
+                                        "com.ramdroid.appquarantine",
+                                        "com.topjohnwu.magisk",
+                                        "com.kingroot.kinguser"
+                                    ];
+
+                                    for (
+                                        let listIndex = packages.size() - 1;
+                                        listIndex >= 0;
+                                        listIndex--
+                                    ) {
+                                        const rawPackageInfo =
+                                            packages.get(listIndex);
+                                        const packageInfo = Java.cast(
+                                            rawPackageInfo,
+                                            PackageInfo
+                                        );
+                                        const packageName =
+                                            packageInfo.packageName.value.toString();
+
+                                        if (rootApps.includes(packageName)) {
+                                            createBypassEvent(
+                                                "bypass.root.package_check",
+                                                {
+                                                    package_name: packageName,
+                                                    detection_method:
+                                                        "ApplicationPackageManager.getInstalledPackages()",
+                                                    action: "removed_from_list"
+                                                }
+                                            );
+                                            packages.remove(listIndex);
+                                        }
+                                    }
+                                }
+
+                                return packages;
+                            } catch (error) {
+                                throw new PropagateException(error);
+                            } finally {
+                                const remaining =
+                                    activeInstalledPackagesDepth.get(threadId)! - 1;
+
+                                if (remaining <= 0) {
+                                    activeInstalledPackagesDepth.delete(threadId);
+                                } else {
+                                    activeInstalledPackagesDepth.set(
+                                        threadId,
+                                        remaining
+                                    );
+                                }
                             }
                         }
-
-                        return list;
-                    }
-                );
-            }
+                    );
+                }
+            );
         }
     });
 }
+
 
 export function install_frida_detection_bypass() {
     devlog("Installing Frida detection bypass hooks");
 
     safePerform("bypass:install_frida_detection_bypass", () => {
-        // 1. File.exists() for frida server / gadget paths
-        // 1. File existence checks for frida-server and related files
-        const File = safeUse("java.io.File", "bypass:frida:file");
-        if (File) {
-            const existsRef = File.exists;
-            if (existsRef) {
-                existsRef.implementation = safeImplementation(
-                    "bypass:File.exists[frida]",
-                    existsRef,
-                    function (original) {
-                        const path = this.getAbsolutePath();
-                        const result = original.call(this);
-
-                        const fridaPaths = [
-                            "/data/local/tmp/frida-server",
-                            "/data/local/tmp/re.frida.server",
-                            "/system/lib/libfrida-gadget.so",
-                            "/system/lib64/libfrida-gadget.so"
-                        ];
-
-                        if (fridaPaths.some(fridaPath => path.includes(fridaPath))) {
-                            createBypassEvent("bypass.frida.file_check", {
-                                file_path: path,
-                                original_result: result,
-                                bypassed_result: false,
-                                detection_method: "File.exists()"
-                            });
-                            return false;
-                        }
-
-                        return result;
-                    }
-                );
-            }
-        }
-
         // 2. Socket(String,int) for port 27042
-        // 2. Port scanning for default Frida port (27042)
         const Socket = safeUse("java.net.Socket", "bypass:frida:socket");
-        if (Socket) {
+        const ConnectException = safeUse(
+            "java.net.ConnectException",
+            "bypass:frida:ConnectException"
+        );
+
+        if (Socket && ConnectException) {
             const socketInitRef = safeOverload(
                 Socket.$init,
                 "bypass:Socket.$init[String,int]",
                 "java.lang.String",
                 "int"
             );
+
             if (socketInitRef) {
                 socketInitRef.implementation = safeImplementation(
                     "bypass:Socket.$init[String,int]",
@@ -267,55 +322,76 @@ export function install_frida_detection_bypass() {
                                 detection_method: "Socket connection",
                                 action: "connection_refused"
                             });
-                            const ConnectException = safeUse(
-                                "java.net.ConnectException",
-                                "bypass:frida:ConnectException"
+
+                            throw new PropagateException(
+                                ConnectException.$new("Connection refused")
                             );
-                            if (ConnectException) {
-                                throw ConnectException.$new("Connection refused");
-                            }
                         }
-                        return original.call(this, host, port);
+
+                        try {
+                            return original.call(this, host, port);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
                     }
                 );
             }
         }
 
         // 3. ActivityManager.getRunningAppProcesses()
-        // 3. Process name checks
         const ActivityManager = safeUse(
             "android.app.ActivityManager",
             "bypass:frida:activitymanager"
         );
-        if (ActivityManager) {
-            const getRunningRef = ActivityManager.getRunningAppProcesses;
+        const RunningAppProcessInfo = safeUse(
+            "android.app.ActivityManager$RunningAppProcessInfo",
+            "bypass:frida:RunningAppProcessInfo"
+        );
+
+        if (ActivityManager && RunningAppProcessInfo) {
+            const getRunningRef = safeOverload(
+                ActivityManager.getRunningAppProcesses,
+                "bypass:ActivityManager.getRunningAppProcesses"
+            );
+
             if (getRunningRef) {
                 getRunningRef.implementation = safeImplementation(
                     "bypass:ActivityManager.getRunningAppProcesses",
                     getRunningRef,
                     function (original) {
-                        const processes = original.call(this);
+                        let processes;
+                        try {
+                            processes = original.call(this);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
 
-                        if (processes) {
-                            const ArrayList = Java.use("java.util.ArrayList");
-                            const processArray = Java.cast(processes, ArrayList);
-                            for (let i = processArray.size() - 1; i >= 0; i--) {
-                                const process = processArray.get(i);
-                                const processName = process.processName.value;
+                        if (processes === null) {
+                            return processes;
+                        }
 
-                                if (
-                                    processName.includes("frida") ||
-                                    processName.includes("gum") ||
-                                    processName.includes("gmain") ||
-                                    processName.includes("pool-frida")
-                                ) {
-                                    createBypassEvent("bypass.frida.process_check", {
-                                        process_name: processName,
-                                        detection_method: "ActivityManager.getRunningAppProcesses()",
-                                        action: "removed_from_list"
-                                    });
-                                    processArray.remove(i);
-                                }
+                        for (let index = processes.size() - 1; index >= 0; index--) {
+                            const rawProcessInfo = processes.get(index);
+                            const processInfo = Java.cast(
+                                rawProcessInfo,
+                                RunningAppProcessInfo
+                            );
+                            const processName =
+                                processInfo.processName.value.toString();
+
+                            if (
+                                processName.includes("frida") ||
+                                processName.includes("gum") ||
+                                processName.includes("gmain") ||
+                                processName.includes("pool-frida")
+                            ) {
+                                createBypassEvent("bypass.frida.process_check", {
+                                    process_name: processName,
+                                    detection_method:
+                                        "ActivityManager.getRunningAppProcesses()",
+                                    action: "removed_from_list"
+                                });
+                                processes.remove(index);
                             }
                         }
 
@@ -335,7 +411,12 @@ export function install_frida_detection_bypass() {
                     "bypass:Thread.getName",
                     getNameRef,
                     function (original) {
-                        const name = original.call(this);
+                        let name;
+                        try {
+                            name = original.call(this);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
 
                         if (
                             name &&
@@ -372,7 +453,13 @@ export function install_debugger_detection_bypass() {
                     "bypass:Debug.isDebuggerConnected",
                     isDebuggerConnectedRef,
                     function (original) {
-                        const originalResult = original.call(this);
+                        let originalResult;
+                        try {
+                            originalResult = original.call(this);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
+
                         createBypassEvent("bypass.debugger.connection_check", {
                             original_result: originalResult,
                             bypassed_result: false,
@@ -389,60 +476,105 @@ export function install_debugger_detection_bypass() {
             "android.content.pm.ApplicationInfo",
             "bypass:debug:ApplicationInfo"
         );
-        const PackageManager = safeUse(
-            "android.content.pm.PackageManager",
-            "bypass:debug:PackageManager"
+        const ApplicationPackageManager = safeUse(
+            "android.app.ApplicationPackageManager",
+            "bypass:debug:ApplicationPackageManager"
         );
-        if (ApplicationInfo && PackageManager) {
-            const getApplicationInfoRef = safeOverload(
-                PackageManager.getApplicationInfo,
-                "bypass:PackageManager.getApplicationInfo",
-                "java.lang.String",
-                "int"
-            );
-            if (getApplicationInfoRef) {
-                getApplicationInfoRef.implementation = safeImplementation(
-                    "bypass:PackageManager.getApplicationInfo",
-                    getApplicationInfoRef,
-                    function (original, packageName: string, flags: number) {
-                        const appInfo = original.call(this, packageName, flags);
 
-                        if (
-                            appInfo &&
-                            (appInfo.flags.value &
-                                ApplicationInfo.FLAG_DEBUGGABLE.value) !== 0
-                        ) {
-                            createBypassEvent("bypass.debugger.flag_check", {
-                                package_name: packageName,
-                                original_flags: appInfo.flags.value,
-                                detection_method: "ApplicationInfo.FLAG_DEBUGGABLE",
-                                action: "flag_removed"
-                            });
-                            appInfo.flags.value =
-                                appInfo.flags.value &
-                                ~ApplicationInfo.FLAG_DEBUGGABLE.value;
+        if (ApplicationInfo && ApplicationPackageManager) {
+            ApplicationPackageManager.getApplicationInfo.overloads.forEach(
+                (overload: any, index: number) => {
+                    overload.implementation = safeImplementation(
+                        `bypass:ApplicationPackageManager.getApplicationInfo[${index}]`,
+                        overload,
+                        function (original, ...args: any[]) {
+                            const threadId = Process.getCurrentThreadId();
+                            const depth =
+                                activeApplicationInfoDepth.get(threadId) || 0;
+                            const isOutermost = depth === 0;
+
+                            activeApplicationInfoDepth.set(threadId, depth + 1);
+
+                            try {
+                                const rawAppInfo = original.apply(this, args);
+
+                                if (isOutermost && rawAppInfo !== null) {
+                                    const appInfo = Java.cast(
+                                        rawAppInfo,
+                                        ApplicationInfo
+                                    );
+                                    const originalFlags = appInfo.flags.value;
+
+                                    if (
+                                        (originalFlags &
+                                            ApplicationInfo.FLAG_DEBUGGABLE.value) !==
+                                        0
+                                    ) {
+                                        createBypassEvent(
+                                            "bypass.debugger.flag_check",
+                                            {
+                                                package_name:
+                                                    args[0] !== null
+                                                        ? args[0].toString()
+                                                        : null,
+                                                original_flags: originalFlags,
+                                                detection_method:
+                                                    "ApplicationInfo.FLAG_DEBUGGABLE",
+                                                action: "flag_removed"
+                                            }
+                                        );
+
+                                        appInfo.flags.value =
+                                            originalFlags &
+                                            ~ApplicationInfo.FLAG_DEBUGGABLE.value;
+                                    }
+                                }
+
+                                return rawAppInfo;
+                            } catch (error) {
+                                throw new PropagateException(error);
+                            } finally {
+                                const remaining =
+                                    activeApplicationInfoDepth.get(threadId)! - 1;
+
+                                if (remaining <= 0) {
+                                    activeApplicationInfoDepth.delete(threadId);
+                                } else {
+                                    activeApplicationInfoDepth.set(
+                                        threadId,
+                                        remaining
+                                    );
+                                }
+                            }
                         }
-
-                        return appInfo;
-                    }
-                );
-            }
+                    );
+                }
+            );
         }
 
         // 3. /proc/self/status TracerPid via BufferedReader.readLine()
-        // 3. Process status checks
         const BufferedReader = safeUse(
             "java.io.BufferedReader",
             "bypass:debug:BufferedReader"
         );
+
         if (BufferedReader) {
-            const readLineRef = BufferedReader.readLine;
+            const readLineRef = safeOverload(
+                BufferedReader.readLine,
+                "bypass:BufferedReader.readLine",
+            );
+
             if (readLineRef) {
                 readLineRef.implementation = safeImplementation(
                     "bypass:BufferedReader.readLine",
                     readLineRef,
                     function (original) {
-                        const line = original.call(this);
+                        let line;
+                        try {
+                            line = original.call(this);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
 
                         if (
                             line &&
@@ -516,7 +648,12 @@ export function install_emulator_detection_bypass() {
                     "bypass:SystemProperties.get[String]",
                     getRef,
                     function (original, key: string) {
-                        const value = original.call(this, key);
+                        let value;
+                        try {
+                            value = original.call(this, key);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
 
                         // Common emulator system properties
                         if (key === "ro.kernel.qemu" && value === "1") {
@@ -529,7 +666,10 @@ export function install_emulator_detection_bypass() {
                             return "0";
                         }
 
-                        if (key === "ro.product.model" && value.includes("google_sdk")) {
+                        if (
+                            key === "ro.product.model" &&
+                            value.includes("google_sdk")
+                        ) {
                             createBypassEvent("bypass.emulator.system_property", {
                                 property: key,
                                 original_value: value,
@@ -561,7 +701,13 @@ export function install_hook_detection_bypass() {
                     "bypass:Throwable.getStackTrace",
                     getStackTraceRef,
                     function (original) {
-                        const stack = original.call(this);
+                        let stack;
+                        try {
+                            stack = original.call(this);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
+
                         const filtered: any[] = [];
 
                         for (let i = 0; i < stack.length; i++) {
@@ -601,10 +747,18 @@ export function install_hook_detection_bypass() {
                     "bypass:System.mapLibraryName",
                     mapLibraryNameRef,
                     function (original, libname: string) {
-                        const result = original.call(this, libname);
+                        let result;
+                        try {
+                            result = original.call(this, libname);
+                        } catch (error) {
+                            throw new PropagateException(error);
+                        }
 
                         // Check if it's trying to verify native methods
-                        if (libname.includes("frida") || libname.includes("substrate")) {
+                        if (
+                            libname.includes("frida") ||
+                            libname.includes("substrate")
+                        ) {
                             createBypassEvent("bypass.hook.library_check", {
                                 library_name: libname,
                                 detection_method: "System.mapLibraryName()",
