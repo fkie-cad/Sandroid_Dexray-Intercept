@@ -225,6 +225,17 @@ class ProcessEvent(Event):
         self.error = None
         self.library_path = None
         self.loader_type = None
+        self.class_name = None
+        self.method_name = None
+        self.method_signature = None
+        self.overload_signature = None
+        self.overload_index = None
+        self.is_internal = None
+        self.initialize = None
+        self.resolve = None
+        self.target_instance = None
+        self.arguments = None
+        self.result = None
 
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
@@ -235,7 +246,10 @@ class ProcessEvent(Event):
             'signal', 'caller_pid', 'child_pid', 'success',
             'command', 'return_value', 'library_name', 'filename',
             'working_directory', 'environment', 'event_description',
-            'load_method', 'handle', 'error', 'library_path', 'loader_type'
+            'load_method', 'handle', 'error', 'library_path', 'loader_type',
+            'class_name', 'method_name', 'method_signature',
+            'overload_signature', 'overload_index', 'is_internal',
+            'initialize', 'resolve', 'target_instance', 'arguments', 'result'
         ]
 
         for field in fields:

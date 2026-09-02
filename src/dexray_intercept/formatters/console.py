@@ -611,33 +611,35 @@ class ConsoleFormatter(BaseFormatter):
         if event.event_type in ['reflection.class_for_name', 'reflection.load_class']:
             action = 'Class.forName' if event.event_type == 'reflection.class_for_name' else 'ClassLoader.loadClass'
             lines.append(f"\n[*] [Reflection] {action}:")
-            if 'class_name' in event.metadata:
-                lines.append(f"[*] Class: {event.metadata['class_name']}")
-            if 'initialize' in event.metadata:
-                lines.append(f"[*] Initialize: {event.metadata['initialize']}")
-            if 'resolve' in event.metadata:
-                lines.append(f"[*] Resolve: {event.metadata['resolve']}")
+            if event.class_name:
+                lines.append(f"[*] Class: {event.class_name}")
+            if event.overload_signature:
+                lines.append(f"[*] Overload: {event.overload_signature}")
+            if event.initialize is not None:
+                lines.append(f"[*] Initialize: {event.initialize}")
+            if event.resolve is not None:
+                lines.append(f"[*] Resolve: {event.resolve}")
 
         elif event.event_type in ['reflection.get_method', 'reflection.get_declared_method']:
             access = 'Public' if event.event_type == 'reflection.get_method' else 'Declared'
             lines.append(f"\n[*] [Reflection] Get {access} Method:")
-            if 'class_name' in event.metadata:
-                lines.append(f"[*] Class: {event.metadata['class_name']}")
-            if 'method_name' in event.metadata:
-                lines.append(f"[*] Method: {event.metadata['method_name']}")
-            if 'method_signature' in event.metadata:
-                lines.append(f"[*] Signature: {event.metadata['method_signature']}")
+            if event.class_name:
+                lines.append(f"[*] Class: {event.class_name}")
+            if event.method_name:
+                lines.append(f"[*] Method: {event.method_name}")
+            if event.method_signature:
+                lines.append(f"[*] Signature: {event.method_signature}")
 
         elif event.event_type == 'reflection.method_invoke':
             lines.append("\n[*] [Reflection] Method Invoke:")
-            if 'method_name' in event.metadata:
-                lines.append(f"[*] Method: {event.metadata['method_name']}")
-            if 'target_instance' in event.metadata:
-                lines.append(f"[*] Target: {event.metadata['target_instance']}")
-            if 'arguments' in event.metadata and event.metadata['arguments']:
-                lines.append(f"[*] Arguments: {event.metadata['arguments']}")
-            if 'result' in event.metadata and event.metadata['result']:
-                result = truncate_string(str(event.metadata['result']), 100)
+            if event.method_name:
+                lines.append(f"[*] Method: {event.method_name}")
+            if event.target_instance:
+                lines.append(f"[*] Target: {event.target_instance}")
+            if event.arguments:
+                lines.append(f"[*] Arguments: {event.arguments}")
+            if event.result:
+                result = truncate_string(str(event.result), 100)
                 lines.append(f"[*] Result: {result}")
 
         else:

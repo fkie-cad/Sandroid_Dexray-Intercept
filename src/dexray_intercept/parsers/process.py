@@ -100,22 +100,22 @@ class RuntimeParser(BaseParser):
             'environment': 'environment',
             'library_name': 'library_name',
             'filename': 'filename',
-            'class_name': None,      # Add to metadata
-            'method_name': None,     # Add to metadata
-            'method_signature': None, # Add to metadata
-            'initialize': None,      # Add to metadata
-            'resolve': None,         # Add to metadata
-            'target_instance': None, # Add to metadata
-            'arguments': None,       # Add to metadata
-            'result': None           # Add to metadata
+            'class_name': 'class_name',
+            'method_name': 'method_name',
+            'method_signature': 'method_signature',
+            'overload_signature': 'overload_signature',
+            'overload_index': 'overload_index',
+            'is_internal': 'is_internal',
+            'initialize': 'initialize',
+            'resolve': 'resolve',
+            'target_instance': 'target_instance',
+            'arguments': 'arguments',
+            'result': 'result',
         }
-        
+
         for json_field, event_field in field_mapping.items():
             if json_field in data:
-                if event_field:
-                    setattr(event, event_field, data[json_field])
-                else:
-                    event.add_metadata(json_field, data[json_field])
+                setattr(event, event_field, data[json_field])
         
         # Add runtime operation description
         if event_type == 'runtime.exec':
@@ -144,9 +144,8 @@ class RuntimeParser(BaseParser):
         elif event_type == 'runtime.halt':
             event.event_description = 'Runtime process halt'
 
-        # Preserve fields not explicitly mapped above (e.g. method name,
-        # overload index, and reflection-specific detail fields) as
-        # metadata rather than dropping them.
+        # Preserve fields not explicitly mapped above (e.g. shutdown hook
+        # thread name and exit code) as metadata rather than dropping them.
         for key, value in data.items():
             if key not in ['event_type', 'timestamp'] and not hasattr(event, key):
                 event.add_metadata(key, value)
@@ -190,7 +189,6 @@ class NativeLibParser(BaseParser):
             'library_path': 'library_path',
             'filename': 'filename',
             'loaded_library': 'library_name',  # Legacy field
-            'method': 'method',
             'loader_type': 'loader_type',
             'success': 'success',
             'handle': 'handle',
