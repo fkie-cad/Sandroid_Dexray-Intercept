@@ -10,6 +10,8 @@ const PROFILE_HOOKING_TYPE: string = "BYPASS_DETECTION"
 // outer public call.
 const activeInstalledPackagesDepth = new Map<number, number>();
 const activeApplicationInfoDepth = new Map<number, number>();
+const activeRuntimeExecDepth = new Map<number, number>();
+const activeSocketConnectDepth = new Map<number, number>();
 
 function createBypassEvent(eventType: string, data: any): void {
     const event = {
@@ -107,76 +109,123 @@ export function install_root_detection_bypass() {
             }
         }
 
-        // 2. Runtime.exec(String) / exec(String[])
-        // 2. Runtime.exec() - used to execute shell commands for root detection
+        // 2. Runtime.exec() - used to execute shell commands for root detection.
+        // Public overloads delegate internally to Runtime.exec(String[], String[], File).
+        // Emit and substitute only for the outer public call.
         const Runtime = safeUse("java.lang.Runtime", "bypass:root:runtime");
         if (Runtime) {
-            // exec(String)
-            const execStringRef = safeOverload(
-                Runtime.exec,
-                "bypass:Runtime.exec[String]",
-                "java.lang.String"
-            );
-            if (execStringRef) {
-                execStringRef.implementation = safeImplementation(
-                    "bypass:Runtime.exec[String]",
-                    execStringRef,
-                    function (original, command: string) {
-                        const rootCommands = ["su", "which su", "busybox", "id"];
+            Runtime.exec.overloads.forEach(
+                (overload: any, index: number) => {
+                    const argumentTypes = overload.argumentTypes.map(
+                        (type: any) => type.className
+                    );
+                    const commandType = argumentTypes[0];
+                    const overloadSignature =
+                        `exec(${argumentTypes.join(",")})`;
 
-                        try {
-                            if (rootCommands.some(cmd => command.includes(cmd))) {
-                                createBypassEvent("bypass.root.command_execution", {
-                                    command: command,
-                                    detection_method: "Runtime.exec(String)",
-                                    action: "blocked"
-                                });
-                                return original.call(
-                                    this,
-                                    "echo 'command not found'"
+                    overload.implementation = safeImplementation(
+                        `bypass:Runtime.${overloadSignature}`,
+                        overload,
+                        function (original, ...args: any[]) {
+                            const threadId = Process.getCurrentThreadId();
+                            const depth =
+                                activeRuntimeExecDepth.get(threadId) || 0;
+                            const isOutermost = depth === 0;
+
+                            activeRuntimeExecDepth.set(
+                                threadId,
+                                depth + 1
+                            );
+
+                            try {
+                                const commandValue = args[0];
+                                let command = "";
+
+                                if (commandType === "java.lang.String") {
+                                    command = commandValue
+                                        ? commandValue.toString()
+                                        : "";
+                                } else if (commandValue) {
+                                    const values: string[] = [];
+
+                                    for (
+                                        let valueIndex = 0;
+                                        valueIndex < commandValue.length;
+                                        valueIndex++
+                                    ) {
+                                        const value = commandValue[valueIndex];
+                                        values.push(
+                                            value === null
+                                                ? "null"
+                                                : value.toString()
+                                        );
+                                    }
+
+                                    command = values.join(" ");
+                                }
+
+                                const rootCommands = [
+                                    "su",
+                                    "which su",
+                                    "busybox",
+                                    "id"
+                                ];
+                                const isRootCommand = rootCommands.some(
+                                    rootCommand =>
+                                        command.includes(rootCommand)
                                 );
+
+                                if (isOutermost && isRootCommand) {
+                                    createBypassEvent(
+                                        "bypass.root.command_execution",
+                                        {
+                                            command: command,
+                                            detection_method:
+                                                `Runtime.${overloadSignature}`,
+                                            action: "blocked",
+                                            overload_index: index,
+                                            overload_signature:
+                                                overloadSignature
+                                        }
+                                    );
+
+                                    const safeArgs = args.slice();
+
+                                    if (
+                                        commandType === "java.lang.String"
+                                    ) {
+                                        safeArgs[0] =
+                                            "echo 'command not found'";
+                                    } else {
+                                        safeArgs[0] = Java.array(
+                                            "java.lang.String",
+                                            ["echo", "command not found"]
+                                        );
+                                    }
+
+                                    return original.apply(this, safeArgs);
+                                }
+
+                                return original.apply(this, args);
+                            } catch (error) {
+                                throw new PropagateException(error);
+                            } finally {
+                                const remaining =
+                                    activeRuntimeExecDepth.get(threadId)! - 1;
+
+                                if (remaining <= 0) {
+                                    activeRuntimeExecDepth.delete(threadId);
+                                } else {
+                                    activeRuntimeExecDepth.set(
+                                        threadId,
+                                        remaining
+                                    );
+                                }
                             }
-
-                            return original.call(this, command);
-                        } catch (error) {
-                            throw new PropagateException(error);
                         }
-                    }
-                );
-            }
-
-            // exec(String[])
-            const execArrayRef = safeOverload(
-                Runtime.exec,
-                "bypass:Runtime.exec[String[]]",
-                "[Ljava.lang.String;"
+                    );
+                }
             );
-            if (execArrayRef) {
-                execArrayRef.implementation = safeImplementation(
-                    "bypass:Runtime.exec[String[]]",
-                    execArrayRef,
-                    function (original, commands: string[]) {
-                        const commandStr = commands.join(" ");
-                        const rootCommands = ["su", "which", "busybox", "id"];
-
-                        try {
-                            if (rootCommands.some(cmd => commandStr.includes(cmd))) {
-                                createBypassEvent("bypass.root.command_execution", {
-                                    command: commandStr,
-                                    detection_method: "Runtime.exec(String[])",
-                                    action: "blocked"
-                                });
-                                const fake = ["echo", "command not found"];
-                                return original.call(this, fake);
-                            }
-
-                            return original.call(this, commands);
-                        } catch (error) {
-                            throw new PropagateException(error);
-                        }
-                    }
-                );
-            }
         }
 
         // 3. Build.TAGS
@@ -295,47 +344,193 @@ export function install_frida_detection_bypass() {
     devlog("Installing Frida detection bypass hooks");
 
     safePerform("bypass:install_frida_detection_bypass", () => {
-        // 2. Socket(String,int) for port 27042
+        // 2. Socket constructors and connect() calls for port 27042.
         const Socket = safeUse("java.net.Socket", "bypass:frida:socket");
+        const InetAddress = safeUse(
+            "java.net.InetAddress",
+            "bypass:frida:InetAddress"
+        );
+        const InetSocketAddress = safeUse(
+            "java.net.InetSocketAddress",
+            "bypass:frida:InetSocketAddress"
+        );
         const ConnectException = safeUse(
             "java.net.ConnectException",
             "bypass:frida:ConnectException"
         );
 
-        if (Socket && ConnectException) {
-            const socketInitRef = safeOverload(
-                Socket.$init,
-                "bypass:Socket.$init[String,int]",
-                "java.lang.String",
-                "int"
-            );
+        if (Socket && InetAddress && InetSocketAddress && ConnectException) {
+            const constructorSignatures = [
+                ["java.lang.String", "int"],
+                [
+                    "java.lang.String",
+                    "int",
+                    "java.net.InetAddress",
+                    "int"
+                ],
+                ["java.lang.String", "int", "boolean"],
+                ["java.net.InetAddress", "int"],
+                [
+                    "java.net.InetAddress",
+                    "int",
+                    "java.net.InetAddress",
+                    "int"
+                ],
+                ["java.net.InetAddress", "int", "boolean"]
+            ];
 
-            if (socketInitRef) {
-                socketInitRef.implementation = safeImplementation(
-                    "bypass:Socket.$init[String,int]",
-                    socketInitRef,
-                    function (original, host: string, port: number) {
+            constructorSignatures.forEach(signatures => {
+                const constructorRef = safeOverload(
+                    Socket.$init,
+                    `bypass:Socket.$init[${signatures.join(",")}]`,
+                    ...signatures
+                );
+
+                if (!constructorRef) {
+                    return;
+                }
+
+                const connectionApi =
+                    `Socket(${signatures.join(",")})`;
+
+                constructorRef.implementation = safeImplementation(
+                    `bypass:${connectionApi}`,
+                    constructorRef,
+                    function (original, ...args: any[]) {
+                        let host: string | null = null;
+                        const port = args[1];
+
+                        try {
+                            if (
+                                signatures[0] === "java.lang.String"
+                            ) {
+                                host = args[0]
+                                    ? args[0].toString()
+                                    : null;
+                            } else if (args[0]) {
+                                const address = Java.cast(
+                                    args[0],
+                                    InetAddress
+                                );
+                                host = address.getHostAddress().toString();
+                            }
+                        } catch {
+                            host = null;
+                        }
+
                         if (port === 27042) {
-                            createBypassEvent("bypass.frida.port_check", {
-                                host: host,
-                                port: port,
-                                detection_method: "Socket connection",
-                                action: "connection_refused"
-                            });
+                            createBypassEvent(
+                                "bypass.frida.port_check",
+                                {
+                                    host: host,
+                                    port: port,
+                                    detection_method: "Socket connection",
+                                    connection_api: connectionApi,
+                                    action: "connection_refused"
+                                }
+                            );
 
                             throw new PropagateException(
-                                ConnectException.$new("Connection refused")
+                                ConnectException.$new(
+                                    "Connection refused"
+                                )
                             );
                         }
 
                         try {
-                            return original.call(this, host, port);
+                            return original.apply(this, args);
                         } catch (error) {
                             throw new PropagateException(error);
                         }
                     }
                 );
-            }
+            });
+
+            Socket.connect.overloads.forEach(
+                (overload: any, index: number) => {
+                    const argumentTypes = overload.argumentTypes.map(
+                        (type: any) => type.className
+                    );
+                    const connectionApi =
+                        `Socket.connect(${argumentTypes.join(",")})`;
+
+                    overload.implementation = safeImplementation(
+                        `bypass:${connectionApi}`,
+                        overload,
+                        function (original, ...args: any[]) {
+                            const threadId = Process.getCurrentThreadId();
+                            const depth =
+                                activeSocketConnectDepth.get(threadId) || 0;
+                            const isOutermost = depth === 0;
+
+                            activeSocketConnectDepth.set(
+                                threadId,
+                                depth + 1
+                            );
+
+                            try {
+                                let host: string | null = null;
+                                let port: number | null = null;
+
+                                try {
+                                    const endpoint = Java.cast(
+                                        args[0],
+                                        InetSocketAddress
+                                    );
+                                    host = endpoint
+                                        .getHostString()
+                                        .toString();
+                                    port = endpoint.getPort();
+                                } catch {
+                                    // Non-InetSocketAddress endpoints are
+                                    // not part of the port-27042 bypass.
+                                }
+
+                                if (
+                                    isOutermost &&
+                                    port === 27042
+                                ) {
+                                    createBypassEvent(
+                                        "bypass.frida.port_check",
+                                        {
+                                            host: host,
+                                            port: port,
+                                            detection_method:
+                                                "Socket connection",
+                                            connection_api: connectionApi,
+                                            action: "connection_refused"
+                                        }
+                                    );
+
+                                    throw new PropagateException(
+                                        ConnectException.$new(
+                                            "Connection refused"
+                                        )
+                                    );
+                                }
+
+                                return original.apply(this, args);
+                            } catch (error) {
+                                throw error instanceof PropagateException
+                                    ? error
+                                    : new PropagateException(error);
+                            } finally {
+                                const remaining =
+                                    activeSocketConnectDepth.get(threadId)! - 1;
+
+                                if (remaining <= 0) {
+                                    activeSocketConnectDepth.delete(threadId);
+                                } else {
+                                    activeSocketConnectDepth.set(
+                                        threadId,
+                                        remaining
+                                    );
+                                }
+                            }
+                        }
+                    );
+                }
+            );
         }
 
         // 3. ActivityManager.getRunningAppProcesses()
@@ -632,57 +827,79 @@ export function install_emulator_detection_bypass() {
             });
         }
 
-        // 2. SystemProperties.get(String)
+        // 2. SystemProperties.get(String) and get(String, String)
         const SystemProperties = safeUse(
             "android.os.SystemProperties",
             "bypass:emu:SystemProperties"
         );
+
         if (SystemProperties) {
-            const getRef = safeOverload(
-                SystemProperties.get,
-                "bypass:SystemProperties.get[String]",
-                "java.lang.String"
+            SystemProperties.get.overloads.forEach(
+                (overload: any, index: number) => {
+                    const argumentTypes = overload.argumentTypes.map(
+                        (type: any) => type.className
+                    );
+                    const overloadSignature =
+                        `get(${argumentTypes.join(",")})`;
+
+                    overload.implementation = safeImplementation(
+                        `bypass:SystemProperties.${overloadSignature}`,
+                        overload,
+                        function (original, ...args: any[]) {
+                            const key = args[0] ? args[0].toString() : "";
+                            let value;
+
+                            try {
+                                value = original.apply(this, args);
+                            } catch (error) {
+                                throw new PropagateException(error);
+                            }
+
+                            if (
+                                key === "ro.kernel.qemu" &&
+                                value === "1"
+                            ) {
+                                createBypassEvent(
+                                    "bypass.emulator.system_property",
+                                    {
+                                        property: key,
+                                        original_value: value,
+                                        bypassed_value: "0",
+                                        detection_method:
+                                            "SystemProperties.get()",
+                                        overload_index: index,
+                                        overload_signature:
+                                            overloadSignature
+                                    }
+                                );
+                                return "0";
+                            }
+
+                            if (
+                                key === "ro.product.model" &&
+                                value.includes("google_sdk")
+                            ) {
+                                createBypassEvent(
+                                    "bypass.emulator.system_property",
+                                    {
+                                        property: key,
+                                        original_value: value,
+                                        bypassed_value: "SM-G973F",
+                                        detection_method:
+                                            "SystemProperties.get()",
+                                        overload_index: index,
+                                        overload_signature:
+                                            overloadSignature
+                                    }
+                                );
+                                return "SM-G973F";
+                            }
+
+                            return value;
+                        }
+                    );
+                }
             );
-            if (getRef) {
-                getRef.implementation = safeImplementation(
-                    "bypass:SystemProperties.get[String]",
-                    getRef,
-                    function (original, key: string) {
-                        let value;
-                        try {
-                            value = original.call(this, key);
-                        } catch (error) {
-                            throw new PropagateException(error);
-                        }
-
-                        // Common emulator system properties
-                        if (key === "ro.kernel.qemu" && value === "1") {
-                            createBypassEvent("bypass.emulator.system_property", {
-                                property: key,
-                                original_value: value,
-                                bypassed_value: "0",
-                                detection_method: "SystemProperties.get()"
-                            });
-                            return "0";
-                        }
-
-                        if (
-                            key === "ro.product.model" &&
-                            value.includes("google_sdk")
-                        ) {
-                            createBypassEvent("bypass.emulator.system_property", {
-                                property: key,
-                                original_value: value,
-                                bypassed_value: "SM-G973F",
-                                detection_method: "SystemProperties.get()"
-                            });
-                            return "SM-G973F";
-                        }
-
-                        return value;
-                    }
-                );
-            }
         }
     });
 }
