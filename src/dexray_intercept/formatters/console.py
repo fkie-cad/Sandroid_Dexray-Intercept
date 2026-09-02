@@ -1357,4 +1357,12 @@ class ConsoleFormatter(BaseFormatter):
             if "stat" in getattr(event, 'operation', ''):
                 return True
 
+        # Skip internal (framework-originated) reflection lookups unless
+        # verbose. is_internal is a first-class ProcessEvent field set by
+        # the agent; the JSON profile always contains these events with
+        # full fidelity regardless of console verbosity.
+        if not self.verbose_mode and isinstance(event, ProcessEvent):
+            if event.is_internal:
+                return True
+
         return False

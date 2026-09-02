@@ -268,6 +268,15 @@ function trace_reflection() {
     safePerform("runtime:trace_reflection", () => {
         const internalClasses: string[] = ["android.", "com.android", "java.lang", "java.io"];
 
+        function isInternalClassName(class_name: string): boolean {
+            for (const internalClass of internalClasses) {
+                if (class_name.startsWith(internalClass)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         const classDef = safeUse('java.lang.Class', "runtime:trace_reflection");
         const classLoaderDef = safeUse('java.lang.ClassLoader', "runtime:trace_reflection");
         const Method = safeUse('java.lang.reflect.Method', "runtime:trace_reflection");
@@ -356,26 +365,18 @@ function trace_reflection() {
                         activeForNameDepth.set(threadId, depth + 1);
 
                         if (isOutermost) {
-                            let isInternal = false;
-                            for (const internalClass of internalClasses) {
-                                if (class_name.startsWith(internalClass)) {
-                                    isInternal = true;
-                                    break;
-                                }
-                            }
-                            if (!isInternal) {
-                                const java_stack_trace = collectJavaStackTrace();
-                                createRuntimeEvent("reflection.class_for_name", {
-                                    library: 'java.lang.Class',
-                                    method: 'forName',
-                                    overload_signature: 'forName(java.lang.String,boolean,java.lang.ClassLoader)',
-                                    class_name: class_name,
-                                    initialize: flag,
-                                    class_loader: class_loader ? class_loader.toString() : null,
-                                    is_internal: isInternal,
-                                    ...(java_stack_trace ? { java_stack_trace } : {})
-                                });
-                            }
+                            const isInternal = isInternalClassName(class_name);
+                            const java_stack_trace = collectJavaStackTrace();
+                            createRuntimeEvent("reflection.class_for_name", {
+                                library: 'java.lang.Class',
+                                method: 'forName',
+                                overload_signature: 'forName(java.lang.String,boolean,java.lang.ClassLoader)',
+                                class_name: class_name,
+                                initialize: flag,
+                                class_loader: class_loader ? class_loader.toString() : null,
+                                is_internal: isInternal,
+                                ...(java_stack_trace ? { java_stack_trace } : {})
+                            });
                         }
 
                         try {
@@ -421,25 +422,17 @@ function trace_reflection() {
                         activeForNameDepth.set(threadId, depth + 1);
 
                         if (isOutermost) {
-                            let isInternal = false;
-                            for (const internalClass of internalClasses) {
-                                if (class_name.startsWith(internalClass)) {
-                                    isInternal = true;
-                                    break;
-                                }
-                            }
-                            if (!isInternal) {
-                                const java_stack_trace = collectJavaStackTrace();
-                                createRuntimeEvent("reflection.class_for_name", {
-                                    library: 'java.lang.Class',
-                                    method: 'forName',
-                                    overload_signature: 'forName(java.lang.String)',
-                                    class_name: class_name,
-                                    initialize: true,
-                                    is_internal: isInternal,
-                                    ...(java_stack_trace ? { java_stack_trace } : {})
-                                });
-                            }
+                            const isInternal = isInternalClassName(class_name);
+                            const java_stack_trace = collectJavaStackTrace();
+                            createRuntimeEvent("reflection.class_for_name", {
+                                library: 'java.lang.Class',
+                                method: 'forName',
+                                overload_signature: 'forName(java.lang.String)',
+                                class_name: class_name,
+                                initialize: true,
+                                is_internal: isInternal,
+                                ...(java_stack_trace ? { java_stack_trace } : {})
+                            });
                         }
 
                         try {
@@ -472,24 +465,16 @@ function trace_reflection() {
                     "runtime:ClassLoader.loadClass",
                     loadClass,
                     function(original, class_name: string, resolve: boolean) {
-                        let isInternal = false;
-                        for (const internalClass of internalClasses) {
-                            if (class_name.startsWith(internalClass)) {
-                                isInternal = true;
-                                break;
-                            }
-                        }
-                        if (!isInternal) {
-                            const java_stack_trace = collectJavaStackTrace();
-                            createRuntimeEvent("reflection.load_class", {
-                                library: 'java.lang.ClassLoader',
-                                method: 'loadClass',
-                                class_name: class_name,
-                                resolve: resolve,
-                                is_internal: isInternal,
-                                ...(java_stack_trace ? { java_stack_trace } : {})
-                            });
-                        }
+                        const isInternal = isInternalClassName(class_name);
+                        const java_stack_trace = collectJavaStackTrace();
+                        createRuntimeEvent("reflection.load_class", {
+                            library: 'java.lang.ClassLoader',
+                            method: 'loadClass',
+                            class_name: class_name,
+                            resolve: resolve,
+                            is_internal: isInternal,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
+                        });
                         try {
                             return original.call(this, class_name, resolve);
                         } catch (error) {
