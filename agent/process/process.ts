@@ -461,14 +461,19 @@ function hook_java_process_creation() {
 }
 
 function hook_native_process_creation(){
-    // Hook native process creation functions like fork, execve, system
-    
+    // Hook native process creation functions like fork, execve, system.
+    // Resolved globally rather than by exact module name, matching
+    // nativelibrary.ts, since libc exports may resolve under a different
+    // module name on some Android versions.
+
     // Hook fork system call
-    safeAttachExport("libc.so", "fork", "process:fork", {
+    safeAttachExport(null, "fork", "process:fork", {
         onEnter: function(args) {
+            const java_stack_trace = collectJavaStackTrace();
             createProcessEvent("process.fork.attempt", {
                 native_function: "fork",
-                caller_pid: Process.id
+                caller_pid: Process.id,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
         },
         onLeave: function(retval) {
@@ -483,13 +488,15 @@ function hook_native_process_creation(){
     });
 
     // Hook execve system call
-    safeAttachExport("libc.so", "execve", "process:execve", {
+    safeAttachExport(null, "execve", "process:execve", {
         onEnter: function(args) {
             const pathname = args[0].readCString();
+            const java_stack_trace = collectJavaStackTrace();
             createProcessEvent("process.execve.attempt", {
                 native_function: "execve",
                 pathname: pathname,
-                caller_pid: Process.id
+                caller_pid: Process.id,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
         },
         onLeave: function(retval) {
@@ -503,13 +510,15 @@ function hook_native_process_creation(){
     });
 
     // Hook system function
-    safeAttachExport("libc.so", "system", "process:system", {
+    safeAttachExport(null, "system", "process:system", {
         onEnter: function(args) {
             const command = args[0].readCString();
+            const java_stack_trace = collectJavaStackTrace();
             createProcessEvent("process.system.call", {
                 native_function: "system",
                 command: command,
-                caller_pid: Process.id
+                caller_pid: Process.id,
+                ...(java_stack_trace ? { java_stack_trace } : {})
             });
         },
         onLeave: function(retval) {
