@@ -146,6 +146,25 @@ public class MainActivity extends Activity {
                 Log.e(TAG, "Runtime.exec([\"busybox\",\"id\"]) failed", t);
             }
 
+            // Positive classification: standalone id is root-detection-relevant.
+            try {
+                Log.i(TAG, "Runtime.exec(String) - trigger: id");
+                rt.exec("id");
+                Log.i(TAG, "Runtime.exec(\"id\") completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "Runtime.exec(\"id\") failed", t);
+            }
+
+            // Negative classification: identity contains "id" but is not a
+            // root-detection command and must pass through unchanged.
+            try {
+                Log.i(TAG, "Runtime.exec(String) - trigger: echo identity");
+                rt.exec("echo identity");
+                Log.i(TAG, "Runtime.exec(\"echo identity\") completed");
+            } catch (Throwable t) {
+                Log.e(TAG, "Runtime.exec(\"echo identity\") failed", t);
+            }
+
             String[] environment = new String[]{"SECURITY_E2E=1"};
             File workingDirectory = getFilesDir();
 
