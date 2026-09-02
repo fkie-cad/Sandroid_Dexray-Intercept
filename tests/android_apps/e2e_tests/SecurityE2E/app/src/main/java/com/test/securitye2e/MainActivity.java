@@ -14,6 +14,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.lang.reflect.Method;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.Arrays;
 import java.util.List;
@@ -144,6 +146,53 @@ public class MainActivity extends Activity {
                 Log.e(TAG, "Runtime.exec([\"busybox\",\"id\"]) failed", t);
             }
 
+            String[] environment = new String[]{"SECURITY_E2E=1"};
+            File workingDirectory = getFilesDir();
+
+            try {
+                Log.i(TAG, "Runtime.exec(String,String[]) - trigger: su");
+                rt.exec("su", environment);
+            } catch (Throwable t) {
+                Log.e(TAG, "Runtime.exec(\"su\", environment) failed", t);
+            }
+
+            try {
+                Log.i(TAG, "Runtime.exec(String,String[],File) - trigger: which su");
+                rt.exec("which su", environment, workingDirectory);
+            } catch (Throwable t) {
+                Log.e(
+                        TAG,
+                        "Runtime.exec(\"which su\", environment, workingDirectory) failed",
+                        t
+                );
+            }
+
+            try {
+                Log.i(TAG, "Runtime.exec(String[],String[]) - trigger: su -c id");
+                rt.exec(new String[]{"su", "-c", "id"}, environment);
+            } catch (Throwable t) {
+                Log.e(
+                        TAG,
+                        "Runtime.exec([\"su\",\"-c\",\"id\"], environment) failed",
+                        t
+                );
+            }
+
+            try {
+                Log.i(TAG, "Runtime.exec(String[],String[],File) - trigger: busybox id");
+                rt.exec(
+                        new String[]{"busybox", "id"},
+                        environment,
+                        workingDirectory
+                );
+            } catch (Throwable t) {
+                Log.e(
+                        TAG,
+                        "Runtime.exec([\"busybox\",\"id\"], environment, workingDirectory) failed",
+                        t
+                );
+            }
+
             // bypass.root.build_tags - Build.TAGS field read
             // Event fires at hook install time if Build.TAGS contains "test-keys",
             // not on this field read. Read included to confirm field is accessible.
@@ -195,12 +244,63 @@ public class MainActivity extends Activity {
                 }
             }
 
-            // bypass.frida.port_check - Socket.$init(String,int) port 27042
+            InetAddress loopback = InetAddress.getByName("127.0.0.1");
+            InetSocketAddress fridaEndpoint =
+                    new InetSocketAddress(loopback, 27042);
+
+            // bypass.frida.port_check - Socket(String,int)
             try {
-                Log.i(TAG, "Socket(127.0.0.1, 27042) - trigger");
+                Log.i(TAG, "Socket(String,int) port 27042 - trigger");
                 new Socket("127.0.0.1", 27042).close();
             } catch (Throwable t) {
-                Log.i(TAG, "Socket(127.0.0.1, 27042) threw (expected): " + t.getClass().getSimpleName());
+                Log.i(
+                        TAG,
+                        "Socket(String,int) threw (expected): " +
+                                t.getClass().getSimpleName()
+                );
+            }
+
+            // bypass.frida.port_check - Socket(InetAddress,int)
+            try {
+                Log.i(TAG, "Socket(InetAddress,int) port 27042 - trigger");
+                new Socket(loopback, 27042).close();
+            } catch (Throwable t) {
+                Log.i(
+                        TAG,
+                        "Socket(InetAddress,int) threw (expected): " +
+                                t.getClass().getSimpleName()
+                );
+            }
+
+            // bypass.frida.port_check - Socket.connect(SocketAddress)
+            try {
+                Log.i(TAG, "Socket.connect(SocketAddress) port 27042 - trigger");
+                Socket socket = new Socket();
+                socket.connect(fridaEndpoint);
+                socket.close();
+            } catch (Throwable t) {
+                Log.i(
+                        TAG,
+                        "Socket.connect(SocketAddress) threw (expected): " +
+                                t.getClass().getSimpleName()
+                );
+            }
+
+            // bypass.frida.port_check - Socket.connect(SocketAddress,int)
+            try {
+                Log.i(
+                        TAG,
+                        "Socket.connect(SocketAddress,int) port 27042 - trigger"
+                );
+                Socket socket = new Socket();
+                socket.connect(fridaEndpoint, 500);
+                socket.close();
+            } catch (Throwable t) {
+                Log.i(
+                        TAG,
+                        "Socket.connect(SocketAddress,int) threw (expected): " +
+                                t.getClass().getSimpleName()
+                );
             }
 
             // bypass.frida.process_check - ActivityManager.getRunningAppProcesses()
@@ -340,6 +440,26 @@ public class MainActivity extends Activity {
                 Log.i(TAG, "SystemProperties.get(ro.product.model) - trigger");
                 Object modelProp = get.invoke(null, "ro.product.model");
                 Log.i(TAG, "SystemProperties.get(ro.product.model) = " + modelProp);
+
+                Method getWithDefault = spClass.getMethod(
+                        "get",
+                        String.class,
+                        String.class
+                );
+                Log.i(
+                        TAG,
+                        "SystemProperties.get(ro.kernel.qemu,fallback) - trigger"
+                );
+                Object qemuWithDefault = getWithDefault.invoke(
+                        null,
+                        "ro.kernel.qemu",
+                        "fallback"
+                );
+                Log.i(
+                        TAG,
+                        "SystemProperties.get(ro.kernel.qemu,fallback) = " +
+                                qemuWithDefault
+                );
             } catch (Throwable t) {
                 Log.e(TAG, "SystemProperties.get emulator properties failed", t);
             }
