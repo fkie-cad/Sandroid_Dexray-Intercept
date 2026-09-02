@@ -22,6 +22,66 @@ function createBypassEvent(eventType: string, data: any): void {
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
 }
 
+function getRuntimeCommandTokens(
+    commandValue: any,
+    commandType: string
+): string[] {
+    if (!commandValue) {
+        return [];
+    }
+
+    if (commandType === "java.lang.String") {
+        return commandValue
+            .toString()
+            .trim()
+            .split(/\s+/)
+            .filter(token => token.length > 0);
+    }
+
+    const tokens: string[] = [];
+
+    for (
+        let tokenIndex = 0;
+        tokenIndex < commandValue.length;
+        tokenIndex++
+    ) {
+        const token = commandValue[tokenIndex];
+        tokens.push(token === null ? "null" : token.toString());
+    }
+
+    return tokens;
+}
+
+function getCommandBasename(token: string): string {
+    const separatorIndex = token.lastIndexOf("/");
+    return separatorIndex >= 0
+        ? token.substring(separatorIndex + 1)
+        : token;
+}
+
+function isRootDetectionCommand(tokens: string[]): boolean {
+    if (tokens.length === 0) {
+        return false;
+    }
+
+    const executable = getCommandBasename(tokens[0]);
+
+    if (
+        executable === "su" ||
+        executable === "busybox" ||
+        executable === "id"
+    ) {
+        return true;
+    }
+
+    return (
+        executable === "which" &&
+        tokens.length > 1 &&
+        getCommandBasename(tokens[1]) === "su"
+    );
+}
+
+
 /**
  * NOTE:
  * Original code used raw Java.perform + Java.use + direct .implementation,
@@ -138,42 +198,13 @@ export function install_root_detection_bypass() {
                             );
 
                             try {
-                                const commandValue = args[0];
-                                let command = "";
-
-                                if (commandType === "java.lang.String") {
-                                    command = commandValue
-                                        ? commandValue.toString()
-                                        : "";
-                                } else if (commandValue) {
-                                    const values: string[] = [];
-
-                                    for (
-                                        let valueIndex = 0;
-                                        valueIndex < commandValue.length;
-                                        valueIndex++
-                                    ) {
-                                        const value = commandValue[valueIndex];
-                                        values.push(
-                                            value === null
-                                                ? "null"
-                                                : value.toString()
-                                        );
-                                    }
-
-                                    command = values.join(" ");
-                                }
-
-                                const rootCommands = [
-                                    "su",
-                                    "which su",
-                                    "busybox",
-                                    "id"
-                                ];
-                                const isRootCommand = rootCommands.some(
-                                    rootCommand =>
-                                        command.includes(rootCommand)
+                                const commandTokens = getRuntimeCommandTokens(
+                                    args[0],
+                                    commandType
                                 );
+                                const command = commandTokens.join(" ");
+                                const isRootCommand =
+                                    isRootDetectionCommand(commandTokens);
 
                                 if (isOutermost && isRootCommand) {
                                     createBypassEvent(
@@ -185,7 +216,8 @@ export function install_root_detection_bypass() {
                                             action: "blocked",
                                             overload_index: index,
                                             overload_signature:
-                                                overloadSignature
+                                                overloadSignature,
+                                            command_tokens: commandTokens
                                         }
                                     );
 
