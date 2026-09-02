@@ -829,34 +829,88 @@ export function install_emulator_detection_bypass() {
     devlog("Installing emulator detection bypass hooks");
 
     safePerform("bypass:install_emulator_detection_bypass", () => {
-        // 1. Build properties that indicate emulator
+        // 1. Build properties that indicate an emulator.
         const Build = safeUse("android.os.Build", "bypass:emu:build");
         if (Build) {
-            // Common emulator indicators
-            const emulatorIndicators: Record<string, string[]> = {
-                BRAND: ["generic", "Android"],
-                DEVICE: ["generic", "generic_x86"],
-                MODEL: ["Android SDK built for x86", "google_sdk"],
-                PRODUCT: ["sdk", "google_sdk", "sdk_x86"],
-                MANUFACTURER: ["Genymotion", "unknown"],
-                HARDWARE: ["goldfish", "vbox86"]
+            const buildValues: Record<string, string> = {
+                BRAND: Build.BRAND.value.toString(),
+                DEVICE: Build.DEVICE.value.toString(),
+                MODEL: Build.MODEL.value.toString(),
+                PRODUCT: Build.PRODUCT.value.toString(),
+                MANUFACTURER: Build.MANUFACTURER.value.toString(),
+                HARDWARE: Build.HARDWARE.value.toString()
             };
 
-            Object.keys(emulatorIndicators).forEach(prop => {
-                // @ts-ignore
-                const originalValue = Build[prop].value;
-                if (emulatorIndicators[prop].includes(originalValue)) {
-                    const safeValue = prop === "BRAND" ? "samsung" : "SM-G973F";
-                    // @ts-ignore
-                    Build[prop].value = safeValue;
-                    createBypassEvent("bypass.emulator.build_property", {
-                        property: prop,
-                        original_value: originalValue,
-                        bypassed_value: safeValue,
-                        detection_method: `Build.${prop}`
-                    });
-                }
-            });
+            const normalizedValues = Object.fromEntries(
+                Object.entries(buildValues).map(([property, value]) => [
+                    property,
+                    value.toLowerCase()
+                ])
+            );
+
+            const matchedIndicators: string[] = [];
+
+            if (
+                normalizedValues.DEVICE.startsWith("generic") ||
+                normalizedValues.DEVICE.startsWith("emu") ||
+                normalizedValues.DEVICE.startsWith("sdk")
+            ) {
+                matchedIndicators.push(`DEVICE=${buildValues.DEVICE}`);
+            }
+
+            if (
+                normalizedValues.MODEL.startsWith("sdk_") ||
+                normalizedValues.MODEL.includes("android sdk") ||
+                normalizedValues.MODEL === "google_sdk"
+            ) {
+                matchedIndicators.push(`MODEL=${buildValues.MODEL}`);
+            }
+
+            if (
+                normalizedValues.PRODUCT.startsWith("sdk_") ||
+                normalizedValues.PRODUCT === "google_sdk"
+            ) {
+                matchedIndicators.push(`PRODUCT=${buildValues.PRODUCT}`);
+            }
+
+            if (
+                normalizedValues.HARDWARE === "ranchu" ||
+                normalizedValues.HARDWARE === "goldfish" ||
+                normalizedValues.HARDWARE === "vbox86"
+            ) {
+                matchedIndicators.push(`HARDWARE=${buildValues.HARDWARE}`);
+            }
+
+            if (matchedIndicators.length > 0) {
+                const bypassProfile: Record<string, string> = {
+                    BRAND: "samsung",
+                    DEVICE: "beyond1",
+                    MODEL: "SM-G973F",
+                    PRODUCT: "beyond1ltexx",
+                    MANUFACTURER: "samsung",
+                    HARDWARE: "exynos9820"
+                };
+
+                Object.entries(bypassProfile).forEach(
+                    ([property, bypassedValue]) => {
+                        const originalValue = buildValues[property];
+
+                        // @ts-ignore
+                        Build[property].value = bypassedValue;
+
+                        createBypassEvent(
+                            "bypass.emulator.build_property",
+                            {
+                                property: property,
+                                original_value: originalValue,
+                                bypassed_value: bypassedValue,
+                                detection_method: `Build.${property}`,
+                                matched_indicators: matchedIndicators
+                            }
+                        );
+                    }
+                );
+            }
         }
 
         // 2. SystemProperties.get(String) and get(String, String)
