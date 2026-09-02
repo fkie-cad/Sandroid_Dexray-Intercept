@@ -6,8 +6,8 @@ import json
 from .base import BaseFormatter
 from ..models.events import (
     Event, FileSystemEvent, CryptoEvent, NetworkEvent,
-    ProcessEvent, IPCEvent, ServiceEvent, DatabaseEvent,
-    DEXEvent, JNIEvent
+    ProcessEvent, BypassEvent, IPCEvent, ServiceEvent,
+    DatabaseEvent, DEXEvent, JNIEvent
 )
 from ..utils.hexdump import hexdump
 from ..utils.string_utils import truncate_string
@@ -35,6 +35,8 @@ class ConsoleFormatter(BaseFormatter):
             formatted = self._format_network_event(event)
         elif isinstance(event, ProcessEvent):
             formatted = self._format_process_event(event)
+        elif isinstance(event, BypassEvent):
+            formatted = self._format_bypass_event(event)
         elif isinstance(event, IPCEvent):
             formatted = self._format_ipc_event(event)
         elif isinstance(event, ServiceEvent):
@@ -441,6 +443,69 @@ class ConsoleFormatter(BaseFormatter):
 
         lines.append("")  # Empty line
         return '\n'.join(lines)
+
+    def _format_bypass_event(self, event: BypassEvent) -> str:
+        """Format anti-analysis bypass events."""
+        category_labels = {
+            'root_detection': 'Root Detection',
+            'frida_detection': 'Frida Detection',
+            'debugger_detection': 'Debugger Detection',
+            'emulator_detection': 'Emulator Detection',
+            'hook_detection': 'Hook Detection',
+        }
+
+        category = category_labels.get(
+            event.bypass_category,
+            'Anti-Analysis Detection'
+        )
+
+        lines = [f"\n[*] [Bypass] {category}:"]
+        lines.append(f"[*] Event: {event.event_type}")
+
+        if event.detection_method:
+            lines.append(f"[*] Detection Method: {event.detection_method}")
+
+        if event.action:
+            lines.append(f"[*] Action: {event.action}")
+
+        if event.file_path:
+            lines.append(f"[*] File Path: {event.file_path}")
+
+        if event.command:
+            lines.append(f"[*] Command: {event.command}")
+
+        if event.package_name:
+            lines.append(f"[*] Package: {event.package_name}")
+
+        if event.process_name:
+            lines.append(f"[*] Process: {event.process_name}")
+
+        if event.property_name:
+            lines.append(f"[*] Property: {event.property_name}")
+
+        if event.library_name:
+            lines.append(f"[*] Library: {event.library_name}")
+
+        if event.host:
+            lines.append(f"[*] Host: {event.host}")
+
+        if event.port is not None:
+            lines.append(f"[*] Port: {event.port}")
+
+        if event.original_result is not None:
+            lines.append(f"[*] Original Result: {event.original_result}")
+
+        if event.bypassed_result is not None:
+            lines.append(f"[*] Bypassed Result: {event.bypassed_result}")
+
+        if event.original_value is not None:
+            lines.append(f"[*] Original Value: {event.original_value}")
+
+        if event.bypassed_value is not None:
+            lines.append(f"[*] Bypassed Value: {event.bypassed_value}")
+
+        lines.append("")
+        return "\n".join(lines)
 
     def _format_process_event(self, event: ProcessEvent) -> str:
         """Format process events"""

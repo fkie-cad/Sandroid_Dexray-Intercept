@@ -260,6 +260,46 @@ class ProcessEvent(Event):
         return data
 
 
+class BypassEvent(Event):
+    """Anti-analysis bypass operation event"""
+
+    def __init__(self, event_type: str, timestamp: str = None):
+        super().__init__(event_type, timestamp)
+        self.bypass_category = None
+        self.detection_method = None
+        self.action = None
+        self.original_value = None
+        self.bypassed_value = None
+        self.original_result = None
+        self.bypassed_result = None
+        self.file_path = None
+        self.command = None
+        self.package_name = None
+        self.process_name = None
+        self.property_name = None
+        self.library_name = None
+        self.host = None
+        self.port = None
+
+    def get_event_data(self) -> Dict[str, Any]:
+        data = {}
+
+        fields = [
+            'bypass_category', 'detection_method', 'action',
+            'original_value', 'bypassed_value',
+            'original_result', 'bypassed_result',
+            'file_path', 'command', 'package_name', 'process_name',
+            'property_name', 'library_name', 'host', 'port',
+        ]
+
+        for field in fields:
+            value = getattr(self, field)
+            if value is not None:
+                data[field] = value
+
+        return data
+
+
 class IPCEvent(Event):
     """Inter-Process Communication event"""
 
