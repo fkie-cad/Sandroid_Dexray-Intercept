@@ -8,6 +8,8 @@ import sys
 import time
 import frida
 import argparse
+import json
+import re
 import subprocess
 from .about import __version__
 from .about import __author__
@@ -116,6 +118,124 @@ def interactive_hook_selection():
 
     return selected_hooks
 
+BYPASS_DEVICE_PROFILE_FIELDS = (
+    "BRAND",
+    "DEVICE",
+    "MODEL",
+    "PRODUCT",
+    "MANUFACTURER",
+    "HARDWARE",
+)
+
+BYPASS_DEVICE_PROFILE_IDS = (
+    "samsung_galaxy_s10",
+    "samsung_galaxy_s21",
+    "samsung_galaxy_s23",
+    "google_pixel_5",
+    "google_pixel_6",
+    "google_pixel_7",
+    "google_pixel_8",
+    "xiaomi_mi_11",
+    "xiaomi_12",
+    "oneplus_9",
+)
+
+BYPASS_DEVICE_PROFILE_NAME_PATTERN = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
+)
+
+
+def parse_bypass_device_profile(parsed_args, parser):
+    """Validate and normalize bypass device-profile configuration."""
+    built_in_profile = parsed_args.bypass_device_profile
+    profile_file = parsed_args.bypass_device_profile_file
+
+    if built_in_profile is not None:
+        return {
+            "name": built_in_profile,
+            "source": "built_in",
+        }
+
+    if profile_file is None:
+        return None
+
+    try:
+        with open(profile_file, "r", encoding="utf-8") as handle:
+            raw_profile = json.load(handle)
+    except OSError as error:
+        parser.error(
+            f"unable to read bypass device profile file "
+            f"'{profile_file}': {error}"
+        )
+    except json.JSONDecodeError as error:
+        parser.error(
+            f"invalid JSON in bypass device profile file "
+            f"'{profile_file}': {error}"
+        )
+
+    if not isinstance(raw_profile, dict):
+        parser.error(
+            "bypass device profile file must contain a JSON object"
+        )
+
+    expected_fields = {"name", *BYPASS_DEVICE_PROFILE_FIELDS}
+    actual_fields = set(raw_profile)
+
+    if actual_fields != expected_fields:
+        missing_fields = sorted(expected_fields - actual_fields)
+        unexpected_fields = sorted(actual_fields - expected_fields)
+        details = []
+
+        if missing_fields:
+            details.append(f"missing fields: {', '.join(missing_fields)}")
+
+        if unexpected_fields:
+            details.append(
+                f"unexpected fields: {', '.join(unexpected_fields)}"
+            )
+
+        parser.error(
+            "bypass device profile file must contain exactly "
+            f"name plus these Build fields: "
+            f"{', '.join(BYPASS_DEVICE_PROFILE_FIELDS)} "
+            f"({' ; '.join(details)})"
+        )
+
+    name = raw_profile["name"]
+
+    if not isinstance(name, str) or not name.strip():
+        parser.error(
+            "bypass device profile field 'name' must be a non-empty string"
+        )
+
+    normalized_name = name.strip()
+
+    if not BYPASS_DEVICE_PROFILE_NAME_PATTERN.fullmatch(
+        normalized_name
+    ):
+        parser.error(
+            "bypass device profile field 'name' must contain only "
+            "letters, digits, underscores, and hyphens"
+        )
+
+    values = {}
+
+    for field in BYPASS_DEVICE_PROFILE_FIELDS:
+        value = raw_profile[field]
+
+        if not isinstance(value, str) or not value.strip():
+            parser.error(
+                f"bypass device profile field '{field}' must be a "
+                "non-empty string"
+            )
+
+        values[field] = value.strip()
+
+    return {
+        "name": normalized_name,
+        "source": "custom_file",
+        "values": values,
+    }
 
 def parse_hook_config(parsed_args, use_interactive=False):
     """Convert CLI arguments to hook configuration dictionary
@@ -128,15 +248,18 @@ def parse_hook_config(parsed_args, use_interactive=False):
 
     # Handle group selections
     if parsed_args.hooks_all:
-        # Enable all hooks
-        return {hook: True for hook in [
-            'file_system_hooks', 'database_hooks', 'dex_unpacking_hooks',
-            'java_dex_unpacking_hooks', 'native_library_hooks', 'shared_prefs_hooks',
-            'binder_hooks', 'intent_hooks', 'broadcast_hooks', 'aes_hooks',
-            'encodings_hooks', 'keystore_hooks', 'web_hooks', 'socket_hooks',
-            'process_hooks', 'runtime_hooks', 'bluetooth_hooks', 'camera_hooks',
-            'clipboard_hooks', 'location_hooks', 'telephony_hooks', 'bypass_hooks'
-        ]}
+        hook_config.update({
+            hook: True for hook in [
+                'file_system_hooks', 'database_hooks', 'dex_unpacking_hooks',
+                'java_dex_unpacking_hooks', 'native_library_hooks',
+                'shared_prefs_hooks', 'binder_hooks', 'intent_hooks',
+                'broadcast_hooks', 'aes_hooks', 'encodings_hooks',
+                'keystore_hooks', 'web_hooks', 'socket_hooks',
+                'process_hooks', 'runtime_hooks', 'bluetooth_hooks',
+                'camera_hooks', 'clipboard_hooks', 'location_hooks',
+                'telephony_hooks', 'bypass_hooks'
+            ]
+        })
 
     if parsed_args.hooks_crypto:
         hook_config.update({
@@ -187,10 +310,12 @@ def parse_hook_config(parsed_args, use_interactive=False):
             'telephony_hooks': True
         })
 
-    if parsed_args.hooks_bypass:
-        hook_config.update({
-            'bypass_hooks': True
-        })
+    if (
+        parsed_args.hooks_bypass
+        or parsed_args.bypass_device_profile is not None
+        or parsed_args.bypass_device_profile_file is not None
+    ):
+        hook_config['bypass_hooks'] = True
 
     if parsed_args.deactivate_unlink:
         hook_config['file_system_hooks'] = True
@@ -329,6 +454,25 @@ Examples:
                        help="Enable service hooks (bluetooth, camera, clipboard, location, telephony)")
     hooks.add_argument("--hooks-bypass", required=False, action="store_const", const=True, default=False,
                        help="Enable anti-analysis bypass hooks (root, frida, debugger, emulator detection)")
+    bypass_profile_options = hooks.add_mutually_exclusive_group()
+    bypass_profile_options.add_argument(
+        "--bypass-device-profile",
+        choices=BYPASS_DEVICE_PROFILE_IDS,
+        metavar="PROFILE",
+        help=(
+            "Apply a built-in coherent Build identity after composite "
+            "emulator detection. Enables bypass hooks automatically."
+        )
+    )
+    bypass_profile_options.add_argument(
+        "--bypass-device-profile-file",
+        metavar="FILE",
+        help=(
+            "Apply a validated custom Build identity JSON profile after "
+            "composite emulator detection. Enables bypass hooks automatically."
+        )
+    )
+    
     # JNI tracing options
     hooks.add_argument("--jni-lib", action="append", metavar="PATTERN",
                        help="JNI: limit tracing to libraries whose path contains this string (can be used multiple times)")
@@ -381,6 +525,7 @@ Examples:
     hooks.add_argument("--enable-jni-hooks", action="store_true", help="Enable JNI API tracing hooks")
 
     parsed = parser.parse_args()
+    bypass_device_profile = parse_bypass_device_profile(parsed, parser)
     script_name = sys.argv[0]
 
     if parsed.frida:
@@ -526,6 +671,7 @@ Examples:
                 spawn_mode=parsed.spawn,
                 custom_scripts=parsed.custom_script,
                 jni_config=jni_config,
+                bypass_device_profile=bypass_device_profile,
             )
             if parsed.mitmproxy:
                 print("[*] mitmproxy enabled")

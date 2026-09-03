@@ -33,7 +33,8 @@ class AppProfiler:
                  enable_stacktrace: bool = False, enable_fritap: bool = False, 
                  fritap_output_dir: str = "./fritap_output", target_name: Optional[str] = None, 
                  spawn_mode: bool = False, custom_scripts: Optional[List[str]] = None,
-                 jni_config: Optional[Dict[str, Any]] = None):
+                 jni_config: Optional[Dict[str, Any]] = None,
+                 bypass_device_profile: Optional[Dict[str, Any]] = None):
         """
         Initialize the AppProfiler.
         
@@ -52,6 +53,7 @@ class AppProfiler:
             spawn_mode: Whether the target was spawned (True) or attached to (False)
             custom_scripts: List of paths to custom Frida scripts to load
             jni_config: JNI tracing configuration dictionary
+            bypass_device_profile: Validated bypass Build identity selection
         """
         self.process = process
         
@@ -100,6 +102,7 @@ class AppProfiler:
         )
         self.hook_manager = HookManager(hook_config)
         self.jni_config = jni_config or {}
+        self.bypass_device_profile = bypass_device_profile
         
         # Set up message handling (only if instrumentation service exists)
         if self.instrumentation:
@@ -438,6 +441,14 @@ class AppProfiler:
                 'payload': self.hook_manager.get_hook_config()
             })
             return True
+        
+        # Send validated bypass device-profile configuration.
+        if payload == 'bypass_device_profile':
+            self.instrumentation.send_message({
+                'type': 'bypass_device_profile',
+                'payload': self.bypass_device_profile
+            })
+            return True        
         
         # Send stacktrace configuration
         if payload == 'enable_stacktrace':
