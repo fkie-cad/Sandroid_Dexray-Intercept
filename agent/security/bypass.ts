@@ -13,6 +13,222 @@ const activeApplicationInfoDepth = new Map<number, number>();
 const activeRuntimeExecDepth = new Map<number, number>();
 const activeSocketConnectDepth = new Map<number, number>();
 
+const BYPASS_BUILD_FIELDS = [
+    "BRAND",
+    "DEVICE",
+    "MODEL",
+    "PRODUCT",
+    "MANUFACTURER",
+    "HARDWARE"
+] as const;
+
+type BypassBuildField = typeof BYPASS_BUILD_FIELDS[number];
+
+type BypassBuildValues = Record<BypassBuildField, string>;
+
+interface BypassDeviceProfileSelection {
+    name: string;
+    source: "built_in" | "custom_file";
+    values?: BypassBuildValues;
+}
+
+interface ResolvedBypassDeviceProfile {
+    name: string;
+    source: "built_in" | "custom_file";
+    values: BypassBuildValues;
+}
+
+const BUILT_IN_BYPASS_DEVICE_PROFILES: Record<
+    string,
+    BypassBuildValues
+> = {
+    samsung_galaxy_s10: {
+        BRAND: "samsung",
+        DEVICE: "beyond1",
+        MODEL: "SM-G973F",
+        PRODUCT: "beyond1ltexx",
+        MANUFACTURER: "samsung",
+        HARDWARE: "exynos9820"
+    },
+    samsung_galaxy_s21: {
+        BRAND: "samsung",
+        DEVICE: "o1s",
+        MODEL: "SM-G991B",
+        PRODUCT: "o1sxeea",
+        MANUFACTURER: "samsung",
+        HARDWARE: "exynos2100"
+    },
+    samsung_galaxy_s23: {
+        BRAND: "samsung",
+        DEVICE: "dm1q",
+        MODEL: "SM-S911B",
+        PRODUCT: "dm1qxeea",
+        MANUFACTURER: "samsung",
+        HARDWARE: "qcom"
+    },
+    google_pixel_5: {
+        BRAND: "google",
+        DEVICE: "redfin",
+        MODEL: "Pixel 5",
+        PRODUCT: "redfin",
+        MANUFACTURER: "Google",
+        HARDWARE: "qcom"
+    },
+    google_pixel_6: {
+        BRAND: "google",
+        DEVICE: "oriole",
+        MODEL: "Pixel 6",
+        PRODUCT: "oriole",
+        MANUFACTURER: "Google",
+        HARDWARE: "gs101"
+    },
+    google_pixel_7: {
+        BRAND: "google",
+        DEVICE: "panther",
+        MODEL: "Pixel 7",
+        PRODUCT: "panther",
+        MANUFACTURER: "Google",
+        HARDWARE: "gs201"
+    },
+    google_pixel_8: {
+        BRAND: "google",
+        DEVICE: "shiba",
+        MODEL: "Pixel 8",
+        PRODUCT: "shiba",
+        MANUFACTURER: "Google",
+        HARDWARE: "shusky"
+    },
+    xiaomi_mi_11: {
+        BRAND: "Xiaomi",
+        DEVICE: "venus",
+        MODEL: "M2011K2G",
+        PRODUCT: "venus_global",
+        MANUFACTURER: "Xiaomi",
+        HARDWARE: "qcom"
+    },
+    xiaomi_12: {
+        BRAND: "Xiaomi",
+        DEVICE: "cupid",
+        MODEL: "2201123G",
+        PRODUCT: "cupid_global",
+        MANUFACTURER: "Xiaomi",
+        HARDWARE: "qcom"
+    },
+    oneplus_9: {
+        BRAND: "OnePlus",
+        DEVICE: "lemonade",
+        MODEL: "LE2113",
+        PRODUCT: "lemonade_eea",
+        MANUFACTURER: "OnePlus",
+        HARDWARE: "qcom"
+    }
+};
+
+let configuredBypassDeviceProfile: BypassDeviceProfileSelection | null =
+    null;
+
+function isBypassBuildValues(value: any): value is BypassBuildValues {
+    return (
+        value !== null &&
+        typeof value === "object" &&
+        BYPASS_BUILD_FIELDS.every(
+            field =>
+                typeof value[field] === "string" &&
+                value[field].trim().length > 0
+        )
+    );
+}
+
+export function configure_bypass_device_profile(
+    value: any
+): void {
+    configuredBypassDeviceProfile = null;
+
+    if (value === null || value === undefined) {
+        return;
+    }
+
+    if (
+        typeof value !== "object" ||
+        typeof value.name !== "string" ||
+        !value.name.trim() ||
+        (
+            value.source !== "built_in" &&
+            value.source !== "custom_file"
+        )
+    ) {
+        devlog("Ignoring invalid bypass device-profile configuration");
+        return;
+    }
+
+    const name = value.name.trim();
+
+    if (value.source === "built_in") {
+        if (!BUILT_IN_BYPASS_DEVICE_PROFILES[name]) {
+            devlog(
+                `Ignoring unknown built-in bypass device profile: ${name}`
+            );
+            return;
+        }
+
+        configuredBypassDeviceProfile = {
+            name: name,
+            source: "built_in"
+        };
+        return;
+    }
+
+    if (!isBypassBuildValues(value.values)) {
+        devlog(
+            `Ignoring invalid custom bypass device profile: ${name}`
+        );
+        return;
+    }
+
+    configuredBypassDeviceProfile = {
+        name: name,
+        source: "custom_file",
+        values: value.values
+    };
+}
+
+function resolve_bypass_device_profile():
+    ResolvedBypassDeviceProfile | null {
+    if (configuredBypassDeviceProfile === null) {
+        return {
+            name: "samsung_galaxy_s10",
+            source: "built_in",
+            values: BUILT_IN_BYPASS_DEVICE_PROFILES.samsung_galaxy_s10
+        };
+    }
+
+    if (configuredBypassDeviceProfile.source === "built_in") {
+        const values = BUILT_IN_BYPASS_DEVICE_PROFILES[
+            configuredBypassDeviceProfile.name
+        ];
+
+        if (!values) {
+            return null;
+        }
+
+        return {
+            name: configuredBypassDeviceProfile.name,
+            source: "built_in",
+            values: values
+        };
+    }
+
+    if (!configuredBypassDeviceProfile.values) {
+        return null;
+    }
+
+    return {
+        name: configuredBypassDeviceProfile.name,
+        source: "custom_file",
+        values: configuredBypassDeviceProfile.values
+    };
+}
+
 function createBypassEvent(eventType: string, data: any): void {
     const event = {
         event_type: eventType,
@@ -890,18 +1106,12 @@ export function install_emulator_detection_bypass() {
             }
 
             if (matchedIndicators.length > 0) {
-                const bypassProfile: Record<string, string> = {
-                    BRAND: "samsung",
-                    DEVICE: "beyond1",
-                    MODEL: "SM-G973F",
-                    PRODUCT: "beyond1ltexx",
-                    MANUFACTURER: "samsung",
-                    HARDWARE: "exynos9820"
-                };
+                const deviceProfile = resolve_bypass_device_profile();
 
-                Object.entries(bypassProfile).forEach(
-                    ([property, bypassedValue]) => {
+                if (deviceProfile !== null) {
+                    BYPASS_BUILD_FIELDS.forEach(property => {
                         const originalValue = buildValues[property];
+                        const bypassedValue = deviceProfile.values[property];
 
                         // @ts-ignore
                         Build[property].value = bypassedValue;
@@ -913,11 +1123,13 @@ export function install_emulator_detection_bypass() {
                                 original_value: originalValue,
                                 bypassed_value: bypassedValue,
                                 detection_method: `Build.${property}`,
-                                matched_indicators: matchedIndicators
+                                matched_indicators: matchedIndicators,
+                                device_profile: deviceProfile.name,
+                                profile_source: deviceProfile.source
                             }
                         );
-                    }
-                );
+                    });
+                }
             }
         }
 

@@ -19,7 +19,7 @@ import { install_camera_hooks } from "./services/camera.js"
 import { install_clipboard_hooks } from "./services/clipboard.js"
 import { install_location_hooks } from "./services/location.js"
 import { install_telephony_manager_hooks } from "./services/telephony.js"
-import { install_bypass_hooks } from "./security/bypass.js"
+import { configure_bypass_device_profile, install_bypass_hooks } from "./security/bypass.js"
 import { install_jni_hooks } from "./jni/jni_trace.js";
 import { am_send, log, devlog } from "./utils/logging.js"
 
@@ -116,6 +116,15 @@ const hook_config_recv_state = recv('hook_config', value => {
     }
 });
 hook_config_recv_state.wait();
+
+send("bypass_device_profile")
+const bypass_device_profile_recv_state = recv(
+    "bypass_device_profile",
+    value => {
+        configure_bypass_device_profile(value.payload);
+    }
+);
+bypass_device_profile_recv_state.wait();
 
 send("enable_stacktrace")
 const enable_stacktrace_recv_state = recv('enable_stacktrace', value => {
