@@ -4,6 +4,7 @@ package com.test.securitye2e;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
@@ -24,11 +25,29 @@ public class MainActivity extends Activity {
 
     private static final String TAG = "BYPASS_E2E";
 
+    private static final String FRIDA_WORKER_READY_FILE =
+            "frida_worker.ready";
+    private static final String FRIDA_WORKER_PROCESS =
+            "com.test.securitye2e:frida_worker";
+    private static final long FRIDA_WORKER_READY_TIMEOUT_MS = 5000L;
+
+    private static final List<String> ROOT_PACKAGE_NAMES = Arrays.asList(
+            "com.noshufou.android.su",
+            "com.koushikdutta.superuser",
+            "eu.chainfire.supersu",
+            "com.saurik.substrate",
+            "com.zachspong.temprootremovejb",
+            "com.ramdroid.appquarantine",
+            "com.topjohnwu.magisk",
+            "com.kingroot.kinguser"
+    );
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         Log.i(TAG, "SecurityE2E started");
+        startFridaWorkerService();
 
         Thread t = new Thread(() -> {
             try {
@@ -65,6 +84,7 @@ public class MainActivity extends Activity {
             } catch (Throwable t1) {
                 Log.e(TAG, "Error in SecurityE2E", t1);
             } finally {
+                stopFridaWorkerService();
                 Log.i(TAG, "SecurityE2E finished");
             }
         }, "securitye2e-tests");
@@ -72,6 +92,53 @@ public class MainActivity extends Activity {
 
         Log.i(TAG, "SecurityE2E calling finish()");
         finish();
+    }
+
+    private void startFridaWorkerService() {
+        File readyFile = getFileStreamPath(FRIDA_WORKER_READY_FILE);
+
+        if (readyFile.exists() && !readyFile.delete()) {
+            Log.w(TAG, "Unable to clear stale Frida worker readiness marker");
+        }
+
+        try {
+            startService(new Intent(this, FridaWorkerService.class));
+            Log.i(TAG, "Frida worker service start requested");
+        } catch (Throwable t) {
+            Log.e(TAG, "Unable to start Frida worker service", t);
+        }
+    }
+
+    private void stopFridaWorkerService() {
+        try {
+            boolean stopped = stopService(
+                    new Intent(this, FridaWorkerService.class)
+            );
+            Log.i(TAG, "Frida worker service stopped: " + stopped);
+        } catch (Throwable t) {
+            Log.e(TAG, "Unable to stop Frida worker service", t);
+        }
+    }
+
+    private boolean waitForFridaWorkerReady() {
+        File readyFile = getFileStreamPath(FRIDA_WORKER_READY_FILE);
+        long deadline = System.currentTimeMillis()
+                + FRIDA_WORKER_READY_TIMEOUT_MS;
+
+        while (System.currentTimeMillis() < deadline) {
+            if (readyFile.exists()) {
+                return true;
+            }
+
+            try {
+                Thread.sleep(50L);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+
+        return false;
     }
 
     // ------------------------------------------------------------
@@ -227,8 +294,32 @@ public class MainActivity extends Activity {
             try {
                 Log.i(TAG, "PackageManager.getInstalledPackages(0) - trigger");
                 PackageManager pm = getPackageManager();
+
                 if (pm != null) {
-                    pm.getInstalledPackages(0);
+                    List<android.content.pm.PackageInfo> packages =
+                            pm.getInstalledPackages(0);
+                    boolean visibleRootPackage = false;
+
+                    if (packages != null) {
+                        for (android.content.pm.PackageInfo packageInfo : packages) {
+                            String packageName = packageInfo.packageName;
+
+                            if (ROOT_PACKAGE_NAMES.contains(packageName)) {
+                                visibleRootPackage = true;
+                                Log.i(
+                                        TAG,
+                                        "Visible root-package candidate: " +
+                                                packageName
+                                );
+                            }
+                        }
+                    }
+
+                    Log.i(
+                            TAG,
+                            "Visible root-package candidate present: " +
+                                    visibleRootPackage
+                    );
                 }
             } catch (Throwable t) {
                 Log.e(TAG, "getInstalledPackages failed", t);
@@ -324,14 +415,50 @@ public class MainActivity extends Activity {
 
             // bypass.frida.process_check - ActivityManager.getRunningAppProcesses()
             try {
+                boolean workerReady = waitForFridaWorkerReady();
+
+                Log.i(
+                        TAG,
+                        "Frida worker readiness observed: " + workerReady
+                );
                 Log.i(TAG, "ActivityManager.getRunningAppProcesses() - trigger");
+
                 ActivityManager am =
-                        (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+                        (ActivityManager) getSystemService(
+                                Context.ACTIVITY_SERVICE
+                        );
+
                 if (am != null) {
-                    java.util.List<ActivityManager.RunningAppProcessInfo> list =
+                    List<ActivityManager.RunningAppProcessInfo> processes =
                             am.getRunningAppProcesses();
-                    int count = list != null ? list.size() : 0;
+                    int count = processes != null ? processes.size() : 0;
+                    boolean workerVisible = false;
+
                     Log.i(TAG, "Running app processes count: " + count);
+
+                    if (processes != null) {
+                        for (
+                                ActivityManager.RunningAppProcessInfo process
+                                : processes
+                        ) {
+                            String processName = process.processName;
+
+                            Log.i(
+                                    TAG,
+                                    "Visible running process: " + processName
+                            );
+
+                            if (FRIDA_WORKER_PROCESS.equals(processName)) {
+                                workerVisible = true;
+                            }
+                        }
+                    }
+
+                    Log.i(
+                            TAG,
+                            "Frida worker visible in running process list: " +
+                                    workerVisible
+                    );
                 }
             } catch (Throwable t) {
                 Log.e(TAG, "getRunningAppProcesses failed", t);
