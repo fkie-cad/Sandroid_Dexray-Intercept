@@ -482,6 +482,12 @@ class ConsoleFormatter(BaseFormatter):
 
         if event.property_name:
             lines.append(f"[*] Property: {event.property_name}")
+            
+        if event.device_profile:
+            lines.append(f"[*] Device Profile: {event.device_profile}")
+
+        if event.profile_source:
+            lines.append(f"[*] Profile Source: {event.profile_source}")
 
         if event.library_name:
             lines.append(f"[*] Library: {event.library_name}")

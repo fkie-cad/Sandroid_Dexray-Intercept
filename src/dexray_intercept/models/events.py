@@ -280,6 +280,8 @@ class BypassEvent(Event):
         self.library_name = None
         self.host = None
         self.port = None
+        self.device_profile = None
+        self.profile_source = None
 
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
@@ -290,6 +292,7 @@ class BypassEvent(Event):
             'original_result', 'bypassed_result',
             'file_path', 'command', 'package_name', 'process_name',
             'property_name', 'library_name', 'host', 'port',
+            'device_profile', 'profile_source',
         ]
 
         for field in fields:
