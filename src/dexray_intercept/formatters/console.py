@@ -498,11 +498,41 @@ class ConsoleFormatter(BaseFormatter):
         if event.bypassed_result is not None:
             lines.append(f"[*] Bypassed Result: {event.bypassed_result}")
 
-        if event.original_value is not None:
-            lines.append(f"[*] Original Value: {event.original_value}")
+        if event.event_type == "bypass.debugger.flag_check":
+            original_flags = event.metadata.get("original_flags")
+            bypassed_flags = event.metadata.get("bypassed_flags")
+            cleared_flag = event.metadata.get("cleared_flag")
+            cleared_flag_value = event.metadata.get("cleared_flag_value")
 
-        if event.bypassed_value is not None:
-            lines.append(f"[*] Bypassed Value: {event.bypassed_value}")
+            if isinstance(original_flags, int):
+                lines.append(
+                    "[*] Original Flags: "
+                    f"0x{original_flags & 0xFFFFFFFF:08X} "
+                    f"({original_flags})"
+                )
+
+            if isinstance(bypassed_flags, int):
+                lines.append(
+                    "[*] Bypassed Flags: "
+                    f"0x{bypassed_flags & 0xFFFFFFFF:08X} "
+                    f"({bypassed_flags})"
+                )
+
+            if cleared_flag:
+                if isinstance(cleared_flag_value, int):
+                    lines.append(
+                        f"[*] Cleared Flag: {cleared_flag} "
+                        f"(0x{cleared_flag_value:08X})"
+                    )
+                else:
+                    lines.append(f"[*] Cleared Flag: {cleared_flag}")
+
+        else:
+            if event.original_value is not None:
+                lines.append(f"[*] Original Value: {event.original_value}")
+
+            if event.bypassed_value is not None:
+                lines.append(f"[*] Bypassed Value: {event.bypassed_value}")
 
         lines.append("")
         return "\n".join(lines)
