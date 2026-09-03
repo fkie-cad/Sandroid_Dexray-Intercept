@@ -732,11 +732,16 @@ export function install_debugger_detection_bypass() {
                                     );
                                     const originalFlags = appInfo.flags.value;
 
+                                    const debuggableFlag =
+                                        ApplicationInfo.FLAG_DEBUGGABLE.value;
+
                                     if (
-                                        (originalFlags &
-                                            ApplicationInfo.FLAG_DEBUGGABLE.value) !==
+                                        (originalFlags & debuggableFlag) !==
                                         0
                                     ) {
+                                        const bypassedFlags =
+                                            originalFlags & ~debuggableFlag;
+
                                         createBypassEvent(
                                             "bypass.debugger.flag_check",
                                             {
@@ -745,15 +750,18 @@ export function install_debugger_detection_bypass() {
                                                         ? args[0].toString()
                                                         : null,
                                                 original_flags: originalFlags,
+                                                bypassed_flags: bypassedFlags,
+                                                cleared_flag:
+                                                    "FLAG_DEBUGGABLE",
+                                                cleared_flag_value:
+                                                    debuggableFlag,
                                                 detection_method:
                                                     "ApplicationInfo.FLAG_DEBUGGABLE",
                                                 action: "flag_removed"
                                             }
                                         );
 
-                                        appInfo.flags.value =
-                                            originalFlags &
-                                            ~ApplicationInfo.FLAG_DEBUGGABLE.value;
+                                        appInfo.flags.value = bypassedFlags;
                                     }
                                 }
 
