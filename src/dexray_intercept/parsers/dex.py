@@ -25,7 +25,7 @@ class DEXParser(BaseParser):
             'even_type': 'even_type'
         }
         
-        # Map new structured event fields
+        # Map structured DEX, classloader, in-memory, and library fields.
         new_field_mapping = {
             'hooked_function': 'hooked_function',
             'magic': 'magic',
@@ -33,13 +33,26 @@ class DEXParser(BaseParser):
             'size': 'size',
             'original_location': 'original_location',
             'dumped_path': 'dumped_path',
+            'dump_attempted_path': 'dump_attempted_path',
+            'dump_error': 'dump_error',
             'file_type': 'file_type',
+
             'class_loader_type': 'class_loader_type',
             'file_path': 'file_path',
+            'destination_path': 'destination_path',
+            'library_search_path': 'library_search_path',
+            'resource_loading': 'resource_loading',
+            'method': 'method',
+
+            'buffer_size': 'buffer_size',
+            'buffer_count': 'buffer_count',
+            'buffer_sizes': 'buffer_sizes',
+            'total_buffer_size': 'total_buffer_size',
+            'buffer_magics': 'buffer_magics',
+
             'library_path': 'library_path',
             'library_name': 'library_name',
-            'method': 'method',
-            'loader_type': 'loader_type'
+            'loader_type': 'loader_type',
         }
         
         # Apply legacy mapping

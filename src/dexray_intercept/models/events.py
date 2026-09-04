@@ -529,22 +529,70 @@ class ServiceEvent(Event):
 
 
 class DEXEvent(Event):
-    """DEX loading/unpacking event"""
+    """DEX loading and unpacking event"""
 
     def __init__(self, event_type: str, timestamp: str = None):
         super().__init__(event_type, timestamp)
+
+        # Legacy fields
         self.unpacking = False
         self.dumped = None
         self.orig_location = None
-        self.even_type = None  # Keep original field name for compatibility
+        self.even_type = None
+
+        # Native DEX detection
+        self.hooked_function = None
+        self.magic = None
+        self.version = None
+        self.size = None
+        self.original_location = None
+        self.dumped_path = None
+        self.dump_attempted_path = None
+        self.dump_error = None
+        self.file_type = None
+
+        # File-backed class loaders
+        self.class_loader_type = None
+        self.file_path = None
+        self.destination_path = None
+        self.library_search_path = None
+        self.resource_loading = None
+        self.method = None
+
+        # In-memory class loaders
+        self.buffer_size = None
+        self.buffer_count = None
+        self.buffer_sizes = None
+        self.total_buffer_size = None
+        self.buffer_magics = None
+
+        # Library loading
+        self.library_path = None
+        self.library_name = None
+        self.loader_type = None
 
     def get_event_data(self) -> Dict[str, Any]:
         data = {}
 
-        fields = ['unpacking', 'dumped', 'orig_location', 'even_type']
+        fields = [
+            'unpacking', 'dumped', 'orig_location', 'even_type',
+
+            'hooked_function', 'magic', 'version', 'size',
+            'original_location', 'dumped_path', 'dump_attempted_path',
+            'dump_error', 'file_type',
+
+            'class_loader_type', 'file_path', 'destination_path',
+            'library_search_path', 'resource_loading', 'method',
+
+            'buffer_size', 'buffer_count', 'buffer_sizes',
+            'total_buffer_size', 'buffer_magics',
+
+            'library_path', 'library_name', 'loader_type',
+        ]
 
         for field in fields:
             value = getattr(self, field)
+
             if value is not None:
                 data[field] = value
 
