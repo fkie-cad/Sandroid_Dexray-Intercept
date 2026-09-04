@@ -1,10 +1,13 @@
 import { devlog, am_send } from "../utils/logging.js"
-import { getAndroidVersion, copy_file, removeLeadingColon } from "../utils/android_runtime_requests.js"
+import { getAndroidVersion } from "../utils/android_runtime_requests.js"
 import { safePerform, safeUse, safeOverload, safeImplementation, PropagateException } from "../utils/safe_java.js"
-import { safeResolveExport, safeNativeFunction, safeAttach, safeEnumerateMatches, stripModulePrefix } from "../utils/safe_native.js"
+import { safeAttach, safeEnumerateMatches, stripModulePrefix } from "../utils/safe_native.js"
 import { collectJavaStackTrace, collectNativeBacktrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "DEX_LOADING"
+const MAX_DEX_PAYLOAD_CAPTURE = 64 * 1024 * 1024;
+
+let dexOperationSequence = 0;
 
 const activeInMemoryDexLoaderDepth = new Map<number, number>();
 const activeClassLoaderConstructorDepth = new Map<number, number>();
@@ -17,18 +20,6 @@ interface DEXInfo {
     sizeOffset?: number;
     found?: boolean;
     wrongMagic?: any;
-}
-
-interface UnpackingEvent {
-    event_type: string;
-    dex_path?: string;
-    file_path?: string;
-    magic?: string;
-    size?: number;
-    version?: string;
-    location?: string;
-    hooked_function?: string;
-    class_loader_type?: string;
 }
 
 interface NativeDexHookTarget {
@@ -88,8 +79,7 @@ function invokeClassLoaderConstructor(
     original: any,
     receiver: any,
     args: any[],
-    eventData: any,
-    destinationPath: string
+    eventData: any
 ): any {
     const threadId = Process.getCurrentThreadId();
     const depth =
@@ -108,8 +98,6 @@ function invokeClassLoaderConstructor(
                     ? { java_stack_trace: javaStackTrace }
                     : {})
             });
-
-            dump(eventData.file_path, destinationPath);
         }
 
         return callJavaOriginal(original, receiver, ...args);
@@ -295,38 +283,6 @@ function getNativeDexHookTarget(
     };
 }
 
-function getg_processName(): string {
-    let g_processName: string = "";
-
-    const fopenPtr  = safeResolveExport("libc.so", "fopen",  "dex:getg_processName");
-    const fgetsPtr  = safeResolveExport("libc.so", "fgets",  "dex:getg_processName");
-    const fclosePtr = safeResolveExport("libc.so", "fclose", "dex:getg_processName");
-
-    const fopenFunc  = safeNativeFunction(fopenPtr,  "pointer", ["pointer", "pointer"],        "dex:fopen");
-    const fgetsFunc  = safeNativeFunction(fgetsPtr,  "int",     ["pointer", "int", "pointer"], "dex:fgets");
-    const fcloseFunc = safeNativeFunction(fclosePtr, "int",     ["pointer"],                   "dex:fclose");
-
-    // If any libc symbol is missing the process name can't be read - bail cleanly.
-    if (!fopenFunc || !fgetsFunc || !fcloseFunc) return g_processName;
-
-    const pathPtr      = Memory.allocUtf8String("/proc/self/cmdline");
-    const openFlagsPtr = Memory.allocUtf8String("r");
-
-    const fp = fopenFunc(pathPtr, openFlagsPtr);
-    if (!fp.isNull()) {
-        const buffData = Memory.alloc(128);
-        const ret = fgetsFunc(buffData, 128, fp);
-        if (ret !== 0) {
-            g_processName = buffData.readCString();
-            //devlog("ProcessName: " + g_processName);
-        }
-        fcloseFunc(fp);
-    }
-
-    return g_processName;
-}
-
-
 function checkMagic(dataAddr: NativePointer) { // Throws access violation errors, not handled at all.
     const dexMagic     = "dex\n"; // [0x64, 0x65, 0x78, 0x0a]
     const dexVersions  = ["035", "037", "038", "039", "040"]; // Same as above (hex -> ascii)
@@ -362,83 +318,84 @@ function checkMagic(dataAddr: NativePointer) { // Throws access violation errors
     }
 }
 
-function dumpDexToFile(
+function captureDex(
     begin: NativePointer,
     dexInfo: any,
-    processName: string,
     location: string,
     hookedFunction: string,
     context?: CpuContext
 ): void {
-    const dexSize = begin.add(dexInfo.sizeOffset).readInt();
+    const dexSize = begin.add(dexInfo.sizeOffset).readU32();
+    const operationId = `dex-${++dexOperationSequence}`;
     const nativeBacktrace = collectNativeBacktrace(context);
 
-    devlog(
-        `[DEX] Detected ${dexInfo.ext} file: ${dexSize} bytes from ` +
-        `${location || "unknown location"}`
-    );
-
-    let dumpedPath: string | null = null;
-    let dumpError: string | null = null;
-    const attemptedPath =
-        processName.length > 0
-            ? `/data/data/${processName}/${dexSize}.${dexInfo.ext}`
-            : null;
-
-    if (attemptedPath !== null) {
-        try {
-            const dexBuffer = begin.readByteArray(dexSize);
-
-            if (dexBuffer === null) {
-                throw new Error("Unable to read DEX buffer");
-            }
-
-            const dexFile = new File(attemptedPath, "wb");
-            dexFile.write(dexBuffer);
-            dexFile.flush();
-            dexFile.close();
-
-            dumpedPath = attemptedPath;
-
-            devlog(`[DEX] File written successfully: ${dumpedPath}`);
-        } catch (error) {
-            dumpError = error instanceof Error
-                ? error.message
-                : String(error);
-
-            devlog(
-                `[DEX] Unable to write local DEX copy at ${attemptedPath}: ` +
-                `${dumpError}`
-            );
-        }
-    }
-
-    createDEXEvent("dex.unpacking.detected", {
+    const event: any = {
+        operation_id: operationId,
         hooked_function: hookedFunction,
         magic: dexInfo.magicString,
         version: dexInfo.version,
         size: dexSize,
         original_location: location,
         file_type: dexInfo.ext,
-        ...(dumpedPath !== null ? { dumped_path: dumpedPath } : {}),
-        ...(attemptedPath !== null
-            ? { dump_attempted_path: attemptedPath }
-            : {}),
-        ...(dumpError !== null ? { dump_error: dumpError } : {}),
+        captured_length: 0,
+        has_buffer: false,
+        payload_truncated: false,
         ...(nativeBacktrace ? { native_backtrace: nativeBacktrace } : {})
-    });
+    };
 
-    devlog(
-        `[DEX] Unpacking event sent for ${dexInfo.magicString} ` +
-        `(${dexSize} bytes)`
-    );
+    if (dexSize > MAX_DEX_PAYLOAD_CAPTURE) {
+        event.payload_truncated = true;
+        event.capture_error =
+            `DEX size ${dexSize} exceeds capture limit ` +
+            `${MAX_DEX_PAYLOAD_CAPTURE}`;
+
+        createDEXEvent("dex.unpacking.detected", event);
+
+        devlog(
+            `[DEX] Capture skipped for ${dexInfo.ext} file: ${dexSize} bytes`
+        );
+        return;
+    }
+
+    try {
+        const dexBuffer = begin.readByteArray(dexSize);
+
+        if (dexBuffer === null) {
+            throw new Error("Unable to read DEX buffer");
+        }
+
+        event.captured_length = dexSize;
+        event.has_buffer = true;
+
+        am_send(
+            PROFILE_HOOKING_TYPE,
+            JSON.stringify({
+                event_type: "dex.unpacking.detected",
+                timestamp: Date.now(),
+                ...event
+            }),
+            dexBuffer
+        );
+
+        devlog(
+            `[DEX] Captured ${dexInfo.ext} file: ${dexSize} bytes from ` +
+            `${location || "unknown location"}`
+        );
+    } catch (error) {
+        event.capture_error = error instanceof Error
+            ? error.message
+            : String(error);
+
+        createDEXEvent("dex.unpacking.detected", event);
+
+        devlog(
+            `[DEX] Unable to capture DEX payload: ${event.capture_error}`
+        );
+    }
 }
 
 
-function dumpDex(
-    target: NativeDexHookTarget,
-    processName: string
-): void {
+function dumpDex(target: NativeDexHookTarget): void {
     const hookedFunction =
         `${target.moduleName}::${target.symbolName}`;
 
@@ -496,10 +453,9 @@ function dumpDex(
                 }
             }
 
-            dumpDexToFile(
+            captureDex(
                 begin,
                 dexInfo,
-                processName,
                 location || "",
                 hookedFunction,
                 this.context
@@ -513,16 +469,6 @@ function dumpDex(
     );
 }
 
-function dump(file_path: string, dst_path: string): void {
-    const location = removeLeadingColon(file_path);
-    const java_stack_trace = collectJavaStackTrace();
-    createDEXEvent("dex.file_copy", {
-        original_location: location,
-        destination_path: dst_path,
-        ...(java_stack_trace ? { java_stack_trace } : {})
-    });
-    copy_file(PROFILE_HOOKING_TYPE, location, dst_path);
-}
 
 interface InMemoryDexBufferSummary {
     size: number;
@@ -601,9 +547,8 @@ function emitInMemoryDexLoaderEvent(
     createDEXEvent("dex.in_memory_loader", event);
 }
 
-function dex_api_unpacking(g_processName: string): void {
+function dex_api_unpacking(): void {
     safePerform("dex:dex_api_unpacking", () => {
-        const dst_path = `/data/data/${g_processName}`;
 
         // Hook DexClassLoader
         const DexClassLoader = safeUse(
@@ -625,7 +570,6 @@ function dex_api_unpacking(g_processName: string): void {
                             method: "$init(String, String, String, ClassLoader)",
                             ...(java_stack_trace ? { java_stack_trace } : {})
                         });
-                        dump(filepath, dst_path);
                         return callJavaOriginal(original, this, filepath, b, c, d);
                     }
                 );
@@ -656,8 +600,7 @@ function dex_api_unpacking(g_processName: string): void {
                                 class_loader_type: "PathClassLoader",
                                 file_path: file_path,
                                 method: "$init(String, ClassLoader)"
-                            },
-                            dst_path
+                            }
                         );
                     }
                 );
@@ -682,8 +625,7 @@ function dex_api_unpacking(g_processName: string): void {
                                 file_path: file_path,
                                 library_search_path: librarySearchPath,
                                 method: "$init(String, String, ClassLoader)"
-                            },
-                            dst_path
+                            }
                         );
                     }
                 );
@@ -714,8 +656,7 @@ function dex_api_unpacking(g_processName: string): void {
                                 class_loader_type: "DelegateLastClassLoader",
                                 file_path: file_path,
                                 method: "$init(String, ClassLoader)"
-                            },
-                            dst_path
+                            }
                         );
                     }
                 );
@@ -740,8 +681,7 @@ function dex_api_unpacking(g_processName: string): void {
                                 file_path: file_path,
                                 library_search_path: librarySearchPath,
                                 method: "$init(String, String, ClassLoader)"
-                            },
-                            dst_path
+                            }
                         );
                     }
                 );
@@ -785,8 +725,7 @@ function dex_api_unpacking(g_processName: string): void {
                                     resource_loading: resourceLoading,
                                     method:
                                         "$init(String, String, ClassLoader, boolean)"
-                                },
-                                dst_path
+                                }
                             );
                         }
                     );
@@ -964,16 +903,12 @@ function install_dex_memory_hooks(): void {
             : "NOT FOUND"}`
     );
 
-    const processName: string = getg_processName();
-    devlog(`[DEX] Process name: ${processName || "NOT FOUND"}`);
-
-    if (target !== null && processName !== "") {
-        dumpDex(target, processName);
+    if (target !== null) {
+        dumpDex(target);
         devlog("[DEX] Memory hooks successfully installed");
     } else {
         devlog(
-            "[DEX] ERROR: Failed to install memory hooks - " +
-            "missing target or process name"
+            "[DEX] ERROR: Failed to install memory hooks - missing target"
         );
     }
 }
@@ -981,15 +916,8 @@ function install_dex_memory_hooks(): void {
 function install_dex_classloader_hooks(): void {
     devlog("Installing DEX class loader hooks");
 
-    const g_processName: string = getg_processName();
-    devlog(`[DEX] Process name for classloader hooks: ${g_processName || "NOT FOUND"}`);
-
-    if (g_processName !== "") {
-        dex_api_unpacking(g_processName);
-        devlog("[DEX] ClassLoader hooks successfully installed");
-    } else {
-        devlog("[DEX] ERROR: Failed to install classloader hooks - no process name");
-    }
+    dex_api_unpacking();
+    devlog("[DEX] ClassLoader hooks successfully installed");
 }
 
 
