@@ -1,7 +1,7 @@
 import { devlog, am_send } from "../utils/logging.js"
 import { getAndroidVersion, copy_file, removeLeadingColon } from "../utils/android_runtime_requests.js"
 import { Java } from "../utils/javalib.js"
-import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeOverload, safeImplementation, PropagateException } from "../utils/safe_java.js"
 import { safeResolveExport, safeNativeFunction, safeAttach, safeEnumerateMatches, stripModulePrefix } from "../utils/safe_native.js"
 import { collectJavaStackTrace, collectNativeBacktrace } from "../utils/stacktrace.js"
 
@@ -44,6 +44,18 @@ function createDEXEvent(eventType: string, data: any): void {
         ...data
     };
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
+}
+
+function callJavaOriginal(
+    original: any,
+    receiver: any,
+    ...args: any[]
+): any {
+    try {
+        return original.call(receiver, ...args);
+    } catch (error) {
+        throw new PropagateException(error);
+    }
 }
 
 /**
@@ -488,7 +500,7 @@ function dex_api_unpacking(g_processName: string): void {
                             ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         dump(filepath, dst_path);
-                        return original.call(this, filepath, b, c, d);
+                        return callJavaOriginal(original, this, filepath, b, c, d);
                     }
                 );
             }
@@ -518,7 +530,7 @@ function dex_api_unpacking(g_processName: string): void {
                             ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         dump(file_path, dst_path);
-                        return original.call(this, file_path, parent);
+                        return callJavaOriginal(original, this, file_path, parent);
                     }
                 );
             }
@@ -542,7 +554,7 @@ function dex_api_unpacking(g_processName: string): void {
                             ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         dump(file_path, dst_path);
-                        return original.call(this, file_path, librarySearchPath, parent);
+                        return callJavaOriginal( original, this, file_path, librarySearchPath, parent);
                     }
                 );
             }
@@ -572,7 +584,7 @@ function dex_api_unpacking(g_processName: string): void {
                             ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         dump(file_path, dst_path);
-                        return original.call(this, file_path, parent);
+                        return callJavaOriginal(original, this, file_path, parent);
                     }
                 );
             }
@@ -596,7 +608,7 @@ function dex_api_unpacking(g_processName: string): void {
                             ...(java_stack_trace ? { java_stack_trace } : {})
                         });
                         dump(file_path, dst_path);
-                        return original.call(this, file_path, librarySearchPath, parent);
+                        return callJavaOriginal(original, this, file_path, librarySearchPath, parent);
                     }
                 );
             }
@@ -631,7 +643,7 @@ function dex_api_unpacking(g_processName: string): void {
                                 ...(java_stack_trace ? { java_stack_trace } : {})
                             });
                             dump(file_path, dst_path);
-                            return original.call(this, file_path, librarySearchPath, parent, resourceLoading);
+                            return callJavaOriginal(original, this, file_path, librarySearchPath, parent, resourceLoading);
                         }
                     );
                 }
@@ -723,7 +735,6 @@ function install_dex_memory_hooks(): void {
 
     if (target !== null && processName !== "") {
         dumpDex(target, processName);
-        dex_api_unpacking(processName);
         devlog("[DEX] Memory hooks successfully installed");
     } else {
         devlog(
