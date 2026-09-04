@@ -547,9 +547,15 @@ class DEXEvent(Event):
         self.size = None
         self.original_location = None
         self.dumped_path = None
-        self.dump_attempted_path = None
         self.dump_error = None
+        self.dump_success = None
+        self.sha256 = None
         self.file_type = None
+        self.operation_id = None
+        self.captured_length = None
+        self.has_buffer = None
+        self.payload_truncated = None
+        self.capture_error = None
 
         # File-backed class loaders
         self.class_loader_type = None
@@ -578,8 +584,10 @@ class DEXEvent(Event):
             'unpacking', 'dumped', 'orig_location', 'even_type',
 
             'hooked_function', 'magic', 'version', 'size',
-            'original_location', 'dumped_path', 'dump_attempted_path',
-            'dump_error', 'file_type',
+            'original_location', 'dumped_path', 'dump_error',
+            'dump_success', 'sha256', 'file_type',
+            'operation_id', 'captured_length', 'has_buffer',
+            'payload_truncated', 'capture_error',
 
             'class_loader_type', 'file_path', 'destination_path',
             'library_search_path', 'resource_loading', 'method',

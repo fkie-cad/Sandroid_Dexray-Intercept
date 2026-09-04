@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import logging
-from typing import Optional, List, Dict, Any
-from datetime import datetime
-from colorama import Fore
+import hashlib
 import json
+import logging
+import os
+from datetime import datetime
+from typing import Optional, List, Dict, Any
 
 from ..models.profile import ProfileData
 from ..models.events import Event, DEXEvent
 from ..parsers.factory import parser_factory
 from ..formatters.factory import formatter_factory
-from ..utils.android_utils import (
-    getFilePath, get_orig_path, get_filename_from_path,
-    is_benign_dump, pull_file_from_device
-)
+from ..utils.android_utils import is_benign_dump
 from ..utils.string_utils import strip_ansi_codes
 from ..utils.event_logger import EventLogger
 
@@ -44,9 +42,7 @@ class ProfileCollector:
         self.profile_data = ProfileData()
 
         # DEX unpacking tracking
-        self.dex_list = []
-        self.downloaded_origins = {}
-        self.orig_file_location = ""
+        # DEX payloads are persisted directly from Frida binary attachments.
 
         # Output control
         self.skip_output = False
@@ -112,7 +108,7 @@ class ProfileCollector:
             
             # Handle DEX loading specially
             if profile_type == "DEX_LOADING":
-                return self._handle_dex_loading(profile_content, timestamp)
+                return self._handle_dex_loading(profile_content, timestamp, data)
             
             # Process regular events
             profile_content = self._attach_native_socket_payload(
@@ -203,115 +199,109 @@ class ProfileCollector:
         
         return CustomScriptEvent(script_name, message_content, timestamp)
     
-    def _handle_dex_loading(self, content: str, timestamp: str) -> bool:
-        """Handle DEX loading events"""
-        import json
+    def _handle_dex_loading(
+        self,
+        content: str,
+        timestamp: str,
+        data: Any = None
+    ) -> bool:
+        """Parse, persist, and render DEX loading events."""
+        parser = parser_factory.get_parser("DEX_LOADING")
 
-        if content not in self.dex_list:
-            self.dex_list.append(content)
+        if parser is None:
+            return False
 
-        # Try to parse as JSON (new format)
+        event = parser.parse(content, timestamp)
+
+        if event is None:
+            return False
+
+        if event.event_type == "dex.unpacking.detected":
+            self._persist_dex_attachment(event, data)
+
+        self.profile_data.add_event("DEX_LOADING", event)
+
+        if self._should_print_to_terminal() and self.formatter:
+            formatted = self.formatter.format_event(event)
+
+            if formatted:
+                self.event_logger.event(formatted)
+                logger.info(
+                    "[DEX_LOADING] %s",
+                    strip_ansi_codes(formatted)
+                )
+
+        return True
+
+    def _persist_dex_attachment(
+        self,
+        event: DEXEvent,
+        data: Any
+    ) -> None:
+        """Persist a complete native DEX attachment as a local artifact."""
+        event.dump_success = False
+
+        if not event.has_buffer:
+            event.dump_error = (
+                event.capture_error or "DEX payload was not captured"
+            )
+            return
+
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            event.dump_error = "DEX event did not include binary payload data"
+            return
+
+        payload = bytes(data)
+        expected_length = event.captured_length
+
+        if (
+            expected_length is not None
+            and len(payload) != expected_length
+        ):
+            event.dump_error = (
+                f"Captured length mismatch: expected {expected_length}, "
+                f"received {len(payload)}"
+            )
+            return
+
+        if event.size is not None and len(payload) != event.size:
+            event.dump_error = (
+                f"DEX size mismatch: expected {event.size}, "
+                f"received {len(payload)}"
+            )
+            return
+
+        digest = hashlib.sha256(payload).hexdigest()
+        extension = event.file_type or "dex"
+
+        if extension not in {"dex", "cdex", "odex"}:
+            extension = "dex"
+
+        origin = event.original_location or ""
+        output_directory = (
+            self.benign_path
+            if is_benign_dump(origin)
+            else self.malicious_path
+        )
+        dumped_path = os.path.join(
+            output_directory,
+            f"{digest}.{extension}"
+        )
+
         try:
-            data = json.loads(content)
-            event_type = data.get('event_type', '')
+            if not os.path.exists(dumped_path):
+                temporary_path = f"{dumped_path}.tmp"
 
-            if self.verbose_mode:
-                log_func = logger.info if self.integrated_mode else logger.debug
-                log_func(f"[DEX] Received DEX_LOADING message: event_type='{event_type}'")
+                with open(temporary_path, "wb") as output_file:
+                    output_file.write(payload)
 
-            # Handle new JSON format events
-            if event_type == 'dex.unpacking.detected':
-                # Store original location if present
-                if 'original_location' in data:
-                    self.orig_file_location = data['original_location']
+                os.replace(temporary_path, dumped_path)
 
-                # Extract file path and trigger dump
-                file_path = data.get('dumped_path', '')
-                if file_path:
-                    if self.verbose_mode:
-                        log_func = logger.info if self.integrated_mode else logger.debug
-                        log_func(f"[DEX] Calling _dump_dex_file with path: {file_path}")
-                    self._dump_dex_file(file_path, timestamp)
-                elif self.verbose_mode:
-                    log_func = logger.info if self.integrated_mode else logger.debug
-                    log_func("[DEX] WARNING: No dumped_path in dex.unpacking.detected event")
-
-                # Parse and display event
-                if self._should_print_to_terminal():
-                    parser = parser_factory.get_parser("DEX_LOADING")
-                    if parser:
-                        event = parser.parse(content, timestamp)
-                        if event and self.formatter:
-                            formatted = self.formatter.format_event(event)
-                            if formatted:
-                                self.event_logger.event(formatted)
-                                clean_formatted = strip_ansi_codes(formatted)
-                                logger.info(f"[DEX_LOADING] {clean_formatted}")
-                        # Add to profile data
-                        self.profile_data.add_event("DEX_LOADING", event)
-                return True
-
-            elif event_type.startswith('dex.'):
-                # Other DEX events (classloader, memory dumps, etc.)
-                if 'original_location' in data:
-                    self.orig_file_location = data['original_location']
-                elif 'file_path' in data:
-                    # For classloader events, store file path as orig location
-                    self.orig_file_location = data['file_path']
-
-                # Parse and display
-                if self._should_print_to_terminal():
-                    parser = parser_factory.get_parser("DEX_LOADING")
-                    if parser:
-                        event = parser.parse(content, timestamp)
-                        if event and self.formatter:
-                            formatted = self.formatter.format_event(event)
-                            if formatted:
-                                self.event_logger.event(formatted)
-                                clean_formatted = strip_ansi_codes(formatted)
-                                logger.info(f"[DEX_LOADING] {clean_formatted}")
-                        # Add to profile data
-                        self.profile_data.add_event("DEX_LOADING", event)
-                return True
-
-        except (json.JSONDecodeError, ValueError):
-            # Legacy string format handling
-            if self.verbose_mode:
-                log_func = logger.info if self.integrated_mode else logger.debug
-                log_func("[DEX] Processing legacy string format DEX event")
-
-            if "dumped" in content:
-                # Handle file dumping (old format)
-                file_path = getFilePath(content)
-                if self.verbose_mode:
-                    log_func = logger.info if self.integrated_mode else logger.debug
-                    log_func(f"[DEX] Legacy format dump detected, file_path: {file_path}")
-                self._dump_dex_file(file_path, timestamp)
-                return True
-            else:
-                # Regular DEX loading event (old format)
-                if self.verbose_mode:
-                    log_func = logger.info if self.integrated_mode else logger.debug
-                    log_func("[DEX] Legacy format regular DEX loading event")
-                if self._should_print_to_terminal():
-                    # Parse and display
-                    parser = parser_factory.get_parser("DEX_LOADING")
-                    if parser:
-                        event = parser.parse(content, timestamp)
-                        if event and self.formatter:
-                            formatted = self.formatter.format_event(event)
-                            if formatted:
-                                self.event_logger.event(formatted)
-                                clean_formatted = strip_ansi_codes(formatted)
-                                logger.info(f"[DEX_LOADING] {clean_formatted}")
-
-                    # Add to profile data
-                    self.profile_data.add_event("DEX_LOADING", event or self._create_generic_event("DEX_LOADING", content, timestamp))
-
-                if "orig location" in content:
-                    self.orig_file_location = get_orig_path(content)
-
-                return True
+            event.dumped_path = dumped_path
+            event.sha256 = digest
+            event.dump_success = True
+        except OSError as error:
+            event.dump_error = str(error)
     
     
     def _attach_native_socket_payload(self, category: str, content: str, data: Any) -> str:
@@ -414,110 +404,8 @@ class ProfileCollector:
                 }
         
         return GenericEvent(category, content, timestamp)
-    
-    def _dump_dex_file(self, file_path: str, timestamp: str):
-        """Handle DEX file dumping"""
-        if not file_path:
-            if self.verbose_mode:
-                log_func = logger.info if self.integrated_mode else logger.debug
-                log_func("[DEX] _dump_dex_file called with empty file_path")
-            return
 
-        if self.verbose_mode:
-            # In integrated mode, use logger.info so messages appear in Sandroid
-            log_func = logger.info if self.integrated_mode else logger.debug
-            log_func(f"[DEX] _dump_dex_file called: file_path={file_path}, orig_location={self.orig_file_location}")
 
-        file_name = get_filename_from_path(file_path)
-
-        # Check if already downloaded
-        if self.orig_file_location in self.downloaded_origins:
-            previously_downloaded = self.downloaded_origins[self.orig_file_location]
-            msg = f"[*] File '{file_name}' has already been dumped as {previously_downloaded}"
-            logger.info(msg)
-            if self._should_print_to_terminal() and not self.integrated_mode:
-                self.event_logger.event(msg)
-            if self.verbose_mode:
-                log_func = logger.info if self.integrated_mode else logger.debug
-                log_func(f"[DEX] Skipping duplicate dump: {self.orig_file_location}")
-            return
-
-        # Determine if benign or malicious
-        is_benign = is_benign_dump(self.orig_file_location)
-        if self.verbose_mode:
-            log_func = logger.info if self.integrated_mode else logger.debug
-            log_func(f"[DEX] is_benign_dump({self.orig_file_location}) = {is_benign}")
-
-        if is_benign:
-            dump_path = f"{self.benign_path}/{file_name}"
-            if self.verbose_mode:
-                log_func = logger.info if self.integrated_mode else logger.debug
-                log_func(f"[DEX] Pulling benign file: {file_path} -> {dump_path}")
-            try:
-                pull_file_from_device(file_path, dump_path)
-                msg = f"[*] Dumped benign DEX to: {dump_path}"
-                logger.info(msg)
-                if self._should_print_to_terminal() and not self.integrated_mode:
-                    self.event_logger.event(f"{Fore.GREEN}{msg}")
-                if self.verbose_mode:
-                    log_func = logger.info if self.integrated_mode else logger.debug
-                    log_func("[DEX] Successfully pulled benign file")
-            except Exception as e:
-                logger.error(f"[DEX] Failed to pull benign file: {e}")
-                if self.verbose_mode:
-                    import traceback
-                    log_func = logger.info if self.integrated_mode else logger.debug
-                    log_func(f"[DEX] Traceback:\n{traceback.format_exc()}")
-                raise
-        else:
-            msg = "[*] Unpacking detected!"
-            logger.warning(msg)
-            if self._should_print_to_terminal() and not self.integrated_mode:
-                self.event_logger.event(msg)
-            dump_path = f"{self.malicious_path}/{file_name}"
-            if self.verbose_mode:
-                log_func = logger.info if self.integrated_mode else logger.debug
-                log_func(f"[DEX] Pulling malicious file: {file_path} -> {dump_path}")
-            try:
-                pull_file_from_device(file_path, dump_path)
-                msg = f"[*] Dumped DEX payload to: {dump_path}"
-                logger.warning(msg)
-                if self._should_print_to_terminal() and not self.integrated_mode:
-                    self.event_logger.event(f"{Fore.RED}{msg}")
-                if self.verbose_mode:
-                    log_func = logger.info if self.integrated_mode else logger.debug
-                    log_func("[DEX] Successfully pulled malicious file")
-            except Exception as e:
-                logger.error(f"[DEX] Failed to pull malicious file: {e}")
-                if self.verbose_mode:
-                    import traceback
-                    log_func = logger.info if self.integrated_mode else logger.debug
-                    log_func(f"[DEX] Traceback:\n{traceback.format_exc()}")
-                raise
-        
-        # Record the download
-        self.downloaded_origins[self.orig_file_location] = file_name
-        
-        # Create DEX event for profile
-        from ..parsers.dex import DEXParser
-        parser = DEXParser()
-        event = parser.parse_dex_loading_list(self.dex_list)
-        
-        dex_event = DEXEvent("dex.unpacking", timestamp)
-        dex_event.unpacking = True
-        dex_event.dumped = dump_path
-        dex_event.orig_location = self.orig_file_location
-        
-        # Copy parsed data
-        for key, value in event.items():
-            if hasattr(dex_event, key):
-                setattr(dex_event, key, value)
-            else:
-                dex_event.add_metadata(key, value)
-        
-        self.profile_data.add_event("DEX_LOADING", dex_event)
-        self.dex_list.clear()
-    
     def get_profile_data(self) -> ProfileData:
         """Get the collected profile data"""
         return self.profile_data
@@ -541,5 +429,3 @@ class ProfileCollector:
     def clear_profile_data(self):
         """Clear collected profile data"""
         self.profile_data = ProfileData()
-        self.dex_list.clear()
-        self.downloaded_origins.clear()
