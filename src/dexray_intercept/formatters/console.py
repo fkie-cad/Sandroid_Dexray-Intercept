@@ -643,12 +643,52 @@ class ConsoleFormatter(BaseFormatter):
                 lines.append(f"[*] Environment: {event.environment}")
 
         elif event.event_type in ['runtime.load_library', 'runtime.load']:
-            action = 'Load Library' if event.event_type == 'runtime.load_library' else 'Load'
+            action = (
+                'Load Library'
+                if event.event_type == 'runtime.load_library'
+                else 'Load'
+            )
             lines.append(f"\n[*] [Runtime] {action}:")
+
             if event.library_name:
                 lines.append(f"[*] Library: {event.library_name}")
+
             if event.filename:
                 lines.append(f"[*] Filename: {event.filename}")
+
+        elif event.event_type in [
+            'library.system.load',
+            'library.system.load_library',
+            'library.runtime.load',
+            'library.runtime.load_library',
+            'library.internal.load',
+            'library.internal.load_library',
+        ]:
+            lines.append("\n[*] [Library] Native Library Load:")
+
+            method = event.metadata.get("method")
+            internal_method = event.metadata.get("internal_method")
+            caller_class = event.metadata.get("caller_class")
+
+            if method:
+                lines.append(f"[*] API: {method}")
+
+            if event.loader_type:
+                lines.append(f"[*] Loader: {event.loader_type}")
+
+            if event.library_path:
+                lines.append(f"[*] Library Path: {event.library_path}")
+
+            if event.library_name:
+                lines.append(f"[*] Library Name: {event.library_name}")
+
+            if caller_class:
+                lines.append(f"[*] Caller Class: {caller_class}")
+
+            if internal_method:
+                lines.append(
+                    f"[*] Internal Dispatch: {internal_method}"
+                )
 
         elif event.event_type in ['runtime.add_shutdown_hook', 'runtime.remove_shutdown_hook']:
             action = 'Add Shutdown Hook' if event.event_type == 'runtime.add_shutdown_hook' else 'Remove Shutdown Hook'
