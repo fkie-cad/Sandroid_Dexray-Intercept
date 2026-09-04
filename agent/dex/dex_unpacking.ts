@@ -1,11 +1,12 @@
 import { devlog, am_send } from "../utils/logging.js"
 import { getAndroidVersion, copy_file, removeLeadingColon } from "../utils/android_runtime_requests.js"
-import { Java } from "../utils/javalib.js"
 import { safePerform, safeUse, safeOverload, safeImplementation, PropagateException } from "../utils/safe_java.js"
 import { safeResolveExport, safeNativeFunction, safeAttach, safeEnumerateMatches, stripModulePrefix } from "../utils/safe_native.js"
 import { collectJavaStackTrace, collectNativeBacktrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "DEX_LOADING"
+
+const activeInMemoryDexLoaderDepth = new Map<number, number>();
 
 interface DEXInfo {
     magicString: string;
@@ -474,9 +475,85 @@ function dump(file_path: string, dst_path: string): void {
     copy_file(PROFILE_HOOKING_TYPE, location, dst_path);
 }
 
+interface InMemoryDexBufferSummary {
+    size: number;
+    magic: string | null;
+}
+
+function inspectInMemoryDexBuffer(
+    buffer: any,
+    getByte: any
+): InMemoryDexBufferSummary {
+    const size = buffer.remaining();
+    const duplicate = buffer.duplicate();
+    const previewLength = Math.min(8, duplicate.remaining());
+    const bytes: number[] = [];
+
+    for (let index = 0; index < previewLength; index++) {
+        bytes.push(Number(getByte.call(duplicate)) & 0xff);
+    }
+
+    if (bytes.length < 8) {
+        return {
+            size: size,
+            magic: null
+        };
+    }
+
+    const start = String.fromCharCode(
+        bytes[0],
+        bytes[1],
+        bytes[2],
+        bytes[3]
+    );
+    const version = String.fromCharCode(
+        bytes[4],
+        bytes[5],
+        bytes[6]
+    );
+    const hasDexMagic =
+        (start === "dex\n" || start === "cdex") &&
+        bytes[7] === 0;
+
+    return {
+        size: size,
+        magic: hasDexMagic
+            ? start.replace("\n", "") + version
+            : null
+    };
+}
+
+function emitInMemoryDexLoaderEvent(
+    method: string,
+    summaries: InMemoryDexBufferSummary[],
+    javaStackTrace: string[] | null
+): void {
+    const bufferSizes = summaries.map(summary => summary.size);
+    const event: any = {
+        class_loader_type: "InMemoryDexClassLoader",
+        method: method,
+        buffer_count: summaries.length,
+        buffer_sizes: bufferSizes,
+        total_buffer_size: bufferSizes.reduce(
+            (total, size) => total + size,
+            0
+        ),
+        buffer_magics: summaries.map(summary => summary.magic),
+        ...(javaStackTrace
+            ? { java_stack_trace: javaStackTrace }
+            : {})
+    };
+
+    if (summaries.length === 1) {
+        event.buffer_size = summaries[0].size;
+        event.magic = summaries[0].magic;
+    }
+
+    createDEXEvent("dex.in_memory_loader", event);
+}
+
 function dex_api_unpacking(g_processName: string): void {
     safePerform("dex:dex_api_unpacking", () => {
-        const filename = `/data/data/${g_processName}/dump.dex`;
         const dst_path = `/data/data/${g_processName}`;
 
         // Hook DexClassLoader
@@ -650,63 +727,153 @@ function dex_api_unpacking(g_processName: string): void {
             }
         }
 
-        // Hook InMemoryDexClassLoader (API 26+)
+        // Hook InMemoryDexClassLoader constructors available from API 26.
         const InMemoryDexClassLoader = safeUse(
             "dalvik.system.InMemoryDexClassLoader",
             "dex:dex_api_unpacking"
         );
-        if (InMemoryDexClassLoader) {
+        const ByteBuffer = safeUse(
+            "java.nio.ByteBuffer",
+            "dex:dex_api_unpacking"
+        );
+
+        if (InMemoryDexClassLoader && ByteBuffer) {
+            const getByte = safeOverload(
+                ByteBuffer.get,
+                "dex:ByteBuffer.get"
+            );
+
             const memInit = safeOverload(
                 InMemoryDexClassLoader.$init,
                 "dex:InMemoryDexClassLoader.$init",
-                "java.nio.ByteBuffer", "java.lang.ClassLoader"
+                "java.nio.ByteBuffer",
+                "java.lang.ClassLoader"
             );
-            if (memInit) {
+
+            if (memInit && getByte) {
                 memInit.implementation = safeImplementation(
                     "dex:InMemoryDexClassLoader.$init(ByteBuffer,ClassLoader)",
                     memInit,
-                    function (original, dexbuffer: any, loader: any) {
-                        const remaining = dexbuffer.remaining();
-                        const java_stack_trace = collectJavaStackTrace();
+                    function (original, dexBuffer: any, loader: any) {
+                        const threadId = Process.getCurrentThreadId();
+                        const depth =
+                            activeInMemoryDexLoaderDepth.get(threadId) || 0;
+                        const isOutermost = depth === 0;
 
-                        createDEXEvent("dex.in_memory_loader", {
-                            class_loader_type: "InMemoryDexClassLoader",
-                            buffer_size: remaining,
-                            method: "$init(ByteBuffer, ClassLoader)",
-                            ...(java_stack_trace ? { java_stack_trace } : {})
-                        });
+                        activeInMemoryDexLoaderDepth.set(
+                            threadId,
+                            depth + 1
+                        );
 
-                        const object = original.call(this, dexbuffer, loader);
+                        try {
+                            if (isOutermost) {
+                                const javaStackTrace =
+                                    collectJavaStackTrace();
 
-                        // Dump the ByteBuffer contents to file
-                        createDEXEvent("dex.memory_dump", {
-                            file_name: filename,
-                            bytes_to_write: remaining
-                        });
+                                emitInMemoryDexLoaderEvent(
+                                    "$init(ByteBuffer, ClassLoader)",
+                                    [
+                                        inspectInMemoryDexBuffer(
+                                            dexBuffer,
+                                            getByte
+                                        )
+                                    ],
+                                    javaStackTrace
+                                );
+                            }
 
-                        const f   = new File(filename, "wb");
-                        const buf = new Uint8Array(remaining);
-                        for (let i = 0; i < remaining; i++) {
-                            buf[i] = dexbuffer.get();
+                            return callJavaOriginal(
+                                original,
+                                this,
+                                dexBuffer,
+                                loader
+                            );
+                        } finally {
+                            const remaining =
+                                activeInMemoryDexLoaderDepth.get(threadId)! - 1;
+
+                            if (remaining <= 0) {
+                                activeInMemoryDexLoaderDepth.delete(threadId);
+                            } else {
+                                activeInMemoryDexLoaderDepth.set(
+                                    threadId,
+                                    remaining
+                                );
+                            }
                         }
-                        f.write(Array.from(buf));
-                        f.close();
+                    }
+                );
+            }
 
-                        // Check if dump was successful
-                        const remainingAfter = dexbuffer.remaining();
-                        if (remainingAfter > 0) {
-                            createDEXEvent("dex.dump_error", {
-                                remaining_bytes: remainingAfter,
-                                file_name: filename
-                            });
-                        } else {
-                            createDEXEvent("dex.dump_success", {
-                                file_name: filename,
-                                bytes_written: remaining
-                            });
+            const memInitMulti = safeOverload(
+                InMemoryDexClassLoader.$init,
+                "dex:InMemoryDexClassLoader.$init",
+                "[Ljava.nio.ByteBuffer;",
+                "java.lang.ClassLoader"
+            );
+
+            if (memInitMulti && getByte) {
+                memInitMulti.implementation = safeImplementation(
+                    "dex:InMemoryDexClassLoader.$init(ByteBuffer[],ClassLoader)",
+                    memInitMulti,
+                    function (original, dexBuffers: any, loader: any) {
+                        const threadId = Process.getCurrentThreadId();
+                        const depth =
+                            activeInMemoryDexLoaderDepth.get(threadId) || 0;
+                        const isOutermost = depth === 0;
+
+                        activeInMemoryDexLoaderDepth.set(
+                            threadId,
+                            depth + 1
+                        );
+
+                        try {
+                            if (isOutermost) {
+                                const summaries: InMemoryDexBufferSummary[] =
+                                    [];
+
+                                for (
+                                    let index = 0;
+                                    index < dexBuffers.length;
+                                    index++
+                                ) {
+                                    summaries.push(
+                                        inspectInMemoryDexBuffer(
+                                            dexBuffers[index],
+                                            getByte
+                                        )
+                                    );
+                                }
+
+                                const javaStackTrace =
+                                    collectJavaStackTrace();
+
+                                emitInMemoryDexLoaderEvent(
+                                    "$init(ByteBuffer[], ClassLoader)",
+                                    summaries,
+                                    javaStackTrace
+                                );
+                            }
+
+                            return callJavaOriginal(
+                                original,
+                                this,
+                                dexBuffers,
+                                loader
+                            );
+                        } finally {
+                            const remaining =
+                                activeInMemoryDexLoaderDepth.get(threadId)! - 1;
+
+                            if (remaining <= 0) {
+                                activeInMemoryDexLoaderDepth.delete(threadId);
+                            } else {
+                                activeInMemoryDexLoaderDepth.set(
+                                    threadId,
+                                    remaining
+                                );
+                            }
                         }
-
-                        return object;
                     }
                 );
             }
