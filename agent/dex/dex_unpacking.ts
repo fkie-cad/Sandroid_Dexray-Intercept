@@ -29,6 +29,14 @@ interface UnpackingEvent {
     class_loader_type?: string;
 }
 
+interface NativeDexHookTarget {
+    moduleName: string;
+    symbolName: string;
+    address: NativePointer;
+    dataArgumentIndexes: number[];
+    sizeArgumentIndex: number | null;
+}
+
 function createDEXEvent(eventType: string, data: any): void {
     const event = {
         event_type: eventType,
@@ -59,28 +67,28 @@ function createDEXEvent(eventType: string, data: any): void {
  */
 
 
-function get_package_name(): string {
-    let package_name = "";
+// function get_package_name(): string {
+//     let package_name = "";
 
-    safePerform("dex:get_package_name", () => {
-        // Get the Android application context
-        const ActivityThread = safeUse(
-            "android.app.ActivityThread",
-            "dex:get_package_name"
-        );
-        if (!ActivityThread) return;
+//     safePerform("dex:get_package_name", () => {
+//         // Get the Android application context
+//         const ActivityThread = safeUse(
+//             "android.app.ActivityThread",
+//             "dex:get_package_name"
+//         );
+//         if (!ActivityThread) return;
 
-        // sometimes we are to early to get the context
-        const context = ActivityThread.currentApplication().getApplicationContext();
-        // Retrieve the package name
-        package_name = context.getPackageName();
+//         // sometimes we are to early to get the context
+//         const context = ActivityThread.currentApplication().getApplicationContext();
+//         // Retrieve the package name
+//         package_name = context.getPackageName();
 
-        // Log the package name
-        //console.log('Package Name:', package_name);
-    });
+//         // Log the package name
+//         //console.log('Package Name:', package_name);
+//     });
 
-    return package_name;
-}
+//     return package_name;
+// }
 
 
 /* Read a C++ std string (basic_string) to a nomal string */
@@ -92,60 +100,137 @@ function readStdString(ptr_str: NativePointer): string {
     return ptr_str.add(2 * Process.pointerSize).readPointer().readUtf8String();
 }
 
-//@ts-ignore
-function getFunctionName(g_AndroidOSVersion: number): string {
-    let functionName = "";
+// //@ts-ignore
+// function getFunctionName(g_AndroidOSVersion: number): string {
+//     let functionName = "";
 
-    // ApiResolver is the safe alternative to Process.getModuleByName(...).enumerateExports():
-    // it resolves the module + does the substring match in one call that returns [] (never
-    // throws) when the library or symbol is absent. Match names come back as "module!symbol",
-    // so stripModulePrefix keeps the bare symbol name that dumpDex re-resolves.
+//     // ApiResolver is the safe alternative to Process.getModuleByName(...).enumerateExports():
+//     // it resolves the module + does the substring match in one call that returns [] (never
+//     // throws) when the library or symbol is absent. Match names come back as "module!symbol",
+//     // so stripModulePrefix keeps the bare symbol name that dumpDex re-resolves.
 
-    // Android 4: hook dexFileParse
-    // Android 5: hook OpenMemory
-    // after Android 5: hook OpenCommon (libdexfile.so on Android 10+, libart.so before)
-    if (g_AndroidOSVersion > 4) {
-        // OpenCommon is in libdexfile.so in android 10 and later
-        const soName: string = g_AndroidOSVersion >= 10 ? "libdexfile.so" : "libart.so";
+//     // Android 4: hook dexFileParse
+//     // Android 5: hook OpenMemory
+//     // after Android 5: hook OpenCommon (libdexfile.so on Android 10+, libart.so before)
+//     if (g_AndroidOSVersion > 4) {
+//         // OpenCommon is in libdexfile.so in android 10 and later
+//         const soName: string = g_AndroidOSVersion >= 10 ? "libdexfile.so" : "libart.so";
 
-        const openMemory = safeEnumerateMatches(
-            `exports:${soName}!*OpenMemory*`,
-            "dex:getFunctionName"
-        );
-        if (openMemory.length > 0) {
-            functionName = stripModulePrefix(openMemory[0].name);
-        } else {
-            const openCommon = safeEnumerateMatches(
-                `exports:${soName}!*OpenCommon*`,
-                "dex:getFunctionName"
+//         const openMemory = safeEnumerateMatches(
+//             `exports:${soName}!*OpenMemory*`,
+//             "dex:getFunctionName"
+//         );
+//         if (openMemory.length > 0) {
+//             functionName = stripModulePrefix(openMemory[0].name);
+//         } else {
+//             const openCommon = safeEnumerateMatches(
+//                 `exports:${soName}!*OpenCommon*`,
+//                 "dex:getFunctionName"
+//             );
+//             for (const match of openCommon) {
+//                 if (g_AndroidOSVersion >= 10 && match.name.indexOf("ArtDexFileLoader") !== -1)
+//                     continue;
+//                 functionName = stripModulePrefix(match.name);
+//                 break;
+//             }
+//         }
+//     } else { //android 4
+//         const dvm = safeEnumerateMatches(
+//             "exports:libdvm.so!*dexFileParse*",
+//             "dex:getFunctionName"
+//         );
+//         if (dvm.length > 0) {
+//             functionName = stripModulePrefix(dvm[0].name);
+//         } else {
+//             // libdvm not present (or no match) - fall back to libart's OpenMemory
+//             const art = safeEnumerateMatches(
+//                 "exports:libart.so!*OpenMemory*",
+//                 "dex:getFunctionName"
+//             );
+//             if (art.length > 0) {
+//                 functionName = stripModulePrefix(art[0].name);
+//             }
+//         }
+//     }
+
+//     return functionName;
+// }
+
+// Select a native DEX-loading entry point and its ABI-specific buffer layout.
+function getNativeDexHookTarget(
+    androidVersion: number
+): NativeDexHookTarget | null {
+    if (androidVersion >= 10) {
+        // Android 14+ routes DEX loading through the container overload,
+        // where the DEX buffer and size follow two C++ object arguments.
+        // Earlier Android 10+ runtimes use the direct buffer overload.
+        const layouts = androidVersion >= 14
+            ? [
+                {
+                    marker: "OpenCommonENSt3__110shared_ptr",
+                    dataArgumentIndexes: [2],
+                    sizeArgumentIndex: 3
+                }
+            ]
+            : [
+                {
+                    marker: "OpenCommonEPKhm",
+                    dataArgumentIndexes: [0, 1],
+                    sizeArgumentIndex: null
+                }
+            ];
+
+        for (const moduleName of ["libart.so", "libdexfile.so"]) {
+            const matches = safeEnumerateMatches(
+                `exports:${moduleName}!*OpenCommon*`,
+                "dex:getNativeDexHookTarget"
             );
-            for (const match of openCommon) {
-                if (g_AndroidOSVersion >= 10 && match.name.indexOf("ArtDexFileLoader") !== -1)
-                    continue;
-                functionName = stripModulePrefix(match.name);
-                break;
+
+            for (const layout of layouts) {
+                const match = matches.find(candidate => {
+                    const symbolName = stripModulePrefix(candidate.name);
+
+                    return (
+                        !symbolName.includes("ArtDexFileLoader") &&
+                        symbolName.includes(layout.marker)
+                    );
+                });
+
+                if (match) {
+                    return {
+                        moduleName: moduleName,
+                        symbolName: stripModulePrefix(match.name),
+                        address: match.address,
+                        dataArgumentIndexes: layout.dataArgumentIndexes,
+                        sizeArgumentIndex: layout.sizeArgumentIndex
+                    };
+                }
             }
         }
-    } else { //android 4
-        const dvm = safeEnumerateMatches(
-            "exports:libdvm.so!*dexFileParse*",
-            "dex:getFunctionName"
-        );
-        if (dvm.length > 0) {
-            functionName = stripModulePrefix(dvm[0].name);
-        } else {
-            // libdvm not present (or no match) - fall back to libart's OpenMemory
-            const art = safeEnumerateMatches(
-                "exports:libart.so!*OpenMemory*",
-                "dex:getFunctionName"
-            );
-            if (art.length > 0) {
-                functionName = stripModulePrefix(art[0].name);
-            }
-        }
+
+        return null;
     }
 
-    return functionName;
+    const moduleName = androidVersion > 4 ? "libart.so" : "libdvm.so";
+    const query = androidVersion > 4
+        ? `exports:${moduleName}!*OpenMemory*`
+        : "exports:libdvm.so!*dexFileParse*";
+    const matches = safeEnumerateMatches(
+        query,
+        "dex:getNativeDexHookTarget"
+    );
+
+    if (matches.length === 0) {
+        return null;
+    }
+
+    return {
+        moduleName: moduleName,
+        symbolName: stripModulePrefix(matches[0].name),
+        address: matches[0].address,
+        dataArgumentIndexes: [0, 1],
+        sizeArgumentIndex: null
+    };
 }
 
 function getg_processName(): string {
@@ -220,126 +305,150 @@ function dumpDexToFile(
     dexInfo: any,
     processName: string,
     location: string,
-    hooked_fct: string,
+    hookedFunction: string,
     context?: CpuContext
 ): void {
     const dexSize = begin.add(dexInfo.sizeOffset).readInt();
+    const nativeBacktrace = collectNativeBacktrace(context);
 
-    devlog(`[DEX] Dumping ${dexInfo.ext} file: ${dexSize} bytes from ${location || "unknown location"}`);
+    devlog(
+        `[DEX] Detected ${dexInfo.ext} file: ${dexSize} bytes from ` +
+        `${location || "unknown location"}`
+    );
 
-    let dexPath = `/data/data/${processName}/${dexSize}.${dexInfo.ext}`;
-    let dexFile: File;
-    const native_backtrace = collectNativeBacktrace(context);
+    let dumpedPath: string | null = null;
+    let dumpError: string | null = null;
+    const attemptedPath =
+        processName.length > 0
+            ? `/data/data/${processName}/${dexSize}.${dexInfo.ext}`
+            : null;
 
-    try {
-        dexFile = new File(dexPath, "wb");
-        devlog(`[DEX] Created file: ${dexPath}`);
-    } catch (e) {
-        const g_package_name = get_package_name();
-        dexPath = `/data/data/${g_package_name}/${dexSize}.${dexInfo.ext}`;
+    if (attemptedPath !== null) {
+        try {
+            const dexBuffer = begin.readByteArray(dexSize);
 
-        devlog(`[DEX] Retry with package name: ${g_package_name}, path: ${dexPath}`);
+            if (dexBuffer === null) {
+                throw new Error("Unable to read DEX buffer");
+            }
 
-        // Log file creation attempt
-        if (g_package_name.length > 4) {
-            createDEXEvent("dex.unpacking.file_creation", {
-                attempted_path: dexPath,
-                package_name: g_package_name,
-                ...(native_backtrace ? { native_backtrace } : {})
-            });
+            const dexFile = new File(attemptedPath, "wb");
+            dexFile.write(dexBuffer);
+            dexFile.flush();
+            dexFile.close();
+
+            dumpedPath = attemptedPath;
+
+            devlog(`[DEX] File written successfully: ${dumpedPath}`);
+        } catch (error) {
+            dumpError = error instanceof Error
+                ? error.message
+                : String(error);
+
+            devlog(
+                `[DEX] Unable to write local DEX copy at ${attemptedPath}: ` +
+                `${dumpError}`
+            );
         }
-        dexFile = new File(dexPath, "wb");
     }
 
-    const dexBuffer = begin.readByteArray(dexSize);
-    if (dexBuffer) {
-        dexFile.write(dexBuffer);
-    }
-    dexFile.flush();
-    dexFile.close();
-
-    devlog(`[DEX] File written successfully: ${dexPath}`);
-
-    // Send structured unpacking event
     createDEXEvent("dex.unpacking.detected", {
-        hooked_function: hooked_fct,
+        hooked_function: hookedFunction,
         magic: dexInfo.magicString,
         version: dexInfo.version,
         size: dexSize,
         original_location: location,
-        dumped_path: dexPath,
         file_type: dexInfo.ext,
-        ...(native_backtrace ? { native_backtrace } : {})
+        ...(dumpedPath !== null ? { dumped_path: dumpedPath } : {}),
+        ...(attemptedPath !== null
+            ? { dump_attempted_path: attemptedPath }
+            : {}),
+        ...(dumpError !== null ? { dump_error: dumpError } : {}),
+        ...(nativeBacktrace ? { native_backtrace: nativeBacktrace } : {})
     });
 
-    devlog(`[DEX] Unpacking event sent for ${dexInfo.magicString} (${dexSize} bytes)`);
+    devlog(
+        `[DEX] Unpacking event sent for ${dexInfo.magicString} ` +
+        `(${dexSize} bytes)`
+    );
 }
 
-function dumpDex(moduleFuncName: string, g_processName: string, g_AndroidOSVersion: number): void {
-    let wrongMagic0: any;
 
-    if (moduleFuncName === "") {
-        devlog("[DEX] Error: cannot find correct module function.");
-        return;
-    }
+function dumpDex(
+    target: NativeDexHookTarget,
+    processName: string
+): void {
+    const hookedFunction =
+        `${target.moduleName}::${target.symbolName}`;
 
-    let hookFunction: NativePointer | null;
-    let hooked_fct: string;
-
-    if (g_AndroidOSVersion > 4) {
-        hookFunction = safeResolveExport("libart.so", moduleFuncName, "dex:dumpDex");
-        hooked_fct   = `Libart.so::${moduleFuncName}`;
-    } else {
-        hookFunction = safeResolveExport("libdvm.so", moduleFuncName, "dex:dumpDex");
-        if (hookFunction === null) {
-            hookFunction = safeResolveExport("libart.so", moduleFuncName, "dex:dumpDex");
-            //dem = demangleAndExtractFunctionName("libart",moduleFuncName)
-            hooked_fct   = `Libart.so::${moduleFuncName}`;
-        } else {
-            hooked_fct = `Libdvm.so::${moduleFuncName}`;
-        }
-    }
-
-    safeAttach(hookFunction, `dex:${moduleFuncName}`, {
+    safeAttach(target.address, `dex:${target.symbolName}`, {
         onEnter: function (args: NativePointer[]) {
-            let begin: NativePointer;
-            let dexInfo: any;
-            let location: string | null = null;
+            let begin: NativePointer | null = null;
+            let dexInfo: any = null;
 
-            dexInfo = checkMagic(args[0]);
-            begin   = args[0];
+            for (const argumentIndex of target.dataArgumentIndexes) {
+                const candidate = args[argumentIndex];
+                const candidateInfo = checkMagic(candidate);
 
-            if (!dexInfo.found) {
-                wrongMagic0 = dexInfo.wrongMagic;
-                dexInfo     = checkMagic(args[1]);
-                begin       = args[1];
-            }
-
-            if (!dexInfo.found) {
-                throw new Error(
-                    "Could not identify magic, found invalid values " +
-                    wrongMagic0.map((i: number) => i.toString(16).padStart(2, "0")).join("") +
-                    " " +
-                    dexInfo.wrongMagic.map((i: number) => i.toString(16).padStart(2, "0")).join("")
-                );
-            }
-
-            // Try all parameters
-            for (let i = 0; i < 10; i++) {
-                try {
-                    location = readStdString(args[i]);
-                } catch {} // Illegal memory access
-                if (location != null && location.length > 0 && location.includes("/")) {
-                    // != null catches both undefined and null
+                if (candidateInfo.found) {
+                    begin = candidate;
+                    dexInfo = candidateInfo;
                     break;
                 }
             }
 
-            dumpDexToFile(begin, dexInfo, g_processName, location, hooked_fct, this.context);
+            // OpenCommon can receive non-DEX inputs during normal ART startup.
+            // Ignore unmatched invocations without producing hook errors.
+            if (begin === null || dexInfo === null) {
+                return;
+            }
+
+            if (target.sizeArgumentIndex !== null) {
+                try {
+                    const suppliedSize = args[
+                        target.sizeArgumentIndex
+                    ].toUInt32();
+
+                    if (suppliedSize > 0) {
+                        dexInfo.suppliedSize = suppliedSize;
+                    }
+                } catch {
+                    // The DEX header remains the authoritative size source.
+                }
+            }
+
+            let location: string | null = null;
+
+            for (let index = 0; index < 10; index++) {
+                try {
+                    location = readStdString(args[index]);
+                } catch {
+                    continue;
+                }
+
+                if (
+                    location !== null &&
+                    location.length > 0 &&
+                    location.includes("/")
+                ) {
+                    break;
+                }
+            }
+
+            dumpDexToFile(
+                begin,
+                dexInfo,
+                processName,
+                location || "",
+                hookedFunction,
+                this.context
+            );
         }
     });
 
-    devlog(`[DEX] Interceptor attached to ${hooked_fct} at ${hookFunction}`);
+    devlog(
+        `[DEX] Interceptor attached to ${hookedFunction} at ` +
+        `${target.address}`
+    );
 }
 
 function dump(file_path: string, dst_path: string): void {
@@ -597,21 +706,30 @@ function dex_api_unpacking(g_processName: string): void {
 function install_dex_memory_hooks(): void {
     devlog("Installing DEX memory-based unpacking hooks");
 
-    const g_AndroidOSVersion: number = getAndroidVersion();
-    devlog(`[DEX] Android version: ${g_AndroidOSVersion}`);
+    const androidVersion: number = getAndroidVersion();
+    devlog(`[DEX] Android version: ${androidVersion}`);
 
-    const g_moduleFunctionName: string = getFunctionName(g_AndroidOSVersion);
-    devlog(`[DEX] Target function name: ${g_moduleFunctionName || "NOT FOUND"}`);
+    const target = getNativeDexHookTarget(androidVersion);
 
-    const g_processName: string = getg_processName();
-    devlog(`[DEX] Process name: ${g_processName || "NOT FOUND"}`);
+    devlog(
+        `[DEX] Target function: ` +
+        `${target
+            ? `${target.moduleName}::${target.symbolName}`
+            : "NOT FOUND"}`
+    );
 
-    if (g_moduleFunctionName !== "" && g_processName !== "") {
-        dumpDex(g_moduleFunctionName, g_processName, g_AndroidOSVersion);
-        dex_api_unpacking(g_processName);
+    const processName: string = getg_processName();
+    devlog(`[DEX] Process name: ${processName || "NOT FOUND"}`);
+
+    if (target !== null && processName !== "") {
+        dumpDex(target, processName);
+        dex_api_unpacking(processName);
         devlog("[DEX] Memory hooks successfully installed");
     } else {
-        devlog(`[DEX] ERROR: Failed to install memory hooks - missing function name or process name`);
+        devlog(
+            "[DEX] ERROR: Failed to install memory hooks - " +
+            "missing target or process name"
+        );
     }
 }
 
