@@ -1178,17 +1178,59 @@ class ConsoleFormatter(BaseFormatter):
 
         # Handle new structured events
         elif event.event_type == "dex.unpacking.detected":
-            if hasattr(event, 'hooked_function') and event.hooked_function:
-                # Extract just the function name from demangled format
-                func_parts = str(event.hooked_function).split("::")
-                func_name = func_parts[-1] if len(func_parts) > 1 else event.hooked_function
-                lines.append(f"[*] Method used for unpacking: {func_name}")
-            if hasattr(event, 'magic') and event.magic:
+            lines.append("\n[*] [DEX] Native DEX Detection:")
+
+            if event.hooked_function:
+                function_parts = str(event.hooked_function).split("::")
+                function_name = (
+                    function_parts[-1]
+                    if len(function_parts) > 1
+                    else event.hooked_function
+                )
+                lines.append(f"[*] Hook: {function_name}")
+
+            if event.magic:
                 lines.append(f"[*] Magic: {event.magic}")
-            if hasattr(event, 'size') and event.size:
-                lines.append(f"[*] Size: {event.size}")
-            if hasattr(event, 'original_location') and event.original_location:
-                lines.append(f"[*] Original location: {event.original_location}")
+
+            if event.size is not None:
+                lines.append(f"[*] Size: {event.size} bytes")
+
+            if event.original_location:
+                lines.append(
+                    f"[*] Original Location: {event.original_location}"
+                )
+
+            if event.operation_id:
+                lines.append(f"[*] Operation ID: {event.operation_id}")
+
+            if event.has_buffer is not None:
+                lines.append(
+                    f"[*] Payload: "
+                    f"{'captured' if event.has_buffer else 'unavailable'}"
+                )
+
+            if event.captured_length is not None:
+                lines.append(
+                    f"[*] Captured Length: {event.captured_length} bytes"
+                )
+
+            if event.payload_truncated:
+                lines.append("[*] Payload Truncated: True")
+
+            if event.dump_success:
+                lines.append("[*] Persisted: True")
+
+            if event.dumped_path:
+                lines.append(f"[*] Local Artifact: {event.dumped_path}")
+
+            if event.sha256:
+                lines.append(f"[*] SHA-256: {event.sha256}")
+
+            if event.capture_error:
+                lines.append(f"[*] Capture Error: {event.capture_error}")
+
+            if event.dump_error:
+                lines.append(f"[*] Persistence Error: {event.dump_error}")
 
         elif event.event_type.startswith("dex.classloader."):
             loader_type = getattr(event, 'class_loader_type', 'Unknown')
@@ -1196,8 +1238,25 @@ class ConsoleFormatter(BaseFormatter):
             lines.append(f"[*] {loader_type} loading: {file_path}")
 
         elif event.event_type == "dex.in_memory_loader":
-            buffer_size = getattr(event, 'buffer_size', 'Unknown')
-            lines.append(f"[*] InMemoryDexClassLoader: {buffer_size} bytes")
+            lines.append("\n[*] [DEX] InMemoryDexClassLoader:")
+
+            if event.method:
+                lines.append(f"[*] Constructor: {event.method}")
+
+            if event.buffer_count is not None:
+                lines.append(f"[*] Buffer Count: {event.buffer_count}")
+
+            if event.total_buffer_size is not None:
+                lines.append(
+                    f"[*] Total Buffer Size: "
+                    f"{event.total_buffer_size} bytes"
+                )
+
+            if event.buffer_sizes:
+                lines.append(f"[*] Buffer Sizes: {event.buffer_sizes}")
+
+            if event.buffer_magics:
+                lines.append(f"[*] Buffer Magics: {event.buffer_magics}")
 
         elif event.event_type == "dex.dump_success":
             file_name = getattr(event, 'file_name', 'Unknown')
