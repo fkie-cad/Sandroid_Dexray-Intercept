@@ -44,18 +44,39 @@ public class DexTestUtils {
      */
     public static File copyAsset(Context context, String assetName) {
         File dest = new File(context.getFilesDir(), assetName);
-        try (InputStream is  = context.getAssets().open(assetName);
+
+        if (dest.exists() && !dest.setWritable(true, true)) {
+            Log.e(
+                    TAG,
+                    "copyAsset could not make destination writable: " +
+                            dest.getAbsolutePath()
+            );
+            return null;
+        }
+
+        try (InputStream is = context.getAssets().open(assetName);
              FileOutputStream fos = new FileOutputStream(dest)) {
             byte[] buf = new byte[4096];
             int n;
+
             while ((n = is.read(buf)) != -1) {
                 fos.write(buf, 0, n);
             }
-            return dest;
         } catch (IOException e) {
             Log.e(TAG, "copyAsset failed for " + assetName, e);
             return null;
         }
+
+        if (!dest.setReadOnly() || dest.canWrite()) {
+            Log.e(
+                    TAG,
+                    "copyAsset could not make destination read-only: " +
+                            dest.getAbsolutePath()
+            );
+            return null;
+        }
+
+        return dest;
     }
 
     /**
