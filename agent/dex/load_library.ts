@@ -1,8 +1,20 @@
 import { devlog, am_send } from "../utils/logging.js"
-import { safePerform, safeUse, safeOverload, safeImplementation } from "../utils/safe_java.js"
+import {
+    safePerform,
+    safeUse,
+    safeOverload,
+    safeImplementation,
+    PropagateException
+} from "../utils/safe_java.js"
 import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "DYNAMIC_LIB_LOADING"
+
+interface LibraryLoadOrigin {
+    eventType: string;
+    originMethod: string;
+    loaderType: string;
+}
 
 function createLibraryEvent(eventType: string, data: any): void {
     const event = {
@@ -13,114 +25,187 @@ function createLibraryEvent(eventType: string, data: any): void {
     am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
 }
 
-function install_system_library_hooks(): void {
-    devlog("Installing System library loading hooks");
+function getCallerClassName(callerClass: any): string | null {
+    if (callerClass === null || callerClass === undefined) {
+        return null;
+    }
 
-    safePerform("load_library:install_system_library_hooks", () => {
-        const SystemDef = safeUse(
-            "java.lang.System",
-            "load_library:install_system_library_hooks"
-        );
-        if (!SystemDef) return;
+    try {
+        return callerClass.getName().toString();
+    } catch {
+        return null;
+    }
+}
 
-        const SystemLoad_1 = safeOverload(
-            SystemDef.load,
-            "load_library:System.load",
-            "java.lang.String"
-        );
-        const SystemLoad_2 = safeOverload(
-            SystemDef.loadLibrary,
-            "load_library:System.loadLibrary",
-            "java.lang.String"
-        );
+function getLibraryLoadOrigin(
+    Thread: any,
+    operation: "load" | "load_library"
+): LibraryLoadOrigin {
+    const internalOrigin: LibraryLoadOrigin = {
+        eventType: `library.internal.${operation}`,
+        originMethod: operation === "load"
+            ? "Runtime.load0(Class, String)"
+            : "Runtime.loadLibrary0(ClassLoader, Class, String)",
+        loaderType: "RuntimeInternal"
+    };
 
-        if (SystemLoad_1) {
-            SystemLoad_1.implementation = safeImplementation(
-                "load_library:System.load",
-                SystemLoad_1,
-                function (original, library: string) {
-                    const java_stack_trace = collectJavaStackTrace();
-                    createLibraryEvent("library.system.load", {
-                        method: "System.load(String)",
-                        library_path: library,
-                        loader_type: "System",
-                        ...(java_stack_trace ? { java_stack_trace } : {})
-                    });
-                    return original.call(this, library);
-                }
-            );
+    let frames: any;
+
+    try {
+        frames = Thread.currentThread().getStackTrace();
+    } catch {
+        return internalOrigin;
+    }
+
+    for (let index = 0; index < frames.length; index++) {
+        let frame: string;
+
+        try {
+            frame = frames[index].toString();
+        } catch {
+            continue;
         }
 
-        if (SystemLoad_2) {
-            SystemLoad_2.implementation = safeImplementation(
-                "load_library:System.loadLibrary",
-                SystemLoad_2,
-                function (original, library: string) {
-                    const java_stack_trace = collectJavaStackTrace();
-                    createLibraryEvent("library.system.load_library", {
-                        method: "System.loadLibrary(String)",
-                        library_name: library,
-                        loader_type: "System",
-                        ...(java_stack_trace ? { java_stack_trace } : {})
-                    });
-                    original.call(this, library);
-                }
-            );
+        if (operation === "load") {
+            if (frame.includes("java.lang.System.load(")) {
+                return {
+                    eventType: "library.system.load",
+                    originMethod: "System.load(String)",
+                    loaderType: "System"
+                };
+            }
+
+            if (frame.includes("java.lang.Runtime.load(")) {
+                return {
+                    eventType: "library.runtime.load",
+                    originMethod: "Runtime.load(String)",
+                    loaderType: "Runtime"
+                };
+            }
+        } else {
+            if (frame.includes("java.lang.System.loadLibrary(")) {
+                return {
+                    eventType: "library.system.load_library",
+                    originMethod: "System.loadLibrary(String)",
+                    loaderType: "System"
+                };
+            }
+
+            if (frame.includes("java.lang.Runtime.loadLibrary(")) {
+                return {
+                    eventType: "library.runtime.load_library",
+                    originMethod: "Runtime.loadLibrary(String)",
+                    loaderType: "Runtime"
+                };
+            }
         }
-    });
+    }
+
+    return internalOrigin;
 }
 
 function install_runtime_library_hooks(): void {
-    devlog("Installing Runtime library loading hooks");
+    devlog("Installing safe Runtime library loading hooks");
 
     safePerform("load_library:install_runtime_library_hooks", () => {
         const RuntimeDef = safeUse(
             "java.lang.Runtime",
             "load_library:install_runtime_library_hooks"
         );
-        if (!RuntimeDef) return;
-
-        const RuntimeLoad_1 = safeOverload(
-            RuntimeDef.load,
-            "load_library:Runtime.load",
-            "java.lang.String"
-        );
-        const RuntimeLoad_2 = safeOverload(
-            RuntimeDef.loadLibrary,
-            "load_library:Runtime.loadLibrary",
-            "java.lang.String"
+        const Thread = safeUse(
+            "java.lang.Thread",
+            "load_library:install_runtime_library_hooks"
         );
 
-        if (RuntimeLoad_1) {
-            RuntimeLoad_1.implementation = safeImplementation(
-                "load_library:Runtime.load",
-                RuntimeLoad_1,
-                function (original, library: string) {
-                    const java_stack_trace = collectJavaStackTrace();
-                    createLibraryEvent("library.runtime.load", {
-                        method: "Runtime.load(String)",
-                        library_path: library,
-                        loader_type: "Runtime",
-                        ...(java_stack_trace ? { java_stack_trace } : {})
+        if (!RuntimeDef || !Thread) {
+            return;
+        }
+
+        const load0 = safeOverload(
+            RuntimeDef.load0,
+            "load_library:Runtime.load0",
+            "java.lang.Class",
+            "java.lang.String"
+        );
+
+        if (load0) {
+            load0.implementation = safeImplementation(
+                "load_library:Runtime.load0",
+                load0,
+                function (original, callerClass: any, libraryPath: string) {
+                    const origin = getLibraryLoadOrigin(Thread, "load");
+                    const javaStackTrace = collectJavaStackTrace();
+
+                    createLibraryEvent(origin.eventType, {
+                        method: origin.originMethod,
+                        library_path: libraryPath,
+                        loader_type: origin.loaderType,
+                        internal_method: "Runtime.load0(Class, String)",
+                        caller_class: getCallerClassName(callerClass),
+                        ...(javaStackTrace
+                            ? { java_stack_trace: javaStackTrace }
+                            : {})
                     });
-                    original.call(this, library);
+
+                    try {
+                        return original.call(
+                            this,
+                            callerClass,
+                            libraryPath
+                        );
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
                 }
             );
         }
 
-        if (RuntimeLoad_2) {
-            RuntimeLoad_2.implementation = safeImplementation(
-                "load_library:Runtime.loadLibrary",
-                RuntimeLoad_2,
-                function (original, library: string) {
-                    const java_stack_trace = collectJavaStackTrace();
-                    createLibraryEvent("library.runtime.load_library", {
-                        method: "Runtime.loadLibrary(String)",
-                        library_name: library,
-                        loader_type: "Runtime",
-                        ...(java_stack_trace ? { java_stack_trace } : {})
+        const loadLibrary0 = safeOverload(
+            RuntimeDef.loadLibrary0,
+            "load_library:Runtime.loadLibrary0",
+            "java.lang.ClassLoader",
+            "java.lang.Class",
+            "java.lang.String"
+        );
+
+        if (loadLibrary0) {
+            loadLibrary0.implementation = safeImplementation(
+                "load_library:Runtime.loadLibrary0",
+                loadLibrary0,
+                function (
+                    original,
+                    classLoader: any,
+                    callerClass: any,
+                    libraryName: string
+                ) {
+                    const origin = getLibraryLoadOrigin(
+                        Thread,
+                        "load_library"
+                    );
+                    const javaStackTrace = collectJavaStackTrace();
+
+                    createLibraryEvent(origin.eventType, {
+                        method: origin.originMethod,
+                        library_name: libraryName,
+                        loader_type: origin.loaderType,
+                        internal_method:
+                            "Runtime.loadLibrary0(ClassLoader, Class, String)",
+                        caller_class: getCallerClassName(callerClass),
+                        ...(javaStackTrace
+                            ? { java_stack_trace: javaStackTrace }
+                            : {})
                     });
-                    original.call(this, library);
+
+                    try {
+                        return original.call(
+                            this,
+                            classLoader,
+                            callerClass,
+                            libraryName
+                        );
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
                 }
             );
         }
@@ -132,16 +217,13 @@ export function install_java_dex_unpacking_hooks(): void {
     devlog("Installing library loading hooks");
 
     try {
-        install_system_library_hooks();
-    } catch (error) {
-        devlog(`[HOOK] Failed to install system library hooks: ${error}`);
-        createLibraryEvent("library.system.hook_error", { error: error.toString() });
-    }
-
-    try {
         install_runtime_library_hooks();
     } catch (error) {
-        devlog(`[HOOK] Failed to install runtime library hooks: ${error}`);
-        createLibraryEvent("library.runtime.hook_error", { error: error.toString() });
+        devlog(
+            `[HOOK] Failed to install Runtime library loading hooks: ${error}`
+        );
+        createLibraryEvent("library.runtime.hook_error", {
+            error: error.toString()
+        });
     }
 }
