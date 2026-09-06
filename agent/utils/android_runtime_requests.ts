@@ -1,7 +1,7 @@
 import { log, devlog, am_send } from "./logging.js"
 import { Java } from "./javalib.js";
 
-export function getAndroidVersion(){
+export function getAndroidVersion(): number {
     var version = 0;
 
     if(Java.available){
@@ -15,8 +15,7 @@ export function getAndroidVersion(){
 }
 
 
-export function arraybuffer2hexstr(buffer)
-{
+export function arraybuffer2hexstr(buffer: ArrayBufferLike): string {
     var hexArr = Array.prototype.map.call(
         new Uint8Array(buffer),
         function (bit) {
@@ -27,7 +26,7 @@ export function arraybuffer2hexstr(buffer)
 }
 
 
-export function java_stack_trace(){
+export function java_stack_trace(): string[] {
     let traceList: string[] = [];
     Java.perform(function() {
         
@@ -56,14 +55,16 @@ export function java_stack_trace(){
 
 
 
-export function get_stack_trace_as_string(trace_list : string[]){
+export function get_stack_trace_as_string(
+    trace_list: readonly string[]
+): void {
     for (let str of trace_list) {
         log(str);
     }
 }
 
 
-export function get_path_from_fd(fd_id: number){
+export function get_path_from_fd(fd_id: number): string {
     var path: string = "";
 
     Java.perform(function() {
@@ -101,7 +102,11 @@ export function removeLeadingColon(input: string): string {
 }
 
 
-export function copy_file(PROFILE_HOOKING_TYPE,source: string, destinationPath: string) {
+export function copy_file(
+    PROFILE_HOOKING_TYPE: string,
+    source: string,
+    destinationPath: string
+): void {
     var filename: string = get_filename(source)
     var destination: string = destinationPath + "/" + filename;
 

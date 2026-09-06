@@ -1,13 +1,22 @@
 //import { Demangler } from 'demangler';
 import { Java } from "./javalib.js"
 
-export function isZero(block) {
+interface ThreadInfo {
+    thread_id: string | null;
+    thread_name: string | null;
+    thread_error?: string;
+}
+
+export function isZero(block: string): boolean {
     var m = /^[0\s]+$/.exec(block);
     return m != null && m.length > 0 && (m[0] == block);
 }
 
 
-export function hexdump_selfmade(buffer, blockSize) {
+export function hexdump_selfmade(
+    buffer: string,
+    blockSize?: number
+): string {
     blockSize = blockSize || 16;
     var lines = [];
     var hex = "0123456789ABCDEF";
@@ -42,7 +51,7 @@ export function hexdump_selfmade(buffer, blockSize) {
 }
 
 
-export function buffer2ArrayBuffer(buffer){
+export function buffer2ArrayBuffer(buffer: any): ArrayBuffer {
     var result = Java.array('byte', buffer);
                 const JString = Java.use('java.lang.String');
                 const jstring = JString.$new(result);
@@ -59,7 +68,7 @@ export function buffer2ArrayBuffer(buffer){
 }
 
 
-export function byteArray2JString(buffer){
+export function byteArray2JString(buffer: any): void {
     Java.perform(function () {
         
             try {
@@ -81,7 +90,7 @@ export function byteArray2JString(buffer){
 
 }
 
-export function b2s(array) {
+export function b2s(array: ArrayLike<number>): string {
     var result = "";
     for (var i = 0; i < array.length; i++) {
         result += String.fromCharCode(modulus(array[i], 256));
@@ -89,12 +98,15 @@ export function b2s(array) {
     return result;
 }
 
-export function modulus(x, n) {
+export function modulus(x: number, n: number): number {
     return ((x % n) + n) % n;
 }
 
 
-export function isPatternPresent(path, patterns) {
+export function isPatternPresent(
+    path: string,
+    patterns: readonly string[]
+): boolean {
     for (var i = 0; i < patterns.length; i++)
         if (path.indexOf(patterns[i]) > -1){
             return true;
@@ -102,7 +114,9 @@ export function isPatternPresent(path, patterns) {
     return false;
 }
 
-export function Where(stack){
+export function Where(
+    stack: ArrayLike<{ toString(): string }>
+): string {
     var at = "";
     for(var i = 0; i < stack.length; ++i){
         at += stack[i].toString() + "\n";
@@ -110,7 +124,7 @@ export function Where(stack){
     return at;
 }
 
-export function bytesToHex(bytes) {
+export function bytesToHex(bytes: ArrayLike<number>): string {
     var hex = [];
     for (var i = 0; i < bytes.length; i++) {
         hex.push((bytes[i] >>> 4).toString(16));
@@ -142,7 +156,7 @@ export function toNullableInt(value: any): number | null {
     }
 }
 
-export function getThreadInfo() {
+export function getThreadInfo(): ThreadInfo {
     try {
         const Thread = Java.use('java.lang.Thread');
         const current = Thread.currentThread();

@@ -251,7 +251,7 @@ function getRuntimeCommandTokens(
             .toString()
             .trim()
             .split(/\s+/)
-            .filter(token => token.length > 0);
+            .filter((token: string) => token.length > 0);
     }
 
     const tokens: string[] = [];

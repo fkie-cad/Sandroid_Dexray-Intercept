@@ -3,13 +3,7 @@ import { buffer2ArrayBuffer, b2s, isPatternPresent, byteArray2JString, bytesToHe
 import { show_verbose } from "../hooking_profile_loader.js"
 import { deactivate_unlink } from "../hooking_profile_loader.js"
 import { Java } from "../utils/javalib.js"
-import {
-    safePerform,
-    safeUse,
-    safeOverload,
-    safeImplementation,
-    PropagateException
-} from "../utils/safe_java.js"
+import { safePerform, safeUse, safeOverload, safeImplementation, PropagateException } from "../utils/safe_java.js"
 import { safeResolveExport, safeAttach, safeReplaceNoCallThrough } from "../utils/safe_native.js"
 import { collectJavaStackTrace, collectNativeBacktrace } from "../utils/stacktrace.js"
 
@@ -21,10 +15,10 @@ const PROFILE_HOOKING_TYPE: string = "FILE_SYSTEM"
 // The Python side will truncate the hex string based on the length field.
 // ============================================================================
 
-var TraceFD = {};
-var TraceFS = {};
-var TraceFile = {};
-var TraceSysFD = {};
+const TraceFD: Record<string, string> = {};
+const TraceFS: Record<string, string> = {};
+const TraceFile: Record<string, string> = {};
+const TraceSysFD: Record<string, string> = {};
 
 var CONFIG = {
     // if TRUE enable data dump 
@@ -45,7 +39,7 @@ var CONFIG = {
     max_output_length: 1024
 }
 
-function isFileFromInterest(file_string) {
+function isFileFromInterest(file_string: string): boolean {
     if (!file_string.startsWith("/proc") && !file_string.startsWith("/system/lib")) {
         return true
     } else if (file_string.endsWith("cgroup") || file_string.endsWith("primary.prof") || file_string.endsWith("cmdline") || file_string === "/proc" || file_string.startsWith("/proc/self/maps") || file_string.endsWith("jar.cur.prof")) {

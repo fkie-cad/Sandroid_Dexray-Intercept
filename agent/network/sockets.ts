@@ -42,7 +42,7 @@ function createSocketEvent(eventType: string, data: any): void {
 }
 
 // helper functions
-function swap16(value) {
+function swap16(value: number): number {
     return ((value & 0xFF) << 8) |
         ((value >> 8) & 0xFF);
 }

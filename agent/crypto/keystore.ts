@@ -606,8 +606,8 @@ function ListAliasesAndroid() {
  * Dump all aliases in keystore of given 'type'.
  * Example: ListAliasesType('AndroidKeyStore');
  */
-function ListAliasesType(type) {
-    const result: any[] = [];
+function ListAliasesType(type: string): string[] {
+    const result: string[] = [];
     safePerform("keystore:ListAliasesType", () => {
         const keyStoreCls = safeUse('java.security.KeyStore', "keystore:ListAliasesType");
         if (!keyStoreCls) return;
@@ -625,8 +625,8 @@ function ListAliasesType(type) {
  * Dump all aliases for a given keystore object.
  * Example: ListAliasesObj(keystoreObj);
  */
-function ListAliasesObj(obj) {
-    const result: any[] = [];
+function ListAliasesObj(obj: any): string[] {
+    const result: string[] = [];
     try {
         var aliases = obj.aliases();
         while (aliases.hasMoreElements()) {
@@ -642,7 +642,7 @@ function ListAliasesObj(obj) {
  * Retrieve keystore instance from keystoreList
  * Example: GetKeyStore("KeyStore...@af102a");
  */
-function GetKeyStore(keystoreName) {
+function GetKeyStore(keystoreName: string): any | null {
     var result = null;
     for (var i = 0; i < keystoreList.length; i++) {
         if (keystoreName.localeCompare("" + keystoreList[i]) == 0)
@@ -653,8 +653,8 @@ function GetKeyStore(keystoreName) {
 
 /* TAG: tagged for removal or relocation to dedicated general helpers/utils after re-evaluation */
 /* following function reads an InputStream and returns an ASCII char representation of it */
-function readStreamToHex(stream) {
-    var data = [];
+function readStreamToHex(stream: any): string {
+    const data: string[] = [];
     var byteRead = stream.read();
     while (byteRead != -1) {
         data.push(('0' + (byteRead & 0xFF).toString(16)).slice(-2));

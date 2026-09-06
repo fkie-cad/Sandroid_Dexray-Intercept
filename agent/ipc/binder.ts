@@ -52,7 +52,7 @@ var binder_driver_command_protocol = {  // enum binder_driver_command_protocol
 // Encoded as ('_'<<24) | (c1<<16) | (c2<<8) | c3, i.e. an ASCII tag like '_PNG'.
 // These are liveness/introspection control calls, NOT real data transactions,
 // so we label them instead of emitting anonymous "Binder Transaction" entries.
-var binder_reserved_transaction_codes = {
+const binder_reserved_transaction_codes: Record<number, string> = {
     0x5F504E47: "PING_TRANSACTION",          // '_PNG'  (IBinder.PING_TRANSACTION)
     0x5F444D50: "DUMP_TRANSACTION",          // '_DMP'
     0x5F4E5446: "INTERFACE_TRANSACTION",     // '_NTF'
@@ -62,7 +62,9 @@ var binder_reserved_transaction_codes = {
 
 
 // http://androidxref.com/kernel_3.18/xref/drivers/staging/android/uapi/binder.h#129
-function parse_binder_transaction_data(binder_transaction_data) {
+function parse_binder_transaction_data(
+    binder_transaction_data: NativePointer
+) {
     // arm64/include/uapi/linux/android/binder.h
     // struct binder_transaction_data {
     //     /* The first two are only used for bcTRANSACTION and brTRANSACTION,
@@ -121,9 +123,14 @@ function parse_binder_transaction_data(binder_transaction_data) {
 }
 
 // http://androidxref.com/kernel_3.18/xref/drivers/staging/android/binder.c#1754
-function handle_write(write_buffer, write_size, write_consumed, context?: CpuContext) { // binder_thread_write
-    var cmd = write_buffer.readU32() & 0xff;
-    var ptr = write_buffer.add(write_consumed + 4); // 4 = sizeof(uint32_t), the first 4 bytes contain "cmd"
+function handle_write(
+    write_buffer: NativePointer,
+    _write_size: UInt64,
+    write_consumed: UInt64,
+    context?: CpuContext
+): void { // binder_thread_write
+    const cmd = write_buffer.readU32() & 0xff;
+    const ptr = write_buffer.add(write_consumed).add(4); // 4 = sizeof(uint32_t), the first 4 bytes contain "cmd"
     // var end = write_buffer.add(write_size);
 
     switch (cmd) {
@@ -141,7 +148,7 @@ function handle_write(write_buffer, write_size, write_consumed, context?: CpuCon
             let payload_hex = bytesToHexSafe(rawBytes)
 
             const txn_code = binder_transaction_data.code;
-            const reserved_desc = (binder_reserved_transaction_codes as any)[txn_code];
+            const reserved_desc = binder_reserved_transaction_codes[txn_code];
             const native_backtrace = collectNativeBacktrace(context);
 
             createBinderEvent("binder.transaction", {
@@ -165,7 +172,9 @@ function handle_write(write_buffer, write_size, write_consumed, context?: CpuCon
 }
 
 // http://androidxref.com/kernel_3.18/xref/drivers/staging/android/uapi/binder.h#77
-function parse_struct_binder_write_read(binder_write_read) {
+function parse_struct_binder_write_read(
+    binder_write_read: NativePointer
+) {
      // arm64/include/uapi/linux/android/binder.h
     // struct binder_write_read {
     //     binder_size_t		write_size;	/* bytes to write */
@@ -225,8 +234,13 @@ function hook_binder(){
 
             var binder_write_read = parse_struct_binder_write_read(data);
 
-            if(binder_write_read.write_size > 0) {
-                handle_write(binder_write_read.write_buffer, binder_write_read.write_size, binder_write_read.write_consumed, this.context);
+            if (Number(binder_write_read.write_size) > 0) {
+                handle_write(
+                    binder_write_read.write_buffer,
+                    binder_write_read.write_size,
+                    binder_write_read.write_consumed,
+                    this.context
+                );
             }
         }
     });
