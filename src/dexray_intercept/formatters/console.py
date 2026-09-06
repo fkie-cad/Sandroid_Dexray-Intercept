@@ -831,6 +831,8 @@ class ConsoleFormatter(BaseFormatter):
                     f"[*] Sender PID: {sender_pid}, "
                     f"Code: 0x{code:08X}, Data Size: {data_size} bytes"
                 )
+                if trans_type == 'BC_TRANSACTION' and event.target_handle is not None:
+                    lines.append(f"[*] Target Handle: {event.target_handle}")
                 if event.payload_hex:
                     payload_dump = hexdump(
                         event.payload_hex, header=True, ansi=True,
