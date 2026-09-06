@@ -328,6 +328,7 @@ class IPCEvent(Event):
         self.intent_flag = None
         self.transaction_type = None
         self.transaction_desc = None
+        self.target_handle = None
         self.sender_pid = None
         self.code = None
         self.data_size = None
@@ -354,7 +355,7 @@ class IPCEvent(Event):
             'stream', 'hook_family', 'declaring_class', 'method_signature',
             'receiver_identity', 'thread_id', 'thread_name',
             'intent_name', 'intent', 'intent_flag',
-            'transaction_type', 'transaction_desc',
+            'transaction_type', 'transaction_desc', 'target_handle',
             'sender_pid', 'code', 'data_size', 'payload_hex',
             'receiver_permission', 'receiver_class', 'actions', 'bundle',
             'source_class', 'flags', 'is_control', 'notification_id',
