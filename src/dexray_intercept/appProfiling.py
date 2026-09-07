@@ -34,7 +34,8 @@ class AppProfiler:
                  fritap_output_dir: str = "./fritap_output", target_name: Optional[str] = None, 
                  spawn_mode: bool = False, custom_scripts: Optional[List[str]] = None,
                  jni_config: Optional[Dict[str, Any]] = None,
-                 bypass_device_profile: Optional[Dict[str, Any]] = None):
+                 bypass_device_profile: Optional[Dict[str, Any]] = None,
+                 synchronous_java_hook_installation: bool = False):
         """
         Initialize the AppProfiler.
         
@@ -54,6 +55,8 @@ class AppProfiler:
             custom_scripts: List of paths to custom Frida scripts to load
             jni_config: JNI tracing configuration dictionary
             bypass_device_profile: Validated bypass Build identity selection
+            synchronous_java_hook_installation: Install Java hooks through
+                Java.performNow() during spawn-gated startup
         """
         self.process = process
         
@@ -103,6 +106,9 @@ class AppProfiler:
         self.hook_manager = HookManager(hook_config)
         self.jni_config = jni_config or {}
         self.bypass_device_profile = bypass_device_profile
+        self.synchronous_java_hook_installation = (
+            synchronous_java_hook_installation
+        )
         
         # Set up message handling (only if instrumentation service exists)
         if self.instrumentation:
@@ -112,6 +118,7 @@ class AppProfiler:
         self.startup = True
         self.startup_unlink = True
         self.path_filters_sent = False
+        self._agent_ready = threading.Event()
     
     def _check_fritap_availability(self) -> bool:
         """Check if fritap is installed and available"""
@@ -354,6 +361,7 @@ class AppProfiler:
             if self.instrumentation is None:
                 raise FridaBasedException("No process session available - cannot load Frida script")
             
+            self._agent_ready.clear()
             script = self.instrumentation.load_script()
             return script
         except Exception as e:
@@ -415,6 +423,17 @@ class AppProfiler:
     def _handle_startup_messages(self, message: Dict[str, Any]) -> bool:
         """Handle startup configuration messages"""
         payload = message.get('payload')
+
+        if payload == 'agent_ready':
+            self._agent_ready.set()
+            return True
+
+        if payload == 'synchronous_java_hook_installation':
+            self.instrumentation.send_message({
+                'type': 'synchronous_java_hook_installation',
+                'payload': self.synchronous_java_hook_installation
+            })
+            return True
         
         # Send verbose mode configuration
         if self.startup and payload == 'verbose_mode':
@@ -494,6 +513,13 @@ class AppProfiler:
         
         return False
     
+    def wait_for_agent_ready(
+        self,
+        timeout: Optional[float] = None
+    ) -> bool:
+        """Wait until the agent completes initial hook installation."""
+        return self._agent_ready.wait(timeout)
+
     # Hook management methods (delegated to HookManager)
     def enable_hook(self, hook_name: str, enabled: bool = True):
         """Enable or disable a specific hook at runtime"""
@@ -599,12 +625,6 @@ class AppProfiler:
             'output_format': self.output_format,
             'verbose_mode': self.verbose_mode
         }
-
-
-# Legacy exception class for compatibility
-class FridaBasedException(FridaBasedException):
-    """Legacy exception class - redirects to new FridaBasedException"""
-    pass
 
 
 # Legacy function for compatibility
