@@ -3,6 +3,7 @@
 
 import frida
 import os
+import threading
 from typing import Optional, Callable, List, Dict, Any
 from datetime import datetime
 
@@ -188,6 +189,122 @@ class InstrumentationService:
         return self.load_script()
 
 
+class TargetSpawnGating:
+    """Coordinates early instrumentation of one spawn-gated target process.
+
+    The coordinator keeps only the first spawn whose identifier exactly matches
+    the requested package paused. Unrelated and later matching spawns resume
+    immediately so device-wide spawn gating does not block other processes.
+    """
+
+    def __init__(self, device, target_identifier: str):
+        self.device = device
+        self.target_identifier = target_identifier
+        self._target_pid: Optional[int] = None
+        self._target_resumed = False
+        self._gating_enabled = False
+        self._target_spawned = threading.Event()
+        self._lock = threading.Lock()
+
+    def _resume_spawn(self, pid: int, description: str) -> None:
+        """Resume a gated spawn while reporting non-fatal resume failures."""
+        try:
+            self.device.resume(pid)
+        except Exception as error:
+            print(
+                f"[-] Failed to resume {description} "
+                f"with pid {pid}: {error}"
+            )
+
+    def _on_spawn_added(self, spawn) -> None:
+        """Retain the first matching target spawn and resume all others."""
+        if spawn.identifier != self.target_identifier:
+            print(
+                f"[*] Resuming unrelated gated spawn: "
+                f"{spawn.identifier} ({spawn.pid})"
+            )
+            self._resume_spawn(spawn.pid, "unrelated gated spawn")
+            return
+
+        with self._lock:
+            if self._target_pid is not None:
+                print(
+                    f"[*] Resuming additional target spawn: "
+                    f"{spawn.identifier} ({spawn.pid})"
+                )
+                self._resume_spawn(spawn.pid, "additional target spawn")
+                return
+
+            self._target_pid = spawn.pid
+            self._target_spawned.set()
+
+        print(
+            f"[*] Target spawn gated: "
+            f"{spawn.identifier} ({spawn.pid})"
+        )
+
+    def enable(self) -> None:
+        """Enable device-wide spawn gating after registering the callback."""
+        if self._gating_enabled:
+            return
+
+        self.device.on("spawn-added", self._on_spawn_added)
+        self.device.enable_spawn_gating()
+        self._gating_enabled = True
+
+    def wait_for_target(self, timeout: float) -> int:
+        """Wait for the first matching paused target process."""
+        if not self._target_spawned.wait(timeout):
+            raise FridaBasedException(
+                "Timed out waiting for the explicit component to spawn "
+                f"the target package '{self.target_identifier}'"
+            )
+
+        with self._lock:
+            if self._target_pid is None:
+                raise FridaBasedException(
+                    "Target spawn notification completed without a PID"
+                )
+
+            return self._target_pid
+
+    def resume_target(self) -> None:
+        """Resume the retained target after profiling startup completes."""
+        with self._lock:
+            if self._target_pid is None or self._target_resumed:
+                return
+
+            target_pid = self._target_pid
+
+        self.device.resume(target_pid)
+
+        with self._lock:
+            self._target_resumed = True
+
+        print(
+            f"[*] Resumed target process with Dexray hooks installed: "
+            f"{target_pid}"
+        )
+
+    def disable(self) -> None:
+        """Disable device-wide spawn gating after target startup."""
+        if not self._gating_enabled:
+            return
+
+        try:
+            self.device.disable_spawn_gating()
+        except Exception as error:
+            print(f"[-] Failed to disable spawn gating: {error}")
+        finally:
+            self._gating_enabled = False
+
+    def abort(self) -> None:
+        """Release a retained target and disable gating after startup failure."""
+        try:
+            self.resume_target()
+        finally:
+            self.disable()
+
 def setup_frida_device(host: str = "", device_id: str = "", enable_spawn_gating: bool = False):
     """Setup and return a Frida device connection.
 
@@ -222,8 +339,8 @@ def setup_frida_device(host: str = "", device_id: str = "", enable_spawn_gating:
 
         device.on("child_added", on_child_added)
         if enable_spawn_gating:
+            device.on("spawn-added", on_spawn_added)
             device.enable_spawn_gating()
-            device.on("spawn_added", on_spawn_added)
 
         return device
 

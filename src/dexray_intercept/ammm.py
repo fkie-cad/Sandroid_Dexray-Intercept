@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from .appProfiling import AppProfiler, FridaBasedException, setup_frida_handler
-from .services.instrumentation import list_devices
+from .appProfiling import AppProfiler, setup_frida_handler
+from .services.instrumentation import FridaBasedException, TargetSpawnGating, list_devices
 from .services import cert_pinning
 from .services.mitmproxy_manager import MitmproxyManager
 import sys
 import time
+import threading
 import frida
 import argparse
 import json
@@ -380,6 +381,119 @@ def setup_frida_server():
         time.sleep(15)
 
 
+def normalize_explicit_component(
+    package_name: str,
+    component: str,
+    parser: ArgParser
+) -> str:
+    """Normalize an explicit activity component for adb am start."""
+    if component.startswith("."):
+        return f"{package_name}/{component}"
+
+    if "/" not in component:
+        parser.error(
+            "--component must be relative to the target package "
+            "(.MainActivity) or use package/activity form "
+            "(com.example.app/.MainActivity)"
+        )
+
+    component_package, activity_name = component.split("/", 1)
+
+    if component_package != package_name:
+        parser.error(
+            "--component package must match the positional target package"
+        )
+
+    if not activity_name:
+        parser.error("--component activity name must not be empty")
+
+    return f"{package_name}/{activity_name}"
+
+
+def start_explicit_component(
+    device_id: str,
+    component: str
+) -> subprocess.Popen:
+    """Request an Android activity launch without waiting for completion."""
+    command = [
+        "adb",
+        "-s",
+        device_id,
+        "shell",
+        "am",
+        "start",
+        "-n",
+        component,
+    ]
+
+    try:
+        return subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except OSError as error:
+        raise FridaBasedException(
+            f"Failed to start explicit component '{component}': {error}"
+        )
+
+
+def report_component_launch_result(
+    launch_process: subprocess.Popen
+) -> None:
+    """Print the explicit activity launch command result after adb exits."""
+    try:
+        stdout, stderr = launch_process.communicate()
+    except Exception as error:
+        print(
+            "[-] Failed to collect explicit component launch output: "
+            f"{error}"
+        )
+        return
+
+    if stdout:
+        print(stdout.rstrip())
+
+    if stderr:
+        print(stderr.rstrip(), file=sys.stderr)
+
+    if launch_process.returncode != 0:
+        print(
+            "[-] adb am start returned non-zero status: "
+            f"{launch_process.returncode}"
+        )
+
+
+def start_component_launch_reporter(
+    launch_process: subprocess.Popen
+) -> threading.Thread:
+    """Collect adb activity-launch command output without blocking profiling."""
+    reporter = threading.Thread(
+        target=report_component_launch_result,
+        args=(launch_process,),
+        daemon=True,
+    )
+    reporter.start()
+    return reporter
+
+
+def stop_component_launch(
+    launch_process: subprocess.Popen
+) -> None:
+    """Stop a pending adb activity launch during profiling shutdown."""
+    if launch_process.poll() is not None:
+        return
+
+    try:
+        launch_process.terminate()
+        launch_process.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        launch_process.kill()
+        launch_process.wait(timeout=3)
+    except OSError as error:
+        print(f"[-] Failed to stop explicit component launch: {error}")
+
 def main():
     parser = ArgParser(
         add_help=False,
@@ -390,6 +504,7 @@ def main():
 Examples:
   %(prog)s <App-Name/PID> 
   %(prog)s -s com.example.app
+  %(prog)s -s --component .MainActivity com.example.app
   %(prog)s --enable_spawn_gating -v <App-Name/PID>
   %(prog)s --enable-fritap --enable-aes com.example.app
   %(prog)s --enable-fritap --fritap-output-dir ./logs --hooks-all com.example.app
@@ -410,6 +525,12 @@ Examples:
     args.add_argument('--version', action='version', version='Dexray Intercept v{version}'.format(version=__version__))
     args.add_argument("-s", "--spawn", required=False, action="store_const", const=True,
                       help="Spawn the executable/app instead of attaching to a running process")
+    args.add_argument("--component", metavar="<package/.Activity>", required=False,
+        help=(
+            "Spawn and instrument an explicit Android activity component "
+            "without requiring a launcher activity. Requires -s."
+        )
+    )
     args.add_argument("-fg", "--foreground", required=False, action="store_const", const=True,
                       help="Attaching to the foreground app")
     args.add_argument("--enable_spawn_gating", required=False, action="store_const", const=True,
@@ -528,6 +649,39 @@ Examples:
     bypass_device_profile = parse_bypass_device_profile(parsed, parser)
     script_name = sys.argv[0]
 
+    if parsed.component:
+        if not parsed.spawn:
+            parser.error("--component requires -s/--spawn")
+
+        if parsed.foreground:
+            parser.error("--component cannot be combined with -fg/--foreground")
+
+        if parsed.enable_spawn_gating:
+            parser.error(
+                "--component manages target-aware spawn gating internally"
+            )
+
+        if parsed.enable_fritap:
+            parser.error(
+                "--component cannot be combined with --enable-fritap"
+            )
+
+        if parsed.host:
+            parser.error(
+                "--component currently requires a local adb-connected device"
+            )
+
+        if parsed.exec is None or parsed.exec.isnumeric():
+            parser.error(
+                "--component requires a package name as the positional target"
+            )
+
+        parsed.component = normalize_explicit_component(
+            parsed.exec,
+            parsed.component,
+            parser
+        )
+
     if parsed.frida:
         setup_frida_server()
         exit(2)
@@ -565,6 +719,11 @@ Examples:
     setup_frida_server()
     print_logo()
 
+    profiler = None
+    component_spawn_gating = None
+    component_launch_process = None
+    component_launch_reporter = None
+
     try:
         if parsed.exec is not None or parsed.foreground:
             target_process = parsed.exec
@@ -574,7 +733,34 @@ Examples:
             print(f"[*] connected to device: {device.name} ({device.id})")
 
             # Handle spawn/attach coordination with fritap
-            if parsed.spawn and parsed.enable_fritap:
+            if parsed.component:
+                print(
+                    "[*] preparing explicit component launch: "
+                    f"{parsed.component}"
+                )
+
+                component_spawn_gating = TargetSpawnGating(
+                    device,
+                    target_process
+                )
+
+                try:
+                    component_spawn_gating.enable()
+
+                    component_launch_process = start_explicit_component(
+                        device.id,
+                        parsed.component
+                    )
+
+                    pid = component_spawn_gating.wait_for_target(
+                        timeout=10.0
+                    )
+
+                    process_session = device.attach(pid)
+                except Exception:
+                    component_spawn_gating.abort()
+                    raise
+            elif parsed.spawn and parsed.enable_fritap:
                 # When fritap is enabled in spawn mode, fritap handles spawning
                 # dexray-intercept just attaches to the target by name after fritap spawns it
                 print(f"[*] fritap spawn mode - fritap will spawn '{target_process}', dexray-intercept will attach")
@@ -672,6 +858,9 @@ Examples:
                 custom_scripts=parsed.custom_script,
                 jni_config=jni_config,
                 bypass_device_profile=bypass_device_profile,
+                synchronous_java_hook_installation=bool(
+                    parsed.component
+                ),
             )
             if parsed.mitmproxy:
                 print("[*] mitmproxy enabled")
@@ -731,8 +920,28 @@ Examples:
             print(f"[-] Invoke it with the target process to hook:\n    {script_name} <excutable/app name/pid>")
             exit(2)
 
-        # Only resume if we spawned the process ourselves (not fritap)
-        if parsed.spawn and not parsed.enable_fritap and pid is not None:
+        # Resume only after the selected startup mode has installed hooks.
+        #
+        # Explicit-component mode owns its paused target through
+        # TargetSpawnGating. Normal spawn mode resumes the PID created through
+        # device.spawn(), while fritap manages its own spawned target.
+        if parsed.component:
+            if not profiler.wait_for_agent_ready(timeout=10.0):
+                component_spawn_gating.abort()
+                raise FridaBasedException(
+                    "Timed out waiting for Dexray agent hook installation"
+                )
+
+            component_spawn_gating.resume_target()
+            component_spawn_gating.disable()
+
+            if component_launch_process is not None:
+                component_launch_reporter = (
+                    start_component_launch_reporter(
+                        component_launch_process
+                    )
+                )
+        elif parsed.spawn and not parsed.enable_fritap and pid is not None:
             device.resume(pid)
             time.sleep(1)  # without it Java.perform silently fails
 
@@ -759,6 +968,10 @@ Examples:
         exit(2)
     except KeyboardInterrupt:
         print("\n[*] interrupt received - stopping profiling")
+
+        if component_launch_process is not None:
+            stop_component_launch(component_launch_process)
+
         if isinstance(profiler, AppProfiler):
             # Enhanced shutdown with fritap coordination
             if parsed.enable_fritap:
