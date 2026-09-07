@@ -21,12 +21,22 @@ import { install_location_hooks } from "./services/location.js"
 import { install_telephony_manager_hooks } from "./services/telephony.js"
 import { configure_bypass_device_profile, install_bypass_hooks } from "./security/bypass.js"
 import { install_jni_hooks } from "./jni/jni_trace.js";
+import { setSynchronousJavaHookInstallation } from "./utils/safe_java.js";
 import { am_send, log, devlog } from "./utils/logging.js"
 
 
 export let show_verbose: boolean = false;
 export let deactivate_unlink: boolean = false;
 export let enable_stacktrace: boolean = false;
+
+/**
+ * Enables synchronous Java hook installation during spawn-gated startup.
+ *
+ * When enabled, safePerform() executes through Java.performNow() while the
+ * target process is paused. This ensures selected Java hooks are installed
+ * before application code resumes.
+ */
+export let synchronous_java_hook_installation: boolean = false;
 
 // Hook configuration - all hooks disabled by default
 interface HookConfig {
@@ -132,6 +142,16 @@ const enable_stacktrace_recv_state = recv('enable_stacktrace', value => {
 });
 enable_stacktrace_recv_state.wait();
 
+send("synchronous_java_hook_installation")
+const synchronous_java_hook_installation_recv_state = recv(
+    "synchronous_java_hook_installation",
+    value => {
+        synchronous_java_hook_installation =
+            value.payload === true;
+    }
+);
+synchronous_java_hook_installation_recv_state.wait();
+
 
 /*
  * our final hooks gets loaded
@@ -199,5 +219,17 @@ function load_profile_hooks(){
     log(`[HOOK] Active hooks: ${enabled_hooks.join(', ') || 'none'}`);
 }
 
-load_profile_hooks();
+try {
+    setSynchronousJavaHookInstallation(
+        synchronous_java_hook_installation
+    );
+
+    load_profile_hooks();
+} catch (error) {
+    devlog(`[HOOK] Failed during hook loading: ${error}`);
+} finally {
+    setSynchronousJavaHookInstallation(false);
+}
+
+send("agent_ready");
 

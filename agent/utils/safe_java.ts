@@ -1,22 +1,69 @@
 import { Java, JavaWrapper } from "./javalib.js";
 import { hookError, hookPropagate } from "./error_utils.js";
 
+let synchronousJavaHookInstallation = false;
+
 /**
- * Wraps Java.perform with availability check and error isolation.
+ * Controls whether safePerform() executes installation callbacks immediately.
+ *
+ * Synchronous installation is intended for spawn-gated startup, where hooks
+ * must be installed before the target process resumes. The setting applies
+ * only while the initial hook installation sequence is running.
+ *
+ * @param enabled  Whether safePerform() should use Java.performNow()
+ */
+export function setSynchronousJavaHookInstallation(
+    enabled: boolean
+): void {
+    synchronousJavaHookInstallation = enabled;
+}
+
+/**
+ * Wraps Java.performNow with availability check and error isolation.
  *
  * Does:
- * - Checks Java.available before calling Java.perform
+ * - Checks Java.available before calling Java.performNow
+ * - Executes the callback on the current thread immediately
  * - Catches and logs any exception thrown from the callback
  * - Does not rethrow — sibling install calls are unaffected on failure
  *
  * @param context  Hook context for error logging, e.g. "aes:install_aes_secrets"
- * @param fn       Hook installation logic to run inside Java.perform
+ * @param fn       Hook installation logic to run inside Java.performNow
  */
-export function safePerform(context: string, fn: () => void): void {
+export function safePerformNow(context: string, fn: () => void): void {
     if (!Java.available) {
         hookError(context, new Error("Java runtime not available"));
         return;
     }
+
+    try {
+        Java.performNow(fn);
+    } catch (error) {
+        hookError(context, error);
+    }
+}
+
+/**
+ * Wraps Java.perform with availability check and error isolation.
+ *
+ * During spawn-gated startup, synchronous installation can be enabled through
+ * setSynchronousJavaHookInstallation(). In that mode, the callback executes
+ * through safePerformNow() before the target process resumes.
+ *
+ * @param context  Hook context for error logging, e.g. "aes:install_aes_secrets"
+ * @param fn       Hook installation logic to run inside the Java bridge
+ */
+export function safePerform(context: string, fn: () => void): void {
+    if (synchronousJavaHookInstallation) {
+        safePerformNow(context, fn);
+        return;
+    }
+
+    if (!Java.available) {
+        hookError(context, new Error("Java runtime not available"));
+        return;
+    }
+
     try {
         Java.perform(fn);
     } catch (error) {
