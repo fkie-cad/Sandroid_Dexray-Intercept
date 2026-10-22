@@ -12,16 +12,6 @@ let dexOperationSequence = 0;
 const activeInMemoryDexLoaderDepth = new Map<number, number>();
 const activeClassLoaderConstructorDepth = new Map<number, number>();
 
-interface DEXInfo {
-    magicString: string;
-    version: string;
-    ext: string;
-    size: number;
-    sizeOffset?: number;
-    found?: boolean;
-    wrongMagic?: any;
-}
-
 interface NativeDexHookTarget {
     moduleName: string;
     symbolName: string;
@@ -116,32 +106,7 @@ function invokeClassLoaderConstructor(
     }
 }
 
-
-// function get_package_name(): string {
-//     let package_name = "";
-
-//     safePerform("dex:get_package_name", () => {
-//         // Get the Android application context
-//         const ActivityThread = safeUse(
-//             "android.app.ActivityThread",
-//             "dex:get_package_name"
-//         );
-//         if (!ActivityThread) return;
-
-//         // sometimes we are to early to get the context
-//         const context = ActivityThread.currentApplication().getApplicationContext();
-//         // Retrieve the package name
-//         package_name = context.getPackageName();
-
-//         // Log the package name
-//         //console.log('Package Name:', package_name);
-//     });
-
-//     return package_name;
-// }
-
-
-/* Read a C++ std string (basic_string) to a nomal string */
+/** Read a C++ std::basic_string value as UTF-8 text. */
 function readStdString(ptr_str: NativePointer): string {
     const isTiny: boolean = (ptr_str.readU8() & 1) === 0;
     if (isTiny) {
@@ -149,62 +114,6 @@ function readStdString(ptr_str: NativePointer): string {
     }
     return ptr_str.add(2 * Process.pointerSize).readPointer().readUtf8String();
 }
-
-// //@ts-ignore
-// function getFunctionName(g_AndroidOSVersion: number): string {
-//     let functionName = "";
-
-//     // ApiResolver is the safe alternative to Process.getModuleByName(...).enumerateExports():
-//     // it resolves the module + does the substring match in one call that returns [] (never
-//     // throws) when the library or symbol is absent. Match names come back as "module!symbol",
-//     // so stripModulePrefix keeps the bare symbol name that dumpDex re-resolves.
-
-//     // Android 4: hook dexFileParse
-//     // Android 5: hook OpenMemory
-//     // after Android 5: hook OpenCommon (libdexfile.so on Android 10+, libart.so before)
-//     if (g_AndroidOSVersion > 4) {
-//         // OpenCommon is in libdexfile.so in android 10 and later
-//         const soName: string = g_AndroidOSVersion >= 10 ? "libdexfile.so" : "libart.so";
-
-//         const openMemory = safeEnumerateMatches(
-//             `exports:${soName}!*OpenMemory*`,
-//             "dex:getFunctionName"
-//         );
-//         if (openMemory.length > 0) {
-//             functionName = stripModulePrefix(openMemory[0].name);
-//         } else {
-//             const openCommon = safeEnumerateMatches(
-//                 `exports:${soName}!*OpenCommon*`,
-//                 "dex:getFunctionName"
-//             );
-//             for (const match of openCommon) {
-//                 if (g_AndroidOSVersion >= 10 && match.name.indexOf("ArtDexFileLoader") !== -1)
-//                     continue;
-//                 functionName = stripModulePrefix(match.name);
-//                 break;
-//             }
-//         }
-//     } else { //android 4
-//         const dvm = safeEnumerateMatches(
-//             "exports:libdvm.so!*dexFileParse*",
-//             "dex:getFunctionName"
-//         );
-//         if (dvm.length > 0) {
-//             functionName = stripModulePrefix(dvm[0].name);
-//         } else {
-//             // libdvm not present (or no match) - fall back to libart's OpenMemory
-//             const art = safeEnumerateMatches(
-//                 "exports:libart.so!*OpenMemory*",
-//                 "dex:getFunctionName"
-//             );
-//             if (art.length > 0) {
-//                 functionName = stripModulePrefix(art[0].name);
-//             }
-//         }
-//     }
-
-//     return functionName;
-// }
 
 // Select a native DEX-loading entry point and its ABI-specific buffer layout.
 function getNativeDexHookTarget(
