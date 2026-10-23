@@ -40,13 +40,24 @@ def has_multidex_ending(s):
     return bool(re.search(pattern, s))
 
 
+TRUSTED_DEX_ORIGIN_PREFIXES = (
+    "/system/",
+    "/system_ext/",
+    "/product/",
+    "/vendor/",
+    "/odm/",
+    "/apex/",
+)
+
+
 def is_benign_dump(orig_path):
-    """Determine if a dump path is benign or malicious"""
-    # This function would contain the logic to classify dumps
-    # For now, return a simple heuristic
-    if "/system/" in orig_path or "/vendor/" in orig_path:
-        return True
-    return False
+    """Return whether a DEX origin belongs to a trusted system partition."""
+    if not isinstance(orig_path, str) or not orig_path:
+        return False
+
+    normalized_path = os.path.normpath(orig_path)
+
+    return normalized_path.startswith(TRUSTED_DEX_ORIGIN_PREFIXES)
 
 
 def pull_file_from_device(device_path, local_path, category=None, output_format=None):
