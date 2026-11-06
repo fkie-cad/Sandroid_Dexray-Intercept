@@ -308,8 +308,8 @@ We extend our gratitude to these projects and their maintainers for advancing th
 ## Roadmap
 
 - [ x ] Create templates for the different hookings we want to install in order to get a runtime profile
-- [ ] Create a test application which is using all the different features which we want to hook (we need some sort of ground truth in order to test our hooks)
-- [ ] Implement the actual hooks 
+- [ x ] Create a test application which is using all the different features which we want to hook (we need some sort of ground truth in order to test our hooks)
+- [ x ] Implement the actual hooks 
 - [ x ] The format to print the monitored information
 - [ ] https://attack.mitre.org/matrices/mobile/ add this as a final result so we can say what kind of Attacks the Application is using
 - [ ] We want to track also things like "this are privacy issues", "this might lead to bugs" ...
