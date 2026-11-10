@@ -45,7 +45,7 @@ class ArgParser(argparse.ArgumentParser):
         print("Error: " + message)
         print()
         print(self.format_help().replace("usage:", "Usage:"))
-        self.exit(0)
+        self.exit(2)
 
 
 def interactive_hook_selection():
@@ -64,10 +64,15 @@ def interactive_hook_selection():
             'description': 'Web requests, sockets, HTTP/HTTPS traffic',
             'hooks': ['web_hooks', 'socket_hooks']
         },
-        'filesystem': {
-            'name': 'Filesystem Hooks',
-            'description': 'File operations, database access',
-            'hooks': ['file_system_hooks', 'database_hooks']
+        'file': {
+            'name': 'File Hooks',
+            'description': 'File construction, streams, reads, writes, and deletion',
+            'hooks': ['file_system_hooks']
+        },
+        'database': {
+            'name': 'Database Hooks',
+            'description': 'SQLite, Room, SQLCipher, WCDB, and native SQLite operations',
+            'hooks': ['database_hooks']
         },
         'ipc': {
             'name': 'IPC Hooks',
@@ -275,9 +280,13 @@ def parse_hook_config(parsed_args, use_interactive=False):
             'socket_hooks': True
         })
 
-    if parsed_args.hooks_filesystem:
+    if parsed_args.hooks_file:
         hook_config.update({
-            'file_system_hooks': True,
+            'file_system_hooks': True
+        })
+
+    if parsed_args.hooks_database:
+        hook_config.update({
             'database_hooks': True
         })
 
@@ -318,6 +327,11 @@ def parse_hook_config(parsed_args, use_interactive=False):
     ):
         hook_config['bypass_hooks'] = True
 
+    if parsed_args.hooks_jni:
+        hook_config.update({
+            'jni_hooks': True
+        })
+
     if parsed_args.deactivate_unlink:
         hook_config['file_system_hooks'] = True
 
@@ -329,7 +343,7 @@ def parse_hook_config(parsed_args, use_interactive=False):
         'enable_web': 'web_hooks',
         'enable_sockets': 'socket_hooks',
         'enable_filesystem': 'file_system_hooks',
-        'enable_database': 'database_hooks',
+        'enable_sql': 'database_hooks',
         'enable_dex_unpacking': 'dex_unpacking_hooks',
         'enable_java_dex': 'java_dex_unpacking_hooks',
         'enable_native_libs': 'native_library_hooks',
@@ -345,7 +359,6 @@ def parse_hook_config(parsed_args, use_interactive=False):
         'enable_location': 'location_hooks',
         'enable_telephony': 'telephony_hooks',
         'enable_bypass': 'bypass_hooks',
-        'enable_jni_hooks': 'jni_hooks',
     }
 
     for arg_name, hook_name in individual_hooks.items():
@@ -511,6 +524,13 @@ Examples:
   %(prog)s -acp :8080: -mp 8080 -mpa mitm_addon.py --hooks-all com.example.app
 """)
 
+
+    parser.add_argument(
+        "-h",
+        "--help",
+        action="help",
+        help="Show this help message and exit",
+    )
     args = parser.add_argument_group("Arguments")
     args.add_argument("-f", "--frida", metavar="<version>", const=True, action="store_const",
                       help="Install and run the frida-server to the target device. By default the latest version will be installed.")
@@ -558,13 +578,15 @@ Examples:
     # Hook selection arguments
     hooks = parser.add_argument_group("Hook Selection (all disabled by default)")
     hooks.add_argument("--hooks-all", required=False, action="store_const", const=True, default=False,
-                       help="Enable all available hooks")
+                       help="Enable all standard hook categories except JNI tracing")
     hooks.add_argument("--hooks-crypto", required=False, action="store_const", const=True, default=False,
                        help="Enable crypto hooks (AES, encodings, keystore)")
     hooks.add_argument("--hooks-network", required=False, action="store_const", const=True, default=False,
                        help="Enable network hooks (web, sockets)")
-    hooks.add_argument("--hooks-filesystem", required=False, action="store_const", const=True, default=False,
-                       help="Enable filesystem hooks (file operations, database)")
+    hooks.add_argument("--hooks-file", required=False, action="store_const", const=True, default=False,
+                       help="Enable file hooks (file operations, streams, and deletion)")
+    hooks.add_argument("--hooks-database", required=False, action="store_const", const=True, default=False,
+                       help="Enable database hooks (SQLite, Room, SQLCipher, WCDB, and native SQLite)")
     hooks.add_argument("--hooks-ipc", required=False, action="store_const", const=True, default=False,
                        help="Enable IPC hooks (binder, intents, broadcasts, shared prefs)")
     hooks.add_argument("--hooks-process", required=False, action="store_const", const=True, default=False,
@@ -593,26 +615,86 @@ Examples:
             "composite emulator detection. Enables bypass hooks automatically."
         )
     )
+    hooks.add_argument("--hooks-jni", required=False, action="store_const", const=True, default=False,
+                       help="Enable JNI API tracing hooks (not included in --hooks-all)")
     
-    # JNI tracing options
-    hooks.add_argument("--jni-lib", action="append", metavar="PATTERN",
-                       help="JNI: limit tracing to libraries whose path contains this string (can be used multiple times)")
-    hooks.add_argument("--jni-backtrace", choices=["none", "fuzzy", "accurate"], default="none",
-                       help="JNI: backtrace mode for JNI calls (default: none)")
-    hooks.add_argument("--jni-include", action="append", default=[],
-                       help="JNI: regex filter to include JNI method names (e.g., Get, CallIntMethod)")
-    hooks.add_argument("--jni-exclude", action="append", default=[],
-                       help="JNI: regex filter to exclude JNI method names")
-    hooks.add_argument("--jni-include-export", action="append", default=[],
-                       help="JNI: include only native exports whose name contains this substring")
-    hooks.add_argument("--jni-exclude-export", action="append", default=[],
-                       help="JNI: exclude native exports whose name contains this substring")
-    hooks.add_argument("--jni-hide-data", action="store_true",
-                       help="JNI: reduce data in output (do not decode strings/buffers)")
-    hooks.add_argument("--jni-ignore-env", action="store_true",
-                       help="JNI: do not trace JNIEnv calls")
-    hooks.add_argument("--jni-ignore-vm", action="store_true",
-                       help="JNI: do not trace JavaVM calls")
+    # JNI tracing options. All require --hooks-jni.
+    hooks.add_argument(
+        "--jni-lib",
+        action="append",
+        metavar="PATTERN",
+        help=(
+            "JNI: limit tracing to libraries whose path contains this string; "
+            "requires --hooks-jni (can be used multiple times)"
+        )
+    )
+    hooks.add_argument(
+        "--jni-backtrace",
+        choices=["none", "fuzzy", "accurate"],
+        default="none",
+        help=(
+            "JNI: backtrace mode for JNI calls; requires --hooks-jni "
+            "(default: none)"
+        )
+    )
+    hooks.add_argument(
+        "--jni-include",
+        action="append",
+        default=[],
+        help=(
+            "JNI: regex filter to include JNI method names; "
+            "requires --hooks-jni"
+        )
+    )
+    hooks.add_argument(
+        "--jni-exclude",
+        action="append",
+        default=[],
+        help=(
+            "JNI: regex filter to exclude JNI method names; "
+            "requires --hooks-jni"
+        )
+    )
+    hooks.add_argument(
+        "--jni-include-export",
+        action="append",
+        default=[],
+        help=(
+            "JNI: include only native exports whose name contains this "
+            "substring; requires --hooks-jni"
+        )
+    )
+    hooks.add_argument(
+        "--jni-exclude-export",
+        action="append",
+        default=[],
+        help=(
+            "JNI: exclude native exports whose name contains this substring; "
+            "requires --hooks-jni"
+        )
+    )
+    hooks.add_argument(
+        "--jni-hide-data",
+        action="store_true",
+        help=(
+            "JNI: reduce output by not decoding strings or buffers; "
+            "requires --hooks-jni"
+        )
+    )
+    hooks.add_argument(
+        "--jni-ignore-env",
+        action="store_true",
+        help=(
+            "JNI: do not trace JNIEnv calls; requires --hooks-jni"
+        )
+    )
+    hooks.add_argument(
+        "--jni-ignore-vm",
+        action="store_true",
+        help=(
+            "JNI: do not trace JavaVM calls; requires --hooks-jni"
+        )
+    )
 
     # Individual hook arguments
     hooks.add_argument("--enable-aes", action="store_true", help="Enable AES hooks")
@@ -627,7 +709,7 @@ Examples:
             "filesystem hooks."
         )
     )
-    hooks.add_argument("--enable-database", action="store_true", help="Enable database hooks")
+    hooks.add_argument("--enable-sql", action="store_true", help="Enable database hooks")
     hooks.add_argument("--enable-dex-unpacking", action="store_true", help="Enable DEX unpacking hooks")
     hooks.add_argument("--enable-java-dex", action="store_true", help="Enable Java DEX hooks (may crash apps)")
     hooks.add_argument("--enable-native-libs", action="store_true", help="Enable native library hooks")
@@ -643,9 +725,24 @@ Examples:
     hooks.add_argument("--enable-location", action="store_true", help="Enable location hooks")
     hooks.add_argument("--enable-telephony", action="store_true", help="Enable telephony hooks")
     hooks.add_argument("--enable-bypass", action="store_true", help="Enable anti-analysis bypass hooks")
-    hooks.add_argument("--enable-jni-hooks", action="store_true", help="Enable JNI API tracing hooks")
 
     parsed = parser.parse_args()
+
+    jni_options_requested = any([
+        parsed.jni_lib,
+        parsed.jni_backtrace != "none",
+        parsed.jni_include,
+        parsed.jni_exclude,
+        parsed.jni_include_export,
+        parsed.jni_exclude_export,
+        parsed.jni_hide_data,
+        parsed.jni_ignore_env,
+        parsed.jni_ignore_vm,
+    ])
+
+    if jni_options_requested and not parsed.hooks_jni:
+        parser.error("JNI configuration options require --hooks-jni")
+
     bypass_device_profile = parse_bypass_device_profile(parsed, parser)
     script_name = sys.argv[0]
 
@@ -684,7 +781,7 @@ Examples:
 
     if parsed.frida:
         setup_frida_server()
-        exit(2)
+        exit(0)
 
     # Handle --list-devices flag
     if parsed.list_devices:
