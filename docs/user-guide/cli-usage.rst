@@ -23,7 +23,8 @@ Target and Connection
 
 .. option:: <target>
 
-   **Required.** The target application to analyze.
+   The target application or process to analyze. It is required unless using a
+   standalone option such as ``--list-devices``.
    
    Examples:
    
@@ -44,13 +45,20 @@ Target and Connection
    .. note::
       Spawning gives you control from app startup, useful for analyzing initialization behavior.
 
-.. option:: -fg, --foreground
+.. option:: --component <package/.Activity>
 
-   Attach to the currently foreground (visible) application.
-   
+   Spawn and instrument an explicit Android activity component. Requires
+   ``-s`` / ``--spawn`` and a package name as the positional target.
+
    .. code-block:: bash
-   
-      dexray-intercept -fg
+
+      dexray-intercept -s --component .MainActivity com.example.app
+
+   Dexray Intercept installs the selected hooks before resuming the component.
+
+   .. note::
+      ``--component`` cannot be combined with ``--enable_spawn_gating``,
+      ``--enable-fritap``, or ``--host``.
 
 .. option:: -H <ip:port>, --host <ip:port>
 
@@ -59,6 +67,22 @@ Target and Connection
    .. code-block:: bash
    
       dexray-intercept -H 192.168.1.100:27042 com.example.app
+
+.. option:: -d <device_id>, --device <device_id>
+
+   Connect to a specific Frida device.
+
+   .. code-block:: bash
+
+      dexray-intercept -d emulator-5554 com.example.app
+
+.. option:: -l, --list-devices
+
+   List available Frida devices and exit.
+
+   .. code-block:: bash
+
+      dexray-intercept --list-devices
 
 Device and Server Management
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -81,6 +105,17 @@ Device and Server Management
    
    .. warning::
       This may catch unrelated processes spawned during analysis.
+
+.. option:: --non-interactive
+
+   Disable the interactive hook-selection prompt when no built-in hook option is
+   supplied. This is useful for automated or custom-script-only runs.
+
+   .. code-block:: bash
+
+      dexray-intercept -s --non-interactive \
+        --custom-script ./my_hooks.js \
+        com.example.app
 
 Output and Debugging
 ^^^^^^^^^^^^^^^^^^^^^
@@ -135,6 +170,34 @@ Custom Scripts
       # Multiple custom scripts
       dexray-intercept --custom-script ./script1.js --custom-script ./script2.js com.example.app
 
+Bypass Device Profiles
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. option:: --bypass-device-profile <profile>
+
+   Apply a built-in coherent Android ``Build`` identity for emulator-detection
+   bypass. This option enables bypass hooks automatically.
+
+   .. code-block:: bash
+
+      dexray-intercept -s \
+        --bypass-device-profile google_pixel_8 \
+        com.example.app
+
+.. option:: --bypass-device-profile-file <file>
+
+   Apply a custom Android ``Build`` identity from a JSON profile file. This
+   option enables bypass hooks automatically.
+
+   .. code-block:: bash
+
+      dexray-intercept -s \
+        --bypass-device-profile-file ./device-profile.json \
+        com.example.app
+
+   ``--bypass-device-profile`` and ``--bypass-device-profile-file`` cannot be
+   combined.
+
 Hook Selection
 --------------
 
@@ -143,7 +206,8 @@ Hook Groups
 
 .. option:: --hooks-all
 
-   Enable all available hooks for comprehensive analysis.
+   Enable all standard hook categories for comprehensive analysis. JNI tracing is
+   not included.
    
    .. code-block:: bash
    
@@ -165,13 +229,23 @@ Hook Groups
    
       dexray-intercept --hooks-network com.example.app
 
-.. option:: --hooks-filesystem
+.. option:: --hooks-file
 
-   Enable file system hooks (file operations, database access).
-   
+   Enable file hooks for file construction, streams, reads, writes, and
+   deletion.
+
    .. code-block:: bash
-   
-      dexray-intercept --hooks-filesystem com.example.app
+
+      dexray-intercept --hooks-file com.example.app
+
+.. option:: --hooks-database
+
+   Enable database hooks for SQLite, Room, SQLCipher, WCDB, and native SQLite
+   operations.
+
+   .. code-block:: bash
+
+      dexray-intercept --hooks-database com.example.app
 
 .. option:: --hooks-ipc
 
@@ -183,11 +257,20 @@ Hook Groups
 
 .. option:: --hooks-process
 
-   Enable process monitoring hooks (native libraries, runtime, DEX unpacking).
+   Enable process monitoring hooks for native library loading, process APIs, and
+   runtime or reflection activity.
    
    .. code-block:: bash
    
       dexray-intercept --hooks-process com.example.app
+
+.. option:: --hooks-dex
+
+   Enable DEX loading and unpacking hooks.
+
+   .. code-block:: bash
+
+      dexray-intercept --hooks-dex com.example.app
 
 .. option:: --hooks-services
 
@@ -204,6 +287,15 @@ Hook Groups
    .. code-block:: bash
    
       dexray-intercept --hooks-bypass com.example.app
+
+.. option:: --hooks-jni
+
+   Enable JNI API tracing. JNI tracing is configured further with the
+   ``--jni-*`` options.
+
+   .. code-block:: bash
+
+      dexray-intercept --hooks-jni com.example.app
 
 Individual Hooks
 ^^^^^^^^^^^^^^^^
@@ -240,7 +332,17 @@ For fine-grained control, you can enable specific individual hooks:
 
    Enable file system operation monitoring.
 
-.. option:: --enable-database
+.. option:: --deactivate-unlink
+
+   Prevent native ``unlink()`` calls from deleting files while reporting success
+   to the target application. This changes target behavior and automatically
+   enables file hooks.
+
+   .. code-block:: bash
+
+      dexray-intercept --deactivate-unlink com.example.app
+
+.. option:: --enable-sql
 
    Enable database operation monitoring.
 
@@ -314,6 +416,37 @@ For fine-grained control, you can enable specific individual hooks:
 .. option:: --enable-bypass
 
    Enable all anti-analysis bypass techniques.
+
+JNI Tracing Options
+^^^^^^^^^^^^^^^^^^^
+
+JNI tracing is enabled with ``--hooks-jni``. The following options configure JNI
+tracing and require ``--hooks-jni``:
+
+- ``--jni-lib <pattern>`` - Limit tracing to libraries whose path contains the
+  pattern. May be specified multiple times.
+- ``--jni-backtrace <none|fuzzy|accurate>`` - Select native backtrace mode.
+  The default is ``none``.
+- ``--jni-include <regex>`` and ``--jni-exclude <regex>`` - Include or exclude
+  JNI method names using regular expressions.
+- ``--jni-include-export <substring>`` and ``--jni-exclude-export <substring>``
+  - Include or exclude native exports by name.
+- ``--jni-hide-data`` - Do not decode strings and buffers in JNI events.
+- ``--jni-ignore-env`` - Do not trace ``JNIEnv`` calls.
+- ``--jni-ignore-vm`` - Do not trace ``JavaVM`` calls.
+
+.. code-block:: bash
+
+   # Trace JNI activity only in matching libraries
+   dexray-intercept -s --hooks-jni \
+     --jni-lib "libtarget.so" \
+     com.example.app
+
+   # Trace selected JNI method families with fuzzy backtraces
+   dexray-intercept -s --hooks-jni \
+     --jni-backtrace fuzzy \
+     --jni-include "Call.*Method" \
+     com.example.app
 
 Usage Examples
 --------------
