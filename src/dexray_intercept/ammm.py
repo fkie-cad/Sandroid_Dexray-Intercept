@@ -98,6 +98,11 @@ def interactive_hook_selection():
             'name': 'Anti-Analysis Bypass Hooks',
             'description': 'Root, frida, debugger, emulator detection',
             'hooks': ['bypass_hooks']
+        },
+        'jni': {
+            'name': 'JNI Tracing',
+            'description': 'JNIEnv and JavaVM API tracing',
+            'hooks': ['jni_hooks']
         }
     }
 
