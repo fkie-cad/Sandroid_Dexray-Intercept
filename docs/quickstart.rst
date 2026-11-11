@@ -30,7 +30,9 @@ Start with the simplest command to attach to a running app:
    dexray-intercept 1234
 
 .. note::
-   By default, **all hooks are disabled** for performance. You'll see basic process attachment info but no detailed monitoring.
+   When no hook-selection option is supplied, Dexray Intercept opens an
+   interactive prompt for selecting hook categories. Use ``--non-interactive``
+   to skip this prompt.
 
 2. Enable Specific Hook Categories
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -46,7 +48,7 @@ Enable hook categories based on what you want to monitor:
    dexray-intercept --hooks-network com.example.app
 
    # Monitor multiple categories
-   dexray-intercept --hooks-crypto --hooks-network --hooks-filesystem com.example.app
+   dexray-intercept --hooks-crypto --hooks-network --hooks-file com.example.app
 
 3. Comprehensive Analysis
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -55,11 +57,26 @@ For complete behavioral analysis:
 
 .. code-block:: bash
 
-   # Enable all available hooks
    dexray-intercept --hooks-all com.example.app
 
-   # Include anti-analysis bypass
-   dexray-intercept --hooks-all --hooks-bypass com.example.app
+.. note::
+   ``--hooks-all`` includes anti-analysis bypass hooks but does not include JNI
+   tracing. Enable JNI tracing separately with ``--hooks-jni`` when required.
+
+4. Instrument an Explicit Activity
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Use ``--component`` to start and instrument a specific activity when the target
+has no launcher activity or when analysis must begin from a known component.
+
+.. code-block:: bash
+
+   dexray-intercept -s \
+     --component .MainActivity \
+     --hooks-crypto \
+     com.example.app
+
+Dexray Intercept installs the selected hooks before resuming the component.
 
 Common Scenarios
 ---------------
@@ -72,17 +89,26 @@ For analyzing potentially malicious apps with evasion techniques:
 .. code-block:: bash
 
    # Spawn app with full monitoring and bypass techniques
-   dexray-intercept -s --hooks-all --hooks-bypass --enable-fritap suspicious.malware
+   dexray-intercept -s --hooks-all --enable-fritap suspicious.malware
 
    # Enable verbose output for detailed analysis
-   dexray-intercept -s --hooks-all --hooks-bypass -v suspicious.malware
+   dexray-intercept -s --hooks-all -v suspicious.malware
+
+.. code-block:: bash
+
+   # Apply a coherent device identity together with bypass hooks
+   dexray-intercept -s \
+     --bypass-device-profile google_pixel_8 \
+     --hooks-network \
+     suspicious.malware
 
 **What this does:**
    - ``-s`` spawns the app (vs attaching to running process)
-   - ``--hooks-all`` enables comprehensive monitoring
-   - ``--hooks-bypass`` bypasses anti-analysis detection
+   - ``--hooks-all`` includes anti-analysis bypass hooks
    - ``--enable-fritap`` extracts TLS keys and captures network traffic
    - ``-v`` shows verbose output for detailed debugging
+   - ``--bypass-device-profile`` applies a built-in Android ``Build`` identity
+     and enables bypass hooks automatically
 
 Scenario 2: Network Traffic Analysis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -114,11 +140,29 @@ Load your own custom Frida scripts alongside built-in hooks:
 
 .. code-block:: bash
 
-   # Load custom script with built-in hooks
+   # Load a custom script with built-in hooks
    dexray-intercept --custom-script ./my_hooks.js --hooks-crypto com.example.app
 
-   # Load multiple custom scripts  
-   dexray-intercept --custom-script ./script1.js --custom-script ./script2.js com.example.app
+   # Load custom scripts without built-in hooks
+   dexray-intercept --non-interactive \
+     --custom-script ./script1.js \
+     --custom-script ./script2.js \
+     com.example.app
+
+Scenario 5: JNI Tracing
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Trace JNI activity in native libraries:
+
+.. code-block:: bash
+
+   # Trace JNI activity in all loaded native libraries
+   dexray-intercept -s --hooks-jni com.example.app
+
+   # Limit tracing to libraries matching a path fragment
+   dexray-intercept -s --hooks-jni \
+     --jni-lib "libtarget.so" \
+     com.example.app
 
 Understanding the Output
 ------------------------
@@ -196,10 +240,14 @@ Quick reference for available hook categories:
    - ``--enable-web`` - Web traffic (HTTP/HTTPS, Retrofit, Volley)
    - ``--enable-sockets`` - Raw socket communications
 
-**File System**
-   - ``--hooks-filesystem`` - File operations, database access
-   - ``--enable-filesystem`` - File read/write/delete operations
-   - ``--enable-database`` - SQLite database operations
+**File Operations**
+   - ``--hooks-file`` - File construction, streams, reads, writes, and deletion
+   - ``--enable-filesystem`` - File operation monitoring
+   - ``--deactivate-unlink`` - Preserve files deleted through native ``unlink()``
+
+**Database Operations**
+   - ``--hooks-database`` - SQLite, Room, SQLCipher, WCDB, and native SQLite
+   - ``--enable-sql`` - Database operation monitoring
 
 **Inter-Process Communication**
    - ``--hooks-ipc`` - Intents, broadcasts, binder, shared preferences
@@ -207,9 +255,18 @@ Quick reference for available hook categories:
    - ``--enable-broadcasts`` - Broadcast receiver operations
 
 **Process Monitoring**
-   - ``--hooks-process`` - DEX unpacking, native libraries, runtime
-   - ``--enable-dex-unpacking`` - Dynamic DEX loading detection
-   - ``--enable-native-libs`` - Native library loading
+   - ``--hooks-process`` - Process APIs, runtime activity, reflection, and
+     library loading
+   - ``--enable-process`` - Android and native process activity
+   - ``--enable-runtime`` - Runtime execution and reflection monitoring
+   - ``--enable-library-loading`` - Java ``System`` and ``Runtime``
+     library-loading APIs
+   - ``--enable-native-libs`` - Native linker-level library loading
+
+**DEX Analysis**
+   - ``--hooks-dex`` - DEX loading and unpacking hooks
+   - ``--enable-dex-unpacking`` - ART DEX detection and Java DEX class-loader
+     monitoring
 
 **System Services**
    - ``--hooks-services`` - Location, camera, telephony, clipboard
@@ -219,6 +276,11 @@ Quick reference for available hook categories:
 **Anti-Analysis Bypass**
    - ``--hooks-bypass`` - Root, Frida, debugger, emulator detection bypass
    - ``--enable-bypass`` - Enable all bypass techniques
+
+**JNI Tracing**
+   - ``--hooks-jni`` - JNI environment and Java VM API tracing
+   - ``--jni-lib <pattern>`` - Limit tracing to matching native libraries
+   - ``--jni-backtrace <none|fuzzy|accurate>`` - Select JNI backtrace mode
 
 Best Practices
 --------------
@@ -231,6 +293,9 @@ Best Practices
       
       # Avoid --hooks-all for performance-sensitive analysis
       dexray-intercept --hooks-crypto --hooks-network com.example.app
+
+      Use ``--hooks-file`` and ``--hooks-database`` separately when only one of
+      these categories is relevant.
 
 **Security Considerations**
    .. code-block:: bash
@@ -277,5 +342,3 @@ Now that you've performed your first analysis:
 2. **Read the User Guide** - :doc:`user-guide/index` for advanced usage
 3. **Check the API Reference** - :doc:`api/index` for programmatic usage
 4. **Learn Hook Development** - :doc:`development/index` for creating custom hooks
-
-If you encounter any issues, consult the :doc:`troubleshooting` guide.
