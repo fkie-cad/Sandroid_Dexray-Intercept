@@ -348,28 +348,27 @@ For fine-grained control, you can enable specific individual hooks:
 
 **Process Hooks**
 
-.. option:: --enable-dex-unpacking
-
-   Enable DEX unpacking detection.
-
-.. option:: --enable-java-dex
-
-   Enable Java DEX loading hooks.
-   
-   .. warning::
-      This hook may crash certain applications.
-
-.. option:: --enable-native-libs
-
-   Enable native library loading monitoring.
-
 .. option:: --enable-process
 
-   Enable process creation monitoring.
+   Enable Android process API and native process activity monitoring.
 
 .. option:: --enable-runtime
 
-   Enable runtime operation monitoring.
+   Enable runtime execution, shutdown, and reflection monitoring.
+
+.. option:: --enable-library-loading
+
+   Enable Java ``System`` and ``Runtime`` library-loading monitoring.
+
+.. option:: --enable-native-libs
+
+   Enable native linker-level library-loading monitoring.
+
+**DEX Hooks**
+
+.. option:: --enable-dex-unpacking
+
+   Enable ART DEX detection and Java DEX class-loader monitoring.
 
 **IPC Hooks**
 
