@@ -84,25 +84,34 @@ Monitors all network communications including HTTP/HTTPS, WebSockets, and raw so
      "timestamp": "2024-08-20T10:30:15Z"
    }
 
-File System Hooks (``--hooks-filesystem``)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File Hooks (``--hooks-file``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Monitors file operations and database access.
+Monitors file construction, stream creation, read operations, write operations,
+and file deletion.
 
-**Individual Hooks:**
-   - ``--enable-filesystem`` - File read/write/delete operations
-   - ``--enable-database`` - SQLite database operations
+**Individual Hook:**
+   - ``--enable-filesystem`` - File construction, stream, read, write, and
+     deletion monitoring
+
+   - ``--deactivate-unlink`` - Prevent native ``unlink()`` deletion while
+     reporting success to the target application
+
+.. warning::
+   ``--deactivate-unlink`` changes target behavior. Use it only when preserving
+   deleted files or dropped artifacts is required.
 
 **What it captures:**
-   - File paths and operations (read, write, delete, move)
-   - Database queries and modifications
-   - File content previews (configurable)
-   - Permission changes and directory operations
+   - File paths and constructor variants
+   - Input and output stream creation
+   - Read and write operations, including offsets and lengths
+   - File deletion results
+   - Native ``unlink()`` operations
 
 **Use cases:**
    - Tracking malware file modifications
-   - Analyzing data storage patterns
-   - Investigating sensitive file access
+   - Investigating dropped files and payloads
+   - Analyzing application file access patterns
 
 **Example events:**
 
@@ -111,10 +120,31 @@ Monitors file operations and database access.
    {
      "event_type": "file.write",
      "file_path": "/data/data/com.example.app/files/config.json",
-     "size": 256,
-     "content_preview": "{\"api_key\": \"...\"}",
+     "method": "java.io.FileOutputStream.write(byte[], int, int)",
+     "offset": 0,
+     "length": 256,
+     "bytes_written": 256,
      "timestamp": "2024-08-20T10:30:30Z"
    }
+
+Database Hooks (``--hooks-database``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Monitors Java and native database activity.
+
+**Individual Hook:**
+   - ``--enable-sql`` - Database operation monitoring
+
+**What it captures:**
+   - SQLite queries and data-modification operations
+   - Room, SQLCipher, and WCDB activity when the corresponding libraries are
+     present
+   - Native SQLite opens, prepared statements, execution, and bind values
+
+**Use cases:**
+   - Tracking locally stored application data
+   - Investigating encrypted or protected databases
+   - Inspecting SQL queries and database modifications
 
 Inter-Process Communication (``--hooks-ipc``)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -153,20 +183,23 @@ Monitors communication between Android components and processes.
 Process Hooks (``--hooks-process``)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Monitors process creation, library loading, and dynamic code execution.
+Monitors process APIs, runtime activity, reflection, and Java or native library
+loading.
 
 **Individual Hooks:**
-   - ``--enable-dex-unpacking`` - DEX file unpacking detection
-   - ``--enable-java-dex`` - Java DEX loading (may crash apps)
-   - ``--enable-native-libs`` - Native library loading
-   - ``--enable-process`` - Process creation and management
-   - ``--enable-runtime`` - Runtime behavior and reflection
+   - ``--enable-process`` - Android process APIs and native process activity
+   - ``--enable-runtime`` - Runtime execution, shutdown behavior, and reflection
+   - ``--enable-library-loading`` - Java ``System`` and ``Runtime``
+     library-loading APIs
+   - ``--enable-native-libs`` - Native linker-level library loading
 
 **What it captures:**
-   - Dynamically loaded DEX files and libraries
-   - Process spawn events and parameters
-   - Reflection API usage
-   - Native library paths and symbols
+   - Process signals, termination, identity changes, and process-group activity
+   - ``/proc`` scanning through Android process APIs
+   - Native ``fork()``, ``execve()``, and ``system()`` activity
+   - Runtime command execution, shutdown hooks, and exit behavior
+   - Reflection and class-loading activity
+   - Java and native library-loading activity
 
 **Use cases:**
    - Detecting packed or encrypted malware
@@ -178,12 +211,36 @@ Monitors process creation, library loading, and dynamic code execution.
 .. code-block:: json
 
    {
-     "event_type": "dex.unpacking",
-     "dex_path": "/data/app/com.example.app/classes.dex",
-     "unpacked": true,
-     "orig_location": "/system/framework/core.jar",
-     "timestamp": "2024-08-20T10:31:00Z"
+     "event_type": "runtime.exec",
+     "timestamp": "2026-11-11T11:25:18.874Z",
+     "command": "/system/bin/id",
+     "event_description": "Runtime command execution",
+     "overload_index": 0,
+     "metadata": {
+       "library": "java.lang.Runtime",
+       "method": "exec"
+     }
    }
+
+DEX Hooks (``--hooks-dex``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Monitors DEX loading, unpacking, and in-memory DEX processing.
+
+**Individual Hook:**
+   - ``--enable-dex-unpacking`` - ART DEX detection and Java class-loader
+     monitoring
+
+**What it captures:**
+   - File-backed DEX class-loader creation
+   - In-memory DEX loader metadata
+   - Native DEX loading detected through ART runtime hooks
+   - DEX payload metadata and captured artifacts when available
+
+**Use cases:**
+   - Detecting packed, encrypted, or dynamically loaded code
+   - Recovering DEX artifacts for further analysis
+   - Tracking class-loader-based code loading
 
 System Service Hooks (``--hooks-services``)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -230,6 +287,16 @@ Bypasses common anti-analysis detection techniques used by malware and security-
 **Individual Hook:**
    - ``--enable-bypass`` - All bypass techniques
 
+**Device Profiles:**
+   - ``--bypass-device-profile <profile>`` - Apply a built-in coherent Android
+     ``Build`` identity
+   - ``--bypass-device-profile-file <file>`` - Apply a custom validated
+     ``Build`` identity from JSON
+
+   Either option enables bypass hooks automatically and is useful when an
+   application uses multiple ``Build`` properties to detect emulator
+   environments.
+
 **Detection Methods Bypassed:**
    - **Root Detection** - su binary checks, root app detection, build tag analysis
    - **Frida Detection** - frida-server detection, port scanning, process/thread name checks
@@ -261,6 +328,41 @@ Bypasses common anti-analysis detection techniques used by malware and security-
      "bypassed_result": false,
      "timestamp": "2024-08-20T10:31:30Z"
    }
+
+JNI Tracing (``--hooks-jni``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Traces JNI calls made by native libraries in the target process.
+
+**Configuration Options:**
+   - ``--jni-lib <pattern>`` - Limit tracing to matching library paths
+   - ``--jni-backtrace <none|fuzzy|accurate>`` - Select native backtrace mode
+   - ``--jni-include <regex>`` / ``--jni-exclude <regex>`` - Filter JNI method
+     names
+   - ``--jni-include-export <substring>`` /
+     ``--jni-exclude-export <substring>`` - Filter native exports
+   - ``--jni-hide-data`` - Do not decode strings and buffers
+   - ``--jni-ignore-env`` - Do not trace ``JNIEnv`` calls
+   - ``--jni-ignore-vm`` - Do not trace ``JavaVM`` calls
+
+**What it captures:**
+   - JNI environment and Java VM calls
+   - Native library tracking
+   - JNI method, field, string, array, reference, exception, and registration
+     activity
+   - Decoded arguments and return values where supported
+
+**Example usage:**
+
+.. code-block:: bash
+
+   # Trace JNI activity in all native libraries
+   dexray-intercept -s --hooks-jni com.example.app
+
+   # Limit tracing to libraries matching a path fragment
+   dexray-intercept -s --hooks-jni \
+     --jni-lib "libtarget.so" \
+     com.example.app
 
 Configuration Strategies
 ------------------------
@@ -320,7 +422,6 @@ Hook Interactions
    - friTap (``--enable-fritap``) works well with ``--hooks-network``
 
 **Potential Conflicts:**
-   - ``--enable-java-dex`` may crash certain applications
    - Heavy hook combinations may impact app performance
    - Some apps may detect extensive instrumentation
 
@@ -335,7 +436,7 @@ Hook Interactions
    dexray-intercept --hooks-crypto --hooks-network --hooks-ipc com.example.app
    
    # Privacy analysis
-   dexray-intercept --hooks-services --hooks-network --hooks-filesystem com.social.app
+   dexray-intercept --hooks-services --hooks-network --hooks-file com.social.app
 
 Dynamic Hook Management
 -----------------------
