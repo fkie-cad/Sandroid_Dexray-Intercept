@@ -23,15 +23,16 @@ Events appear in the terminal as they occur, color-coded by category:
 
 .. code-block:: text
 
-   [*] attaching to app: com.example.app
-   [*] enabled hooks: aes_hooks, web_hooks, bypass_hooks
-   [*] starting app profiling
-   [*] press Ctrl+C to stop the profiling ...
-
-   [CRYPTO] AES key creation: algorithm=AES, key_length=32, key=a1b2c3d4...
-   [WEB] HTTP request: GET https://api.example.com/users/profile
-   [BYPASS] Root detection bypassed: File.exists() -> /system/bin/su (false)
-   [CUSTOM] my_script.js: Custom hook triggered with data: {...}
+   [*] [File] Read Operation:
+   [*] Operation: FileInputStream.read
+   [*] File Path: /data/user/0/com.test.filee2e/files/fis_read0.log
+   [*] Buffer Size: 1 bytes
+   [*] Offset: 0, Length: 1
+   [*] Bytes Read: 1
+   [*] Byte Value: 88
+   [*] Data:
+                 00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f
+       00000000  58                                                |X               |
 
 **Color Coding:**
    - **[CRYPTO]** - Blue - Cryptographic operations
@@ -43,13 +44,14 @@ Events appear in the terminal as they occur, color-coded by category:
 
 **Verbosity Levels:**
    - **Normal**: Essential events only
-   - **Verbose (``-v``)**: All events including debug information
+   - **Verbose (``-v``)**: Additional event details and debug information
    - **Stack traces (``--enable-full-stacktrace``)**: Include call origin information
 
 JSON Profile Format
 -------------------
 
-When analysis stops (Ctrl+C), a comprehensive JSON profile is generated containing all captured events.
+When analysis stops with Ctrl+C, a JSON profile is generated containing the
+collected events.
 
 Basic Structure
 ^^^^^^^^^^^^^^^
@@ -61,21 +63,76 @@ Basic Structure
        {
          "event_type": "specific.event.type",
          "timestamp": "2024-08-20T10:30:00.000Z",
-         "field1": "value1",
-         "field2": "value2"
+         "event_specific_field": "value",
+         "additional_field": 42,
+         "metadata": {
+           "additional_context": "value"
+         }
        }
      ],
      "_metadata": {
        "created_at": "2024-08-20T10:30:00.000Z",
        "version": "2.0",
-       "total_events": 42,
-       "category_breakdown": {
-         "CRYPTO_AES": 15,
-         "WEB": 20,
-         "BYPASS_DETECTION": 7
-       }
+       "total_events": 1
      }
    }
+
+Each profile category contains a list of events. Every event has an
+``event_type`` and ``timestamp``; additional top-level fields depend on the
+event type. Supplementary or category-specific information may be stored in
+``metadata``.
+
+Stack Traces
+^^^^^^^^^^^^
+
+Use ``--enable-full-stacktrace`` to request stack traces from supported hooks.
+When available, traces are stored in the event's ``metadata``:
+
+- ``java_stack_trace`` contains Java stack frames as strings.
+- ``native_backtrace`` contains native frames with address, module, and symbol
+  information. Module or symbol details may be unavailable.
+
+For example, a Java trace can look like this (selected frames):
+
+.. code-block:: json
+
+   {
+     "event_type": "file.create",
+     "metadata": {
+       "java_stack_trace": [
+         "dalvik.system.VMStack.getThreadStackTrace(Native Method)",
+         "java.lang.Thread.getStackTrace(Thread.java:1841)",
+         "java.io.File.<init>(Native Method)"
+       ]
+     }
+   }
+
+A native trace can look like this (one selected frame):
+
+.. code-block:: json
+
+   {
+     "event_type": "file.delete.native",
+     "metadata": {
+       "native_backtrace": [
+         {
+           "address": "0x7dc41accc159",
+           "module": {
+             "name": "libc.so",
+             "base": "0x7dc41ac05000",
+             "path": "/apex/com.android.runtime/lib64/bionic/libc.so"
+           },
+           "symbol": {
+             "address": "0x7dc41accc159",
+             "name": "remove+0x9",
+             "moduleName": "libc.so"
+           }
+         }
+       ]
+     }
+   }
+
+The examples are excerpts; actual traces and event fields vary by hook and runtime.
 
 Event Categories
 ^^^^^^^^^^^^^^^^
@@ -87,16 +144,59 @@ Event Categories
 
    {
      "event_type": "crypto.cipher.operation",
+     "timestamp": "2026-11-11T20:54:03.281Z",
      "algorithm": "AES/CBC/PKCS5Padding",
-     "operation_mode": 1,
-     "operation_mode_desc": "ENCRYPT_MODE (1)",
-     "key_hex": "a1b2c3d4e5f67890...",
-     "iv_hex": "1234567890abcdef...",
-     "input_hex": "48656c6c6f20576f726c64",
-     "output_hex": "8b7df143d91c7169...",
-     "plaintext": "Hello World",
-     "stack_trace": ["com.example.CryptoManager.encrypt()", "..."],
-     "timestamp": "2024-08-20T10:30:00.000Z"
+     "operation_mode": 2,
+     "operation_mode_desc": "DECRYPT_MODE (2)",
+     "input_hex": "f6302125b8cfcfb245adc9344d712b2d",
+     "output_hex": "48656c6c6f204145532045324521",
+     "input_length": 16,
+     "output_length": 14,
+     "key_hex": "fc064967581dff0c55147a039b53b00b",
+     "key_length": 0,
+     "iv_hex": "23423551bc3a5ec38db1bdf040b15316",
+     "iv_length": 0,
+     "plaintext": "Hello AES E2E!"
+   }
+
+**CRYPTO_ENCODING**
+   Encoding and decoding operations
+
+.. code-block:: json
+
+   {
+     "event_type": "crypto.base64.encode_to_string",
+     "timestamp": "2026-11-11T20:54:03.289Z",
+     "input_hex": "48656c6c6f204261736536342045324521",
+     "input_length": 17,
+     "output_length": 24,
+     "key_length": 0,
+     "iv_length": 0,
+     "plaintext": "Hello Base64 E2E!",
+     "metadata": {
+       "output_string": "SGVsbG8gQmFzZTY0IEUyRSE=",
+       "flags": 2,
+       "method": "encodeToString(byte[], int)",
+       "input_content": "Hello Base64 E2E!"
+     }
+   }
+
+**CRYPTO_KEYSTORE**
+   Keystore operations
+
+.. code-block:: json
+
+   {
+     "event_type": "crypto.keystore.get_instance",
+     "timestamp": "2026-11-11T20:54:03.305Z",
+     "input_length": 0,
+     "output_length": 0,
+     "key_length": 0,
+     "iv_length": 0,
+     "metadata": {
+       "type": "BKS",
+       "method": "getInstance(String)"
+     }
    }
 
 **WEB**
@@ -121,6 +221,59 @@ Event Categories
      "timestamp": "2024-08-20T10:30:15.000Z"
    }
 
+**NETWORK_SOCKETS**
+   Java and native socket activity
+
+.. code-block:: json
+
+   {
+     "event_type": "socket.native.sendmsg",
+     "timestamp": "2026-11-11T21:00:54.699Z",
+     "method": "sendmsg",
+     "socket_type": "unix:stream",
+     "socket_descriptor": 110,
+     "remote_address": "filesystem:/dev/socket/traced_producer",
+     "data_length": 25,
+     "has_buffer": true,
+     "operation": "Socket Sendmsg",
+     "socket_description": "Socket (unix:stream)",
+     "address_family": 1,
+     "protocol": 0,
+     "result_code": 25,
+     "operation_id": "socket-110-1",
+     "captured_length": 25,
+     "payload_truncated": false,
+     "metadata": {
+       "socket_noise_reason": "known_noisy_endpoint"
+     }
+   }
+
+Native socket payloads can be stored in separate companion events. The
+``operation_id`` links the payload event to its corresponding operation.
+
+The corresponding payload event from the same run is:
+
+.. code-block:: json
+
+   {
+     "event_type": "socket.native.sendmsg_data",
+     "timestamp": "2026-11-11T21:00:54.699Z",
+     "socket_descriptor": 110,
+     "data_length": 25,
+     "has_buffer": true,
+     "operation_id": "socket-110-1",
+     "captured_length": 25,
+     "data_hex": "1500000010011a8e8080000a0c50726f6475636572506f7274",
+     "payload_truncated": false,
+     "metadata": {
+       "socket_noise_reason": "inherited"
+     }
+   }
+
+Some low-signal Unix socket events are classified in ``metadata`` using
+``socket_noise_reason``. They are hidden from the console by default but remain
+in the JSON profile. Use ``-v`` to show them in the console.
+
 **FILE_SYSTEM**
    File operations
 
@@ -128,12 +281,115 @@ Event Categories
 
    {
      "event_type": "file.write",
-     "operation": "write",
-     "file_path": "/data/data/com.example.app/shared_prefs/config.xml",
-     "size": 256,
-     "content_preview": "<?xml version=\"1.0\" encoding=\"utf-8\"?>...",
-     "permissions": "rw-rw----",
-     "timestamp": "2024-08-20T10:30:30.000Z"
+     "timestamp": "2026-11-11T09:45:36.106Z",
+     "file_path": "/data/user/0/com.test.filee2e/files/fis_file.log",
+     "operation": "FileOutputStream.write",
+     "method": "java.io.FileOutputStream.write(byte[])",
+     "variant": 0,
+     "buffer_size": 13,
+     "offset": 0,
+     "length": 13,
+     "data_hex": "4649532d46696c652d54657374",
+     "plaintext": "FIS-File-Test",
+     "file_type": "other",
+     "is_large_data": false,
+     "bytes_written": 13
+   }
+
+The console may show only a preview of large file data. The JSON event can
+contain more data than the console preview.
+
+**DATABASE**
+   Java and native database operations
+
+.. code-block:: json
+
+   {
+     "event_type": "database.native.prepare",
+     "timestamp": "2026-11-11T09:49:58.871Z",
+     "database_path": "/data/user/0/com.test.databasee2e/databases/sqlite_e2e.db",
+     "database_type": "Native SQLite",
+     "method": "sqlite3_prepare16_v2",
+     "sql": "PRAGMA page_size",
+     "result_code": 0,
+     "status": "success",
+     "native_function": "sqlite3_prepare16_v2",
+     "module_name": "libsqlite.so",
+     "architecture": "x64",
+     "sql_encoding": "utf16",
+     "statement_handle": "0x7786d7c2c800",
+     "database_handle": "0x778857c30110",
+     "metadata": {
+       "operation_description": "Native SQLite operation"
+     }
+   }
+
+**RUNTIME_HOOKS**
+   Runtime and reflection activity
+
+.. code-block:: json
+
+   {
+     "event_type": "runtime.exec",
+     "timestamp": "2026-11-11T11:25:18.874Z",
+     "command": "/system/bin/id",
+     "event_description": "Runtime command execution",
+     "overload_index": 0,
+     "metadata": {
+       "library": "java.lang.Runtime",
+       "method": "exec"
+     }
+   }
+
+**PROCESS_CREATION**
+   Android and native process activity
+
+.. code-block:: json
+
+   {
+     "event_type": "process.signal",
+     "timestamp": "2026-11-11T11:25:18.859Z",
+     "target_pid": 5216,
+     "signal": 0,
+     "event_description": "Process signal sent",
+     "metadata": {
+       "library": "android.os.Process",
+       "method": "sendSignal"
+     }
+   }
+
+**IPC_BROADCAST**
+   Broadcast and component activity
+
+.. code-block:: json
+
+   {
+     "event_type": "broadcast.sent",
+     "timestamp": 1794434103815,
+     "method": "sendBroadcast",
+     "intent_name": "com.test.ipce2e.ACTION_SIMPLE",
+     "intent": {
+       "intent_string": "Intent { act=com.test.ipce2e.ACTION_SIMPLE (has extras) }",
+       "action": "com.test.ipce2e.ACTION_SIMPLE",
+       "extras": "Bundle[{key=value}]",
+       "flags": 0
+     },
+     "source_class": "android.content.ContextWrapper"
+   }
+
+**PROCESS_NATIVE_LIB**
+   Native library-loading activity
+
+.. code-block:: json
+
+   {
+     "event_type": "native.library.loaded",
+     "timestamp": "2026-11-11T11:25:18.908Z",
+     "success": true,
+     "library_name": "liblog.so",
+     "event_description": "Native library loaded successfully",
+     "load_method": "android_dlopen_ext",
+     "handle": "0x314eb83eb19b24b9"
    }
 
 **BYPASS_DETECTION**
@@ -142,19 +398,28 @@ Event Categories
 .. code-block:: json
 
    {
-     "event_type": "bypass.root.file_check",
-     "bypass_category": "root_detection",
-     "detection_method": "File.exists()",
-     "file_path": "/system/bin/su",
-     "original_result": true,
-     "bypassed_result": false,
-     "action": "file_check_bypassed",
+     "event_type": "bypass.emulator.build_property",
+     "timestamp": "2026-11-11T21:12:16.622Z",
+     "bypass_category": "emulator_detection",
+     "detection_method": "Build.BRAND",
+     "original_value": "google",
+     "bypassed_value": "samsung",
+     "property_name": "BRAND",
+     "device_profile": "samsung_galaxy_s10",
+     "profile_source": "built_in",
      "metadata": {
-       "description": "Root detection via file existence check",
-       "severity": "high",
-       "mitre_technique": "T1622"
-     },
-     "timestamp": "2024-08-20T10:30:45.000Z"
+       "matched_indicators": [
+         "DEVICE=emu64xa",
+         "MODEL=sdk_gphone64_x86_64",
+         "PRODUCT=sdk_gphone64_x86_64",
+         "HARDWARE=ranchu"
+       ],
+       "description": "Emulator detection via Build properties",
+       "category": "emulator_detection",
+       "severity": "medium",
+       "mitre_technique": "T1497",
+       "technique_name": "Virtualization/Sandbox Evasion"
+     }
    }
 
 **CUSTOM_SCRIPT**
@@ -173,6 +438,30 @@ Event Categories
      "timestamp": "2024-08-20T10:31:00.000Z"
    }
 
+**JNI_TRACE**
+   JNI environment and Java VM calls, and tracked native libraries
+
+.. code-block:: json
+
+   {
+     "event_type": "jni.env.call",
+     "timestamp": "2026-11-11T21:30:04.971Z",
+     "metadata": {
+       "jni_struct": "JNIEnv",
+       "method": "NewStringUTF",
+       "arguments": [
+         "0x7dc270f4b9b0",
+         "0x7dc0eac5698e"
+       ],
+       "return_value": "0x7dc427ae202d",
+       "java_method_sig": null,
+       "thread_id": 5647,
+       "c_arg_types": ["JNIEnv*", "char*"],
+       "c_ret_type": "jstring",
+       "string_argument": "HelloUTF"
+     }
+   }
+
 File Naming Convention
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -186,6 +475,62 @@ Examples:
    - ``profile_com.banking.app_2024-08-20_10-30-45.json``
    - ``profile_1234_2024-08-20_15-45-30.json``
    - ``profile_unknown_app_2024-08-20_09-15-22.json``
+
+DEX Artifacts
+-------------
+
+The native DEX hook sends captured payloads to Python through Frida. When
+persistence succeeds, the ``DEX_LOADING`` event includes the local
+``dumped_path``, SHA-256 hash, file type, and capture status.
+
+Native payloads larger than 64 MiB are not captured. Capture or persistence
+failures are reported in the event.
+
+**Example native capture event** (selected fields):
+
+.. code-block:: json
+
+   {
+     "event_type": "dex.unpacking.detected",
+     "timestamp": "2026-11-11T21:18:49.706Z",
+     "hooked_function": "libdexfile.so::<mangled OpenCommon symbol>",
+     "magic": "dex038",
+     "size": 2300,
+     "original_location": "/data/app/<install-id>/com.test.dexe2e/base.apk",
+     "dumped_path": "/path/to/dexray-intercept/unpacked/malicious/c19ce64f8e58cc0129f0d442fb4a9cebbff3df9cf5033866c981ffba9aee1768.dex",
+     "dump_success": true,
+     "sha256": "c19ce64f8e58cc0129f0d442fb4a9cebbff3df9cf5033866c981ffba9aee1768",
+     "file_type": "dex",
+     "operation_id": "dex-1",
+     "captured_length": 2300,
+     "has_buffer": true,
+     "payload_truncated": false
+   }
+
+The paths and hooked symbol contain placeholders; their actual values depend
+on the device and local environment.
+
+The artifact directory reflects an origin-based classification; it is not by
+itself a determination that the captured file is malicious.
+
+**In-memory class-loader events** describe buffer metadata. They do not by
+themselves guarantee that an artifact was captured:
+
+.. code-block:: json
+
+   {
+     "event_type": "dex.in_memory_loader",
+     "timestamp": "2026-11-11T21:18:49.765Z",
+     "unpacking": false,
+     "magic": "dex038",
+     "class_loader_type": "InMemoryDexClassLoader",
+     "method": "$init(ByteBuffer, ClassLoader)",
+     "buffer_size": 732,
+     "buffer_count": 1,
+     "buffer_sizes": [732],
+     "total_buffer_size": 732,
+     "buffer_magics": ["dex038"]
+   }
 
 Network Capture Files (friTap)
 ------------------------------
@@ -520,4 +865,4 @@ Next Steps
 
 - Learn about the Python API: :doc:`../api/python-api`
 - Explore development workflows: :doc:`../development/index`
-- Check troubleshooting guide: :doc:`../troubleshooting`
+- Review command-line options: :doc:`cli-usage`
