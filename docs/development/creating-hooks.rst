@@ -4,8 +4,9 @@ Creating Custom Hooks
 This guide provides step-by-step instructions for creating custom hooks to monitor specific Android behaviors not covered by the built-in hook categories.
 
 .. important::
-   You only need to write a new **custom hook** when you’re adding a new feature to **dexray-intercept** itself.  
-   For one-off tweaks, pass your script with ``--custom-script <path/to/script.js>`` and it will be loaded *in addition to* dexray-intercept’s built-in hooks.
+   This guide describes adding hooks to Dexray Intercept itself. For a
+   standalone Frida script, use ``--custom-script <path/to/script.js>``;
+   it is loaded alongside the built-in hooks.
 
 
 Overview
@@ -15,65 +16,78 @@ Creating a custom hook involves several coordinated steps:
 
 1. **Design the hook** - Determine what to monitor and event structure
 2. **Implement TypeScript hooks** - Write Frida instrumentation code
-3. **Create Python parsers** - Process events in Python
+3. **Update Python event processing** - Extend an existing model and parser,
+   or create new ones
 4. **Integrate with CLI** - Add command-line support
 5. **Test and validate** - Ensure functionality works correctly
 
-This guide walks through creating a complete hook category from scratch.
+This guide walks through adding a hook to an existing category.
 
-Example: Android Clipboard Monitoring
--------------------------------------
+Example: Adding Clipboard Monitoring
+------------------------------------
 
-We'll create a comprehensive clipboard monitoring hook as a practical example.
+This example walks through adding clipboard monitoring to the ``services``
+category. Clipboard support already exists in Dexray Intercept; the steps
+below reconstruct its integration as a guide for adding another hook.
 
 Step 1: Design the Hook
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-**Target Behavior:** Monitor clipboard access (read/write operations)
+First decide whether the behavior fits an existing category or needs a new one.
+Clipboard access is an Android system-service operation, so it belongs under
+``agent/services/``. An unrelated behavior may justify a separate category.
 
-**Target APIs:**
-   - ``android.content.ClipboardManager.getPrimaryClip()``
-   - ``android.content.ClipboardManager.setPrimaryClip()``
-   - ``android.content.ClipData`` operations
+For this example:
 
-**Event Types to Generate:**
-   - ``clipboard.read`` - When app reads clipboard content
-   - ``clipboard.write`` - When app writes to clipboard
-   - ``clipboard.clear`` - When app clears clipboard
+- **Agent file:** ``agent/services/clipboard.ts``
+- **Target APIs:** ``ClipboardManager.setPrimaryClip()`` and
+  ``ClipboardManager.getPrimaryClip()``
+- **Hook configuration key:** ``clipboard_hooks``
+- **Profile category:** ``CLIPBOARD``
+- **Event types:** ``clipboard.set_primary_clip`` and
+  ``clipboard.get_primary_clip``
+- **Test application:** ``ServicesE2E``
 
-**Event Data Structure:**
+Decide which fields each event needs and whether the existing Python event model
+and parser can represent them. The clipboard events use ``ServiceEvent`` and
+``ServiceParser``.
+
+For example, a clipboard write can produce:
 
 .. code-block:: json
 
    {
-     "event_type": "clipboard.read",
-     "timestamp": "2024-08-20T10:30:00.000Z",
-     "clip_label": "Copied text",
-     "clip_text": "Hello World",
-     "clip_type": "text/plain",
-     "item_count": 1,
-     "source_app": "com.example.app"
+     "event_type": "clipboard.set_primary_clip",
+     "timestamp": "2026-11-12T12:06:41.725Z",
+     "event_description": "Clipboard data written",
+     "library": "android.content.ClipboardManager",
+     "method": "setPrimaryClip",
+     "content_type": "text",
+     "content": "services-e2e-clipboard",
+     "item_index": 0,
+     "total_items": 1,
+     "content_length": 22
    }
 
-Step 2: Implement TypeScript Hook
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Step 2: Implement the TypeScript Hook
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Create the hook file at ``agent/clipboard/clipboard_monitor.ts``:
+Create ``agent/services/clipboard.ts``. The hook uses the ``CLIPBOARD`` profile
+type and sends structured events to the Python frontend:
 
 .. code-block:: typescript
 
-   import { log, devlog, am_send } from "../utils/logging.js"
-   import { Where } from "../utils/misc.js"
-   import { Java } from "../utils/javalib.js"
+   import { devlog, am_send } from "../utils/logging.js"
+   import {
+       safePerform,
+       safeUse,
+       safeImplementation,
+       PropagateException
+   } from "../utils/safe_java.js"
+   import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
-   // Profile type identifier - must be unique
-   const PROFILE_HOOKING_TYPE: string = "CLIPBOARD_MONITOR"
+   const PROFILE_HOOKING_TYPE: string = "CLIPBOARD"
 
-   /**
-    * Create clipboard monitoring event
-    * @param eventType Specific clipboard event type
-    * @param data Event-specific data
-    */
    function createClipboardEvent(eventType: string, data: any): void {
        const event = {
            event_type: eventType,
@@ -83,431 +97,394 @@ Create the hook file at ``agent/clipboard/clipboard_monitor.ts``:
        am_send(PROFILE_HOOKING_TYPE, JSON.stringify(event));
    }
 
-   /**
-    * Extract text content from ClipData safely
-    * @param clipData Android ClipData object
-    * @returns Text content or null
-    */
-   function extractClipText(clipData: any): string | null {
-       try {
-           if (!clipData) return null;
-           
-           const itemCount = clipData.getItemCount();
-           if (itemCount === 0) return null;
-           
-           const firstItem = clipData.getItemAt(0);
-           if (!firstItem) return null;
-           
-           const text = firstItem.getText();
-           return text ? text.toString() : null;
-       } catch (error) {
-           devlog("Error extracting clip text: " + error);
-           return null;
-       }
-   }
+Install the hooks inside ``safePerform()`` and resolve the Android class with
+``safeUse()``. The following excerpt shows the read hook:
 
-   /**
-    * Install clipboard monitoring hooks
-    */
-   export function install_clipboard_monitor_hooks(): void {
-       devlog("Installing clipboard monitoring hooks");
-       
-       Java.perform(() => {
-           try {
-               // Hook ClipboardManager
-               const ClipboardManager = Java.use("android.content.ClipboardManager");
-               
-               // Monitor clipboard reads
-               ClipboardManager.getPrimaryClip.implementation = function() {
-                   const clipData = this.getPrimaryClip();
-                   
-                   if (clipData) {
-                       const clipText = extractClipText(clipData);
-                       const description = clipData.getDescription();
-                       
-                       createClipboardEvent("clipboard.read", {
-                           clip_label: description ? description.getLabel().toString() : "",
-                           clip_text: clipText || "",
-                           clip_type: description ? description.getMimeType(0).toString() : "unknown",
-                           item_count: clipData.getItemCount(),
-                           operation: "read"
-                       });
+.. code-block:: typescript
+
+   function hook_clipboard() {
+       safePerform("clipboard:hook_clipboard", () => {
+           const ClipboardManager = safeUse(
+               "android.content.ClipboardManager",
+               "clipboard:hook_clipboard"
+           );
+           if (!ClipboardManager) return;
+
+           // The setPrimaryClip hook is also installed here.
+
+           const getPrimaryClipRef = ClipboardManager.getPrimaryClip;
+           if (getPrimaryClipRef) {
+               getPrimaryClipRef.implementation = safeImplementation(
+                   "clipboard:ClipboardManager.getPrimaryClip",
+                   getPrimaryClipRef,
+                   function (original) {
+                       const java_stack_trace = collectJavaStackTrace();
+                       let result;
+
+                       try {
+                           result = original.call(this);
+                       } catch (error) {
+                           throw new PropagateException(error);
+                       }
+
+                       try {
+                           createClipboardEvent("clipboard.get_primary_clip", {
+                               library: "android.content.ClipboardManager",
+                               method: "getPrimaryClip",
+                               has_clip: result !== null,
+                               item_count: result ? result.getItemCount() : 0,
+                               ...(java_stack_trace
+                                   ? { java_stack_trace }
+                                   : {})
+                           });
+                       } catch (error) {
+                           try {
+                               devlog(`Clipboard read event failed: ${error}`);
+                           } catch {
+                               // Preserve the original result.
+                           }
+                       }
+
+                       return result;
                    }
-                   
-                   return clipData;
-               };
-               
-               // Monitor clipboard writes
-               ClipboardManager.setPrimaryClip.implementation = function(clip) {
-                   const clipText = extractClipText(clip);
-                   const description = clip.getDescription();
-                   
-                   createClipboardEvent("clipboard.write", {
-                       clip_label: description ? description.getLabel().toString() : "",
-                       clip_text: clipText || "",
-                       clip_type: description ? description.getMimeType(0).toString() : "unknown",
-                       item_count: clip.getItemCount(),
-                       operation: "write"
-                   });
-                   
-                   return this.setPrimaryClip(clip);
-               };
-               
-               // Monitor clipboard clearing (if available)
-               try {
-                   ClipboardManager.clearPrimaryClip.implementation = function() {
-                       createClipboardEvent("clipboard.clear", {
-                           operation: "clear"
-                       });
-                       
-                       return this.clearPrimaryClip();
-                   };
-               } catch (error) {
-                   devlog("clearPrimaryClip not available on this Android version");
-               }
-               
-               log("Clipboard monitoring hooks installed successfully");
-               
-           } catch (error) {
-               devlog("Error installing clipboard hooks: " + error);
+               );
            }
        });
    }
 
-   /**
-    * Install comprehensive clipboard hooks (main export function)
-    */
-   export function install_clipboard_hooks(): void {
-       devlog("Installing comprehensive clipboard hooks");
-       install_clipboard_monitor_hooks();
-   }
+``PropagateException`` passes an exception from the original call back to the
+application without triggering the wrapper's fallback call. Errors while
+creating the read event are handled separately so the original result can be
+returned.
 
-Step 3: Create Python Parser
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The write hook in the same file extracts clipboard-item details and emits
+``clipboard.set_primary_clip``. See ``agent/services/clipboard.ts`` for the
+complete read and write implementations.
 
-Create parser at ``src/dexray_intercept/parsers/clipboard.py``:
-
-.. code-block:: python
-
-   #!/usr/bin/env python3
-   # -*- coding: utf-8 -*-
-
-   from typing import Optional
-   from .base import BaseParser
-   from ..models.events import Event
-
-
-   class ClipboardEvent(Event):
-       """Event representing clipboard operations"""
-       
-       def __init__(self, event_type: str, timestamp: str):
-           super().__init__(event_type, timestamp)
-           self.clip_label = None
-           self.clip_text = None
-           self.clip_type = None
-           self.item_count = None
-           self.operation = None
-           
-       def get_event_data(self):
-           data = {
-               "event_type": self.event_type,
-               "operation": self.operation,
-               "timestamp": self.timestamp
-           }
-           
-           # Add optional fields if present
-           if self.clip_label:
-               data["clip_label"] = self.clip_label
-           if self.clip_text:
-               data["clip_text"] = self.clip_text
-           if self.clip_type:
-               data["clip_type"] = self.clip_type
-           if self.item_count is not None:
-               data["item_count"] = self.item_count
-               
-           return data
-
-
-   class ClipboardParser(BaseParser):
-       """Parser for clipboard monitoring events"""
-       
-       def parse_json_data(self, data: dict, timestamp: str) -> Optional[ClipboardEvent]:
-           """Parse JSON data into ClipboardEvent"""
-           event_type = data.get('event_type', 'clipboard.unknown')
-           
-           event = ClipboardEvent(event_type, timestamp)
-           
-           # Map fields from hook data
-           event.clip_label = data.get('clip_label', '')
-           event.clip_text = data.get('clip_text', '')
-           event.clip_type = data.get('clip_type', 'unknown')
-           event.item_count = data.get('item_count', 0)
-           event.operation = data.get('operation', 'unknown')
-           
-           # Add metadata for analysis
-           self._add_clipboard_metadata(event, data)
-           
-           return event
-       
-       def _add_clipboard_metadata(self, event: ClipboardEvent, data: dict):
-           """Add clipboard-specific metadata"""
-           
-           # Categorize clipboard operations
-           operation_descriptions = {
-               'clipboard.read': 'Application read clipboard content',
-               'clipboard.write': 'Application wrote to clipboard',
-               'clipboard.clear': 'Application cleared clipboard'
-           }
-           
-           description = operation_descriptions.get(event.event_type, f'Unknown clipboard operation: {event.event_type}')
-           event.add_metadata('description', description)
-           
-           # Add privacy sensitivity metadata
-           if event.clip_text and len(event.clip_text) > 0:
-               event.add_metadata('contains_data', True)
-               event.add_metadata('data_length', len(event.clip_text))
-               
-               # Detect potentially sensitive content
-               sensitive_indicators = ['password', 'token', 'key', 'secret', 'credential']
-               if any(indicator in event.clip_text.lower() for indicator in sensitive_indicators):
-                   event.add_metadata('potentially_sensitive', True)
-                   event.add_metadata('sensitivity_level', 'high')
-               else:
-                   event.add_metadata('sensitivity_level', 'medium')
-           else:
-               event.add_metadata('contains_data', False)
-               event.add_metadata('sensitivity_level', 'low')
-           
-           # Add operation category
-           event.add_metadata('category', 'privacy')
-           event.add_metadata('subcategory', 'clipboard_access')
-
-Step 4: Integrate with Hook Loader
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-**4a. Add to Hook Loader** (``agent/hooking_profile_loader.ts``):
+Export the installer for the hook loader:
 
 .. code-block:: typescript
 
-   // Add import at the top
-   import { install_clipboard_hooks } from "./clipboard/clipboard_monitor.js"
+   export function install_clipboard_hooks() {
+       devlog("\n");
+       devlog("install clipboard hooks");
 
-   // Add to hook configuration
-   export let hook_config: HookConfig = {
-       // ... existing hooks ...
-       'clipboard_monitor_hooks': false,
-   };
-
-   // Add to installation function
-   function load_profile_hooks() {
-       // ... existing installations ...
-       install_hook_conditionally('clipboard_monitor_hooks', install_clipboard_hooks);
+       try {
+           hook_clipboard();
+       } catch (error) {
+           devlog(`[HOOK] Failed to install clipboard hooks: ${error}`);
+       }
    }
 
-**4b. Register Parser** (``src/dexray_intercept/parsers/factory.py``):
+For more on safe helpers and propagation, see
+:ref:`hook-error-handling`.
+
+Step 3: Update Python Event Processing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Clipboard events use the existing ``ServiceEvent`` model and
+``ServiceParser``. When adding a hook, check whether its fields fit an existing
+model and parser or require new ones.
+
+**3a. Event model**
+
+In ``src/dexray_intercept/models/events.py``, add the event attributes to
+``ServiceEvent.__init__()``:
 
 .. code-block:: python
 
-   # Add import
-   from .clipboard import ClipboardParser
+   self.item_count = None
+   self.has_clip = None
 
-   def _register_default_parsers(self):
-       # ... existing parsers ...
-       self._parsers["CLIPBOARD_MONITOR"] = ClipboardParser()
+Include them in the ``fields`` list in ``ServiceEvent.get_event_data()`` so
+they are serialized:
+
+.. code-block:: python
+
+   'item_count', 'has_clip',
+
+The clipboard-write event uses additional fields such as ``content_type``,
+``content``, ``item_index``, ``total_items``, and ``content_length``.
+
+**3b. Parser**
+
+In ``src/dexray_intercept/parsers/services.py``, add the fields to the
+``field_mapping`` in ``ServiceParser.parse_json_data()``:
+
+.. code-block:: python
+
+   'item_count': 'item_count',
+   'has_clip': 'has_clip',
+
+Add descriptions for the new event types in
+``ServiceParser._add_event_description()``:
+
+.. code-block:: python
+
+   elif event_type.startswith('clipboard.'):
+       if event_type == 'clipboard.set_primary_clip':
+           event.event_description = 'Clipboard data written'
+       elif event_type == 'clipboard.get_primary_clip':
+           event.event_description = 'Clipboard data read'
+
+**3c. Console formatting**
+
+In ``src/dexray_intercept/formatters/console.py``, check how the event is
+displayed. ``ConsoleFormatter.format_event()`` routes ``ServiceEvent`` objects
+to ``_format_service_event()``, where clipboard events have their own branch:
+
+.. code-block:: python
+
+   elif event.event_type.startswith('clipboard.'):
+       lines.append(
+           f"\n[*] [Clipboard] {event.event_description or event.event_type}:"
+       )
+       if event.content_type:
+           lines.append(f"[*] Content Type: {event.content_type}")
+       if event.content:
+           content = truncate_string(event.content, 100)
+           lines.append(f"[*] Content: {content}")
+       if event.item_count is not None:
+           lines.append(f"[*] Items: {event.item_count}")
+
+Add or adjust formatting when new event fields should appear in terminal
+output. Formatting is separate from JSON serialization.
+
+Step 4: Register the Hook and Parser
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**4a. Agent hook loader**
+
+In ``agent/hooking_profile_loader.ts``, import the installer:
+
+.. code-block:: typescript
+
+   import { install_clipboard_hooks } from "./services/clipboard.js"
+
+Add the default configuration key to ``hook_config``:
+
+.. code-block:: typescript
+
+   'clipboard_hooks': false,
+
+Add the conditional installation to ``load_profile_hooks()``:
+
+.. code-block:: typescript
+
+   install_hook_conditionally('clipboard_hooks', install_clipboard_hooks);
+
+**4b. Python hook manager**
+
+In ``src/dexray_intercept/services/hook_manager.py``, add the key to the
+defaults in ``_init_hook_config()``:
+
+.. code-block:: python
+
+   'clipboard_hooks': False,
+
+Also include it in the ``services`` entry of the ``hook_groups`` mapping in
+``enable_hook_group()``:
+
+.. code-block:: python
+
+   'services': [
+       'bluetooth_hooks', 'camera_hooks', 'clipboard_hooks',
+       'location_hooks', 'telephony_hooks'
+   ],
+
+**4c. Parser factory**
+
+In ``src/dexray_intercept/parsers/factory.py``, register the emitted profile
+type with its parser:
+
+.. code-block:: python
+
+   self._parsers["CLIPBOARD"] = ServiceParser()
+
+For a new parser, import it into the factory and register an instance under
+the profile type emitted by the agent.
 
 Step 5: Add CLI Support
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-Modify ``src/dexray_intercept/ammm.py``:
+Update ``src/dexray_intercept/ammm.py`` so users can select the hook.
+
+**5a. Add it to the services group** in ``parse_hook_config()``:
 
 .. code-block:: python
 
-   # Add to hook groups (optional - create privacy group)
-   if parsed_args.hooks_privacy:
+   if parsed_args.hooks_services:
        hook_config.update({
-           'clipboard_monitor_hooks': True,
-           # other privacy-related hooks
+           'bluetooth_hooks': True,
+           'camera_hooks': True,
+           'clipboard_hooks': True,
+           'location_hooks': True,
+           'telephony_hooks': True
        })
 
-   # Add to individual hooks mapping
-   individual_hooks = {
-       # ... existing hooks ...
-       'enable_clipboard_monitor': 'clipboard_monitor_hooks'
-   }
+Also add ``clipboard_hooks`` to the list enabled by ``--hooks-all``.
 
-   # Add CLI argument
-   hooks.add_argument("--enable-clipboard-monitor", action="store_true", 
-                      help="Enable clipboard access monitoring")
+**5b. Add individual selection** to the ``individual_hooks`` mapping:
 
-   # Optional: Add to hook groups
-   hooks.add_argument("--hooks-privacy", required=False, action="store_const", const=True, default=False,
-                      help="Enable privacy-related hooks (clipboard, etc.)")
+.. code-block:: python
 
-Step 6: Build and Test
-^^^^^^^^^^^^^^^^^^^^^^
+   'enable_clipboard': 'clipboard_hooks',
 
-**6a. Compile TypeScript:**
+Define the corresponding CLI argument:
+
+.. code-block:: python
+
+   hooks.add_argument(
+       "--enable-clipboard",
+       action="store_true",
+       help="Enable clipboard hooks"
+   )
+
+**5c. Add interactive selection** by including ``clipboard_hooks`` in the
+``services`` group's ``hooks`` list in ``interactive_hook_selection()``:
+
+.. code-block:: python
+
+   'hooks': [
+       'bluetooth_hooks', 'camera_hooks', 'clipboard_hooks',
+       'location_hooks', 'telephony_hooks'
+   ]
+
+A hook in a new category also needs its own group option and configuration
+mapping. Update the help description for any group whose contents change.
+
+Step 6: Build and Test the Hook
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+After modifying the agent, compile it from the repository root:
 
 .. code-block:: bash
-
+   
    # Compile hooks to JavaScript
    npm run build
 
    # Verify compilation
    grep -n "install_clipboard_hooks" src/dexray_intercept/profiling.js
 
-**6b. Test with Target App:**
+Add triggers for the hooked APIs to the corresponding category test app. For
+clipboard monitoring, ``ServicesE2E`` uses ``ClipboardTestActivity``:
+
+- ``setPrimaryClip()`` is called during activity creation.
+- ``getPrimaryClip()`` is called after the activity receives window focus.
+
+Build and install the test app:
 
 .. code-block:: bash
 
-   # Test with verbose output
-   dexray-intercept -v --enable-clipboard-monitor com.android.chrome
+    cd tests/android_apps/e2e_tests/ServicesE2E
+    ./gradlew assembleDebug
+    adb install -r app/build/outputs/apk/debug/app-debug.apk
 
-   # Test specific clipboard operations in the app:
-   # 1. Copy text from webpage
-   # 2. Paste in address bar  
-   # 3. Clear clipboard (if supported)
-
-**6c. Validate JSON Output:**
+Start logcat in a separate terminal:
 
 .. code-block:: bash
 
-   # Check generated events
-   cat profile_com.android.chrome_*.json | jq '.CLIPBOARD_MONITOR'
+   adb logcat -v threadtime \
+     -s 'SERVICES_E2E:*' 'SERVICES_CLIPBOARD:*' 'AndroidRuntime:E'
 
-   # Expected output:
-   [
-     {
-       "event_type": "clipboard.write",
-       "operation": "write",
-       "clip_text": "Hello World",
-       "clip_type": "text/plain",
-       "item_count": 1,
-       "timestamp": "2024-08-20T10:30:00.000Z"
-     }
-   ]
+Run the app without hooks to establish a baseline:
 
-Step 7: Create Unit Tests
-^^^^^^^^^^^^^^^^^^^^^^^^^
+.. code-block:: bash
 
-Create ``tests/test_clipboard_parser.py``:
+   adb shell am force-stop com.test.servicese2e
+   adb shell am start -n com.test.servicese2e/.MainActivity
 
-.. code-block:: python
+Then run it with clipboard monitoring:
 
-   import unittest
-   from datetime import datetime
-   from dexray_intercept.parsers.clipboard import ClipboardParser, ClipboardEvent
+.. code-block:: bash
 
-   class TestClipboardParser(unittest.TestCase):
-       def setUp(self):
-           self.parser = ClipboardParser()
-           self.timestamp = "2024-08-20T10:30:00.000Z"
-       
-       def test_parse_clipboard_write(self):
-           """Test parsing clipboard write event"""
-           test_data = {
-               'event_type': 'clipboard.write',
-               'clip_text': 'Hello World',
-               'clip_type': 'text/plain',
-               'item_count': 1,
-               'operation': 'write'
-           }
-           
-           event = self.parser.parse_json_data(test_data, self.timestamp)
-           
-           self.assertIsInstance(event, ClipboardEvent)
-           self.assertEqual(event.event_type, 'clipboard.write')
-           self.assertEqual(event.clip_text, 'Hello World')
-           self.assertEqual(event.operation, 'write')
-       
-       def test_parse_clipboard_read(self):
-           """Test parsing clipboard read event"""
-           test_data = {
-               'event_type': 'clipboard.read',
-               'clip_text': 'Sensitive password: 12345',
-               'operation': 'read'
-           }
-           
-           event = self.parser.parse_json_data(test_data, self.timestamp)
-           
-           self.assertEqual(event.event_type, 'clipboard.read')
-           self.assertTrue(event.metadata.get('potentially_sensitive', False))
-           self.assertEqual(event.metadata.get('sensitivity_level'), 'high')
-       
-       def test_empty_clipboard(self):
-           """Test parsing empty clipboard operation"""
-           test_data = {
-               'event_type': 'clipboard.clear',
-               'operation': 'clear'
-           }
-           
-           event = self.parser.parse_json_data(test_data, self.timestamp)
-           
-           self.assertEqual(event.operation, 'clear')
-           self.assertFalse(event.metadata.get('contains_data', True))
+   adb shell am force-stop com.test.servicese2e
+   dexray-intercept -s -v --enable-clipboard com.test.servicese2e
 
-   if __name__ == '__main__':
-       unittest.main()
+Compare the clipboard activity's logcat output with the baseline. After the
+activity finishes, press Ctrl+C to write the profile. Replace the filename
+below with the one generated by your run:
 
-Step 8: Documentation
-^^^^^^^^^^^^^^^^^^^^^
+.. code-block:: bash
 
-**8a. Update User Documentation** (``docs/user-guide/hook-configuration.rst``):
+   PROFILE="profile_com.test.servicese2e_<timestamp>.json"
+   jq '.CLIPBOARD[] | select(
+     .event_type == "clipboard.set_primary_clip" or
+     .event_type == "clipboard.get_primary_clip"
+   )' "$PROFILE"
+
+Check that the expected events and fields are present. For more on category
+test apps and their prerequisites, see :doc:`index`.
+
+Step 7: Test Event Processing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Test the parser and serialized event fields as well as the agent hook:
+
+- Use a unit test to check ``ServiceParser`` with representative clipboard
+  event data.
+- Use an integration test to check parser selection through ``ParserFactory``
+  and event serialization.
+- Test relevant failure paths and confirm that instrumentation preserves
+  application behavior.
+
+The **Testing Strategies** section below contains clipboard parser examples
+that can be adapted for these checks.
+
+Step 8: Update Documentation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Update the user guides to describe how to enable the hook, what it captures,
+and what its output looks like.
+
+**8a. Hook configuration**
+
+In ``docs/user-guide/hook-configuration.rst``, add the individual option to the
+system-service hooks and describe the captured behavior:
 
 .. code-block:: rst
 
-   Clipboard Monitoring (``--enable-clipboard-monitor``)
-   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   - ``--enable-clipboard`` - Monitor clipboard reads and writes
 
-   Monitors clipboard access operations including read, write, and clear operations.
+   Clipboard events include content type and content for writes, and item
+   count and clipboard availability for reads.
 
-   **What it captures:**
-      - Clipboard content (text, images, etc.)
-      - Content types and labels
-      - Operation timing and frequency
-      - Potentially sensitive data detection
+**8b. CLI usage**
 
-   **Use cases:**
-      - Privacy analysis of data sharing
-      - Detecting clipboard-based data exfiltration
-      - Monitoring sensitive information exposure
-
-   **Example usage:**
-
-   .. code-block:: bash
-
-      # Monitor clipboard access
-      dexray-intercept --enable-clipboard-monitor com.social.app
-
-      # Combine with other privacy hooks
-      dexray-intercept --hooks-privacy com.banking.app
-
-   **Example events:**
-
-   .. code-block:: json
-
-      {
-        "event_type": "clipboard.write",
-        "clip_text": "Hello World",
-        "clip_type": "text/plain",
-        "operation": "write",
-        "metadata": {
-          "sensitivity_level": "medium",
-          "contains_data": true
-        }
-      }
-
-**8b. Update CLI Documentation** (``docs/user-guide/cli-usage.rst``):
+In ``docs/user-guide/cli-usage.rst``, document the individual option:
 
 .. code-block:: rst
 
-   .. option:: --enable-clipboard-monitor
+   .. option:: --enable-clipboard
 
       Enable clipboard access monitoring.
 
       .. code-block:: bash
 
-         dexray-intercept --enable-clipboard-monitor com.example.app
+         dexray-intercept --enable-clipboard com.example.app
+
+Include the hook in the ``--hooks-services`` description when documenting the
+group.
+
+**8c. Output format**
+
+In ``docs/user-guide/output-formats.rst``, add an example based on an observed
+``CLIPBOARD`` event:
+
+.. code-block:: json
+
+   {
+     "event_type": "clipboard.get_primary_clip",
+     "timestamp": "2026-11-12T12:06:41.815Z",
+     "event_description": "Clipboard data read",
+     "library": "android.content.ClipboardManager",
+     "method": "getPrimaryClip",
+     "item_count": 1,
+     "has_clip": true
+   }
+
+Document relevant prerequisites and limitations as well. For example,
+``ServicesE2E`` performs clipboard reads from a focused activity.
 
 Advanced Hook Patterns
 -----------------------
@@ -515,33 +492,45 @@ Advanced Hook Patterns
 Conditional Hook Installation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Install hooks only when target conditions are met:
+Some hooks target APIs or overloads available only on certain Android
+versions. Check the runtime version and resolve the overload safely before
+installing the hook.
+
+For example, ``agent/dex/dex_unpacking.ts`` checks for an API 29+ constructor:
 
 .. code-block:: typescript
 
-   export function install_conditional_hooks(): void {
-       Java.perform(() => {
-           try {
-               // Check if target API is available
-               const Build = Java.use("android.os.Build");
-               const sdkVersion = Build.VERSION.SDK_INT.value;
-               
-               if (sdkVersion >= 28) {
-                   install_android_p_plus_hooks();
-               } else {
-                   install_legacy_android_hooks();
-               }
-               
-           } catch (error) {
-               devlog("Conditional installation failed: " + error);
-           }
-       });
+   const BuildVersion = safeUse(
+       "android.os.Build$VERSION",
+       "dex:dex_api_unpacking"
+   );
+
+   if (BuildVersion && BuildVersion.SDK_INT.value > 28) {
+       const delegateInit4 = safeOverload(
+           DelegateLastClassLoader.$init,
+           "dex:DelegateLastClassLoader.$init",
+           "java.lang.String",
+           "java.lang.String",
+           "java.lang.ClassLoader",
+           "boolean"
+       );
+
+       if (delegateInit4) {
+           // Install the implementation using safeImplementation().
+       }
    }
+
+This excerpt runs inside a ``safePerform()`` callback, after resolving
+``DelegateLastClassLoader``. See the DEX hook file for the complete
+implementation.
 
 State Management Between Hooks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Maintain state across multiple hook invocations:
+
+The following example illustrates the pattern; choose suitable state keys and
+cleanup rules for the hook being implemented.
 
 .. code-block:: typescript
 
@@ -580,6 +569,9 @@ Multi-API Hooking Pattern
 
 Hook multiple related APIs systematically:
 
+The helper functions below illustrate the structure and must be implemented for
+the APIs being monitored.
+
 .. code-block:: typescript
 
    export function install_comprehensive_clipboard_hooks(): void {
@@ -611,192 +603,452 @@ Hook multiple related APIs systematically:
        }
    }
 
-Error Handling and Robustness
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. _hook-error-handling:
+
+Error Handling and Exception Propagation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Hooks run inside the target process. Error handling aims to isolate hook
+failures, allow unrelated hooks to install, and preserve application behavior.
+
+Java Hook Installation
+""""""""""""""""""""""
+
+Use the helpers in ``agent/utils/safe_java.ts``:
+
+- ``safePerform()`` enters the Java runtime for hook installation. During
+  synchronous startup, it uses ``safePerformNow()``.
+- ``safeUse()`` resolves a class using the default class loader.
+  ``safeUseFromClassLoader()`` resolves it through a specified class loader.
+- ``safeOverload()`` resolves a method overload by its Java signatures.
+
+Class and overload resolution return ``null`` on failure. Check each result
+before installing the hook. Keep unrelated installation units separate: a
+failure within one callback can prevent its remaining statements from running.
+
+Normally, ``Java.perform()`` may defer its callback until the Java runtime is
+ready. If the callback runs after ``safePerform()`` has returned, an exception
+inside it cannot be caught by the outer ``safePerform()`` call.
+
+To contain unexpected installation errors, place a ``try/catch`` inside the
+callback. For example:
 
 .. code-block:: typescript
 
-   export function install_robust_hooks(): void {
-       Java.perform(() => {
-           const hookTargets = [
-               { 
-                   className: "android.content.ClipboardManager",
-                   methods: ["getPrimaryClip", "setPrimaryClip", "clearPrimaryClip"]
-               },
-               {
-                   className: "android.content.IClipboard",
-                   methods: ["getPrimaryClip", "setPrimaryClip"]
-               }
-           ];
-           
-           hookTargets.forEach(target => {
-               try {
-                   const targetClass = Java.use(target.className);
-                   
-                   target.methods.forEach(methodName => {
-                       try {
-                           installMethodHook(targetClass, methodName);
-                       } catch (methodError) {
-                           devlog(`Method ${methodName} not available: ${methodError}`);
-                       }
-                   });
-                   
-               } catch (classError) {
-                   devlog(`Class ${target.className} not available: ${classError}`);
-               }
-           });
-       });
+    import { safePerform, safeUse, safeOverload } from "../utils/safe_java.js";
+    import { devlog } from "../utils/logging.js";
+
+    safePerform("example:install", () => {
+        try {
+            const File = safeUse("java.io.File", "example:install");
+            if (!File) return;
+
+            const deleteOverload = safeOverload(
+                File.delete,
+                "example:File.delete"
+            );
+            if (!deleteOverload) return;
+
+            // Install the implementation using safeImplementation().
+        } catch (error) {
+            devlog(`[HOOK] Failed to install File.delete hook: ${error}`);
+        }
+    });
+
+This boundary protects the installation callback; ``safeImplementation()``
+separately handles errors when the installed hook executes. For independent
+hooks, use separate installation callbacks or separate error boundaries so one
+failure does not skip the others.
+
+For callbacks scheduled with ``setTimeout()`` or ``setImmediate()``, use
+``safeDeferred()``. It wraps the deferred callback with its own error boundary,
+as demonstrated by the delayed native read-hook installation in
+``agent/network/sockets.ts``.
+
+Java Hook Execution
+"""""""""""""""""""
+
+``safeImplementation()`` wraps a hook body. If hook logic fails, it logs the
+failure and calls the original method with the original arguments.
+
+If the original method itself throws, wrap that exception in
+``PropagateException``. The wrapper then rethrows the original cause rather
+than logging it as a hook failure or calling the original again.
+
+The following excerpt is adapted from the ``FileInputStream.read`` hooks in
+``agent/file/file_system_hooks.ts``:
+
+.. code-block:: typescript
+
+   let result;
+
+   try {
+       result = original.apply(this, args);
+   } catch (error) {
+       throw new PropagateException(error);
    }
+
+   try {
+       emitReadEvent(
+           this,
+           variant,
+           method,
+           createEventData(args, result)
+       );
+   } catch (error) {
+       devlog(`FileInputStream read metadata failed: ${error}`);
+   }
+
+   return result;
+
+.. important::
+   ``safeImplementation()`` does not track whether the original method was
+   already called. If post-call hook logic throws out of the wrapper, its
+   fallback calls the original again. Catch post-call processing errors
+   locally and return the original result.
+
+Native Hook Installation
+""""""""""""""""""""""""
+
+Use the helpers in ``agent/utils/safe_native.ts`` to discover native functions:
+
+- ``safeResolveExport()`` resolves an export by module and name, or searches
+  globally when the module name is ``null``. It returns ``null`` on failure.
+- ``safeEnumerateModuleExports()`` and ``safeEnumerateModuleSymbols()`` list a
+  module's exports and symbols. The SQLite hooks use both to discover
+  ``sqlite3_*`` functions.
+- ``safeEnumerateMatches()`` searches using a Frida resolver query. The DEX
+  hooks use it to find mangled ART symbols; ``stripModulePrefix()`` extracts
+  the symbol name from a match.
+- ``safeNativeFunction()`` creates a callable native function. Check for
+  ``null`` before using it, and provide the correct function signature.
+
+Native Hook Execution
+"""""""""""""""""""""
+
+Use ``safeAttach()`` when you already have a function address, or
+``safeAttachExport()`` to resolve and attach to an export in one step. These
+helpers isolate errors in ``onEnter`` and ``onLeave`` callbacks; the original
+native function continues to run.
+
+The following excerpt is adapted from the ``fork()`` hook in
+``agent/process/process.ts``:
+
+.. code-block:: typescript
+
+   safeAttachExport(null, "fork", "process:fork", {
+       onEnter() {
+           createProcessEvent("process.fork.attempt", {
+               native_function: "fork",
+               caller_pid: Process.id
+           });
+       },
+       onLeave(retval) {
+           const pid = retval.toInt32();
+           createProcessEvent("process.fork.result", {
+               native_function: "fork",
+               caller_pid: Process.id,
+               child_pid: pid,
+               success: pid >= 0
+           });
+       }
+   });
+
+If ``onLeave`` depends on state set in ``onEnter``, account for that state
+being absent when ``onEnter`` fails.
+
+For native replacements:
+
+- ``safeReplace()`` provides a callable original function to the replacement.
+  If replacement logic throws, the wrapper attempts to call the original.
+  Catch errors after a successful original call locally to avoid calling it
+  again. The SQLite hooks use typed replacements for values that require
+  ABI-specific handling.
+- ``safeReplaceNoCallThrough()`` intentionally replaces behavior without
+  calling the original. It returns a configured fallback value if replacement
+  logic throws. The file hooks use it for ``--deactivate-unlink``.
+
+The return and argument types supplied to a native replacement must match the
+target function's ABI.
+
+Diagnostics
+"""""""""""
+
+The helpers use ``hookError()`` and ``hookPropagate()`` from
+``agent/utils/error_utils.ts`` to send contextual diagnostic messages through
+``devlog()``. These messages are normally visible with ``-v``:
+
+- ``[HOOK ERROR]`` - A helper encountered a hook installation or execution
+  error.
+- ``[HOOK PROPAGATE]`` - An exception from the original Java call was
+  deliberately propagated. This does not by itself indicate a hook failure.
+
+These helper diagnostics are console messages, not structured profile events.
 
 Testing Strategies
 ------------------
 
-Unit Testing Hooks
-^^^^^^^^^^^^^^^^^^
+For category E2E app setup, baseline runs, instrumented runs, and profile
+inspection, see :doc:`index`.
 
-Test individual hook functionality:
+Unit Testing
+^^^^^^^^^^^^
 
-.. code-block:: bash
+Test a parser independently with representative event data. For example, the
+clipboard hooks use ``ServiceParser``:
 
-   # Test hook with specific app
-   dexray-intercept --enable-my-hook com.test.app
+.. code-block:: python
 
-   # Verify events are generated
-   python3 -c "
-   import json
-   with open('profile_com.test.app_*.json') as f:
-       data = json.load(f)
-       events = data.get('MY_HOOK_CATEGORY', [])
-       print(f'Generated {len(events)} events')
-       for event in events[:3]:
-           print(f'Event: {event[\"event_type\"]}')
-   "
+   import unittest
+
+   from dexray_intercept.models.events import ServiceEvent
+   from dexray_intercept.parsers.services import ServiceParser
+
+
+   class TestClipboardParser(unittest.TestCase):
+       def test_parse_clipboard_write(self):
+           parser = ServiceParser()
+           data = {
+               "event_type": "clipboard.set_primary_clip",
+               "library": "android.content.ClipboardManager",
+               "method": "setPrimaryClip",
+               "content_type": "text",
+               "content": "services-e2e-clipboard",
+               "item_index": 0,
+               "total_items": 1,
+               "content_length": 22,
+           }
+
+           event = parser.parse_json_data(
+               data, "2026-11-12T12:06:41.725Z"
+           )
+
+           self.assertIsInstance(event, ServiceEvent)
+           self.assertEqual(event.event_type, "clipboard.set_primary_clip")
+           self.assertEqual(event.content, "services-e2e-clipboard")
+           self.assertEqual(event.content_length, 22)
+           self.assertEqual(event.event_description, "Clipboard data written")
+
+
+   if __name__ == "__main__":
+       unittest.main()
 
 Integration Testing
 ^^^^^^^^^^^^^^^^^^^
 
-Test hook interaction with other components:
+Test parser selection, JSON parsing, and event serialization together:
 
 .. code-block:: python
 
-   # tests/integration/test_clipboard_integration.py
+   import json
    import unittest
-   from dexray_intercept import AppProfiler
+
    from dexray_intercept.parsers.factory import parser_factory
 
+
    class TestClipboardIntegration(unittest.TestCase):
-       def test_parser_registration(self):
-           """Test that clipboard parser is registered"""
-           parser = parser_factory.get_parser("CLIPBOARD_MONITOR")
+       def test_factory_parsing_and_serialization(self):
+           parser = parser_factory.get_parser("CLIPBOARD")
            self.assertIsNotNone(parser)
-       
-       def test_hook_config_integration(self):
-           """Test hook configuration integration"""
-           from dexray_intercept.ammm import parse_hook_config
-           from argparse import Namespace
-           
-           args = Namespace()
-           args.enable_clipboard_monitor = True
-           # Set other args to False...
-           
-           config = parse_hook_config(args)
-           self.assertTrue(config.get('clipboard_monitor_hooks', False))
+
+           raw_data = json.dumps({
+               "event_type": "clipboard.get_primary_clip",
+               "library": "android.content.ClipboardManager",
+               "method": "getPrimaryClip",
+               "item_count": 1,
+               "has_clip": True,
+           })
+
+           event = parser.parse(raw_data, "2026-11-12T12:06:41.815Z")
+           serialized = event.to_dict()
+
+           self.assertEqual(
+               serialized["event_type"], "clipboard.get_primary_clip"
+           )
+           self.assertEqual(serialized["item_count"], 1)
+           self.assertTrue(serialized["has_clip"])
+           self.assertEqual(
+               serialized["event_description"], "Clipboard data read"
+           )
+
+
+   if __name__ == "__main__":
+       unittest.main()
+
+This checks the Python processing path. Use the category E2E applications to
+validate the Frida hook in an Android process.
 
 Performance Testing
 ^^^^^^^^^^^^^^^^^^^
 
-Validate hook performance impact:
+Validate hook performance by comparing repeated runs of the same workload
+with and without hooks. For example:
 
 .. code-block:: python
 
+   from statistics import median
+
+
    def test_clipboard_hook_performance():
-       """Test that clipboard hooks don't significantly impact performance"""
-       import time
-       
-       # Baseline measurement
-       start = time.time()
-       run_app_without_hooks()
-       baseline_time = time.time() - start
-       
-       # With hooks measurement
-       start = time.time()
-       run_app_with_clipboard_hooks()
-       hook_time = time.time() - start
-       
-       # Performance impact should be minimal
+       """Compare clipboard-hook performance against the baseline."""
+
+       # Implement these helpers for the app under test. Each returns the
+       # duration of the same workload in seconds.
+       baseline_runs = [run_app_without_hooks() for _ in range(3)]
+       hooked_runs = [run_app_with_clipboard_hooks() for _ in range(3)]
+
+       baseline_time = median(baseline_runs)
+       hook_time = median(hooked_runs)
+
+       assert baseline_time > 0
        performance_impact = (hook_time - baseline_time) / baseline_time
-       assert performance_impact < 0.1  # Less than 10% impact
+
+       # Example threshold; choose one appropriate to the workload.
+       assert performance_impact < 0.10
+
+The ``run_app_*()`` calls are placeholders for functions that measure the same
+workload and check application behavior in both runs.
+
+See :doc:`index` for a tested ``FileE2E`` measurement script. Use the same
+device, inputs, and test configuration for baseline and instrumented runs.
 
 Common Pitfalls and Solutions
 -----------------------------
 
 **Issue: Hook Not Installing**
 
+A target class may be absent on a particular Android version or application.
+A direct ``Java.use()`` call can throw and stop the remaining installation
+logic in that callback:
+
 .. code-block:: typescript
 
-   // Problem: Class not found
-   const MyClass = Java.use("com.example.MyClass");  // May throw
+   // Problem: class resolution may throw.
+   const MyClass = Java.use("com.example.MyClass");
+   // Install hooks on MyClass.
 
-   // Solution: Defensive loading
-   try {
-       const MyClass = Java.use("com.example.MyClass");
-       // Install hooks
-   } catch (error) {
-       devlog("MyClass not available: " + error);
-       return; // Skip gracefully
-   }
+Use ``safeUse()`` instead and check its result before installing the hooks:
+
+.. code-block:: typescript
+
+   // Solution: log the failure and skip this class if unavailable.
+   const MyClass = safeUse("com.example.MyClass", "example:install");
+   if (!MyClass) return;
+
+   // Install hooks on MyClass.
+
+Both snippets are intended to run inside a Java installation callback.
+``safeUse()`` returns ``null`` on failure and emits a diagnostic visible with
+``-v``.
 
 **Issue: Method Overloads Not Working**
 
+Java method signatures must use the correct type names. For example,
+``String`` is not the Java signature for ``java.lang.String``.
+
 .. code-block:: typescript
 
-   // Problem: Incorrect overload specification
-   MyClass.myMethod.overload("String").implementation = ...  // Wrong
+   // Problem: incorrect Java type name.
+   const overload = MyClass.myMethod.overload("String");
 
-   // Solution: Use correct Java type names
-   MyClass.myMethod.overload("java.lang.String").implementation = ...
+   // Solution: resolve the overload using its full Java type name.
+   const method = safeOverload(
+       MyClass.myMethod,
+       "example:MyClass.myMethod",
+       "java.lang.String"
+   );
+
+   if (method) {
+       // Install the hook using safeImplementation().
+   }
+
+``safeOverload()`` logs a resolution failure and returns ``null`` when the
+method or requested overload is unavailable.
 
 **Issue: Events Not Appearing in JSON**
 
+Check the agent build, hook selection, test trigger, and parser registration:
+
 .. code-block:: bash
 
-   # Debug steps:
-   # 1. Check TypeScript compilation
-   npm run build && grep -n "my_hook" src/dexray_intercept/profiling.js
-   
-   # 2. Check parser registration
-   python3 -c "from dexray_intercept.parsers.factory import parser_factory; print(parser_factory.get_parser('MY_CATEGORY'))"
-   
-   # 3. Check hook configuration
-   dexray-intercept -v --enable-my-hook com.test.app  # Look for "[HOOK] Enabled: my_hook"
+   # Compile the agent and check for the hook installer
+   npm run build
+   grep -n "install_clipboard_hooks" src/dexray_intercept/profiling.js
+
+   # Check the profile category's parser registration
+   python3 -c \
+     "from dexray_intercept.parsers.factory import parser_factory; print(parser_factory.get_parser('CLIPBOARD'))"
+
+   # Run the test app with clipboard hooks and diagnostics enabled
+   dexray-intercept -s -v --enable-clipboard com.test.servicese2e
+
+After the test finishes, stop profiling and inspect the generated profile:
+
+.. code-block:: bash
+
+   PROFILE="profile_com.test.servicese2e_<timestamp>.json"
+   jq '.CLIPBOARD // []' "$PROFILE"
+
+Also check logcat to confirm that the test app invoked the target APIs. A hook
+listed as enabled in diagnostic output does not by itself prove that every
+target method was available or invoked.
 
 **Issue: App Crashes with Hooks**
 
 .. code-block:: typescript
 
-   // Problem: Unhandled exceptions in hooks
-   MyClass.sensitiveMethod.implementation = function() {
-       // This might throw and crash the app
-       const result = this.sensitiveMethod();
-       processResult(result);  // May fail
+   import {
+       safeOverload,
+       safeImplementation,
+       PropagateException
+   } from "../utils/safe_java.js";
+   import { devlog } from "../utils/logging.js";
+
+   // Problem: post-call processing can throw and affect the application.
+   MyClass.sensitiveMethod.implementation = function (value: string) {
+       const result = this.sensitiveMethod(value);
+       processResult(result);
        return result;
    };
 
-   // Solution: Comprehensive error handling
-   MyClass.sensitiveMethod.implementation = function() {
-       try {
-           const result = this.sensitiveMethod();
-           try {
-               processResult(result);
-           } catch (processingError) {
-               devlog("Result processing failed: " + processingError);
+   // Solution: select the overload and isolate original and hook errors.
+   const sensitiveMethod = safeOverload(
+       MyClass.sensitiveMethod,
+       "example:sensitiveMethod",
+       "java.lang.String"
+   );
+
+   if (sensitiveMethod) {
+       sensitiveMethod.implementation = safeImplementation(
+           "example:sensitiveMethod",
+           sensitiveMethod,
+           function (original, value: string) {
+               let result;
+
+               try {
+                   result = original.call(this, value);
+               } catch (error) {
+                   throw new PropagateException(error);
+               }
+
+               try {
+                   processResult(result);
+               } catch (error) {
+                   try {
+                       devlog(`Result processing failed: ${error}`);
+                   } catch {
+                       // Preserve the original result if logging fails.
+                   }
+               }
+
+               return result;
            }
-           return result;
-       } catch (methodError) {
-           devlog("Method execution failed: " + methodError);
-           throw methodError; // Re-throw to maintain app behavior
-       }
-   };
+       );
+   }
+
+``MyClass`` and ``processResult()`` represent the target class and
+hook-specific processing. For the full error-handling strategy, see
+:ref:`hook-error-handling`.
 
 Next Steps
 ----------
@@ -813,5 +1065,4 @@ For more advanced patterns and integration:
 
 - Study existing hooks in the ``agent/`` directory
 - Review the :doc:`../api/typescript-api` for detailed API reference
-- Check the :doc:`building` guide for development workflow
-- See :doc:`contributing` for submission guidelines
+- Review the development workflow: :doc:`index`
