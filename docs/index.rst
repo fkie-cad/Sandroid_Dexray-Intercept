@@ -75,10 +75,18 @@ Quick Start
    dexray-intercept -s --hooks-crypto --hooks-network com.example.app
 
    # Comprehensive analysis with bypass hooks
-   dexray-intercept -s --hooks-all --hooks-bypass com.example.app
+   dexray-intercept -s --hooks-all com.example.app
+
+   # Trace JNI activity
+   dexray-intercept -s --hooks-jni com.example.app
 
    # Custom analysis with TLS extraction
    dexray-intercept -s --enable-fritap --custom-script ./my_hooks.js com.example.app
+
+.. note::
+   When no hook-selection option is supplied, Dexray Intercept opens an
+   interactive selection prompt. ``--hooks-all`` includes bypass hooks but
+   does not include JNI tracing.
 
 Architecture Overview
 --------------------
