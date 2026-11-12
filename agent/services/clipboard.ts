@@ -1,5 +1,5 @@
 import { devlog, am_send } from "../utils/logging.js"
-import { safePerform, safeUse, safeImplementation } from "../utils/safe_java.js"
+import { safePerform, safeUse, safeImplementation, PropagateException } from "../utils/safe_java.js"
 import { collectJavaStackTrace } from "../utils/stacktrace.js"
 
 const PROFILE_HOOKING_TYPE: string = "CLIPBOARD"
@@ -91,7 +91,11 @@ function hook_clipboard() {
                         });
                     }
 
-                    return original.call(this, clip);
+                    try {
+                        return original.call(this, clip);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
                 }
             );
         }
@@ -105,15 +109,30 @@ function hook_clipboard() {
                 getPrimaryClipRef,
                 function (original) {
                     const java_stack_trace = collectJavaStackTrace();
-                    const result = original.call(this);
+                    let result;
 
-                    createClipboardEvent("clipboard.get_primary_clip", {
-                        library: "android.content.ClipboardManager",
-                        method: "getPrimaryClip",
-                        has_clip: result !== null,
-                        item_count: result ? result.getItemCount() : 0,
-                        ...(java_stack_trace ? { java_stack_trace } : {})
-                    });
+                    try {
+                        result = original.call(this);
+                    } catch (error) {
+                        throw new PropagateException(error);
+                    }
+
+                    try {
+                        createClipboardEvent("clipboard.get_primary_clip", {
+                            library: "android.content.ClipboardManager",
+                            method: "getPrimaryClip",
+                            has_clip: result !== null,
+                            item_count: result ? result.getItemCount() : 0,
+                            ...(java_stack_trace ? { java_stack_trace } : {})
+                        });
+                    } catch (error) {
+                        // Diagnostic logging must not discard the original result.
+                        try {
+                            devlog(`Clipboard read event failed: ${error}`);
+                        } catch {
+                            // Preserve the original result if logging also fails.
+                        }
+                    }
 
                     return result;
                 }
