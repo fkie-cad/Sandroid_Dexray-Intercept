@@ -390,6 +390,57 @@ def parse_hook_config(parsed_args, use_interactive=False):
     return hook_config, jni_config
 
 
+class AttachTargetResolutionError(Exception):
+    """Raised when an attach target cannot be resolved."""
+
+
+def resolve_attach_target(device, target, foreground=False):
+    """Return (profile target name, Frida attach target).
+
+    Numeric targets are PIDs. An exact application identifier resolves to
+    its running PID. Other strings are passed to Frida as process names.
+    """
+    if foreground:
+        app = device.get_frontmost_application()
+
+        if app is None:
+            raise AttachTargetResolutionError(
+                "No foreground application was found"
+            )
+
+        if not isinstance(app.pid, int) or app.pid <= 0:
+            raise AttachTargetResolutionError(
+                f"Foreground application '{app.identifier}' "
+                "has no running PID"
+            )
+
+        return app.identifier, app.pid
+
+    if target.isnumeric():
+        return target, int(target)
+
+    matches = [
+        app for app in device.enumerate_applications()
+        if app.identifier == target
+    ]
+
+    if len(matches) > 1:
+        raise AttachTargetResolutionError(
+            f"Application identifier '{target}' is ambiguous"
+        )
+
+    if matches:
+        app = matches[0]
+
+        if not isinstance(app.pid, int) or app.pid <= 0:
+            raise AttachTargetResolutionError(
+                f"Application '{target}' is not running"
+            )
+
+        return target, app.pid
+
+    return target, target
+
 def setup_frida_server():
     afm_obj = FridaManager()
     if not afm_obj.is_frida_server_running():
@@ -539,8 +590,8 @@ Examples:
     args = parser.add_argument_group("Arguments")
     args.add_argument("-f", "--frida", metavar="<version>", const=True, action="store_const",
                       help="Install and run the frida-server to the target device. By default the latest version will be installed.")
-    args.add_argument("exec", metavar="<executable/app name/pid>", nargs="?", default=None,
-                      help="target app to create the runtime profile")
+    args.add_argument("exec", metavar="<target>", nargs="?", default=None,
+                      help="Target PID, case-sensitive application identifier, or Frida process name")
     args.add_argument("-H", "--host", metavar="<ip:port>", required=False, default="",
                       help="Attach to a process on remote frida device")
     args.add_argument("-d", "--device", metavar="<device_id>", required=False, default="",
@@ -557,7 +608,7 @@ Examples:
         )
     )
     args.add_argument("-fg", "--foreground", required=False, action="store_const", const=True,
-                      help="Attaching to the foreground app")
+                      help="Attach to the foreground app; cannot be combined with a target or --spawn")
     args.add_argument("--enable_spawn_gating", required=False, action="store_const", const=True,
                       help="Catch newly spawned processes. ATTENTION: These could be unrelated to the current process!")
     args.add_argument("-v", "--verbose", required=False, action="store_const", const=True, default=False,
@@ -733,6 +784,14 @@ Examples:
 
     parsed = parser.parse_args()
 
+    if parsed.foreground and parsed.spawn:
+        parser.error("-fg/--foreground cannot be combined with -s/--spawn")
+
+    if parsed.foreground and parsed.exec is not None:
+        parser.error(
+            "-fg/--foreground cannot be combined with a positional target"
+        )
+
     jni_options_requested = any([
         parsed.jni_lib,
         parsed.jni_backtrace != "none",
@@ -897,34 +956,45 @@ Examples:
                     print("  Try restarting frida-server or check device connection")
                     sys.exit(1)
             else:
-                # Attach mode (works the same whether fritap is enabled or not)
-                if parsed.foreground:
-                    target_process = device.get_frontmost_application()
-                    if target_process is None or len(target_process.identifier) < 2:
-                        print("[-] unable to attach to the frontmost application. Aborting ...")
-                        sys.exit(1)
-
-                    target_process = target_process.identifier
-
-                print("[*] attaching to app: " + target_process)
+                # Attach to the foreground app, a PID, an application
+                # identifier, or a Frida process name.
                 try:
-                    process_session = device.attach(
-                        int(target_process) if target_process.isnumeric() else target_process)
-                    pid = None  # No PID in attach mode
+                    target_process, attach_target = resolve_attach_target(
+                        device,
+                        target_process,
+                        foreground=bool(parsed.foreground),
+                    )
+
+                    if isinstance(attach_target, int):
+                        print(
+                            f"[*] attaching to app: {target_process} "
+                            f"(PID: {attach_target})"
+                        )
+                    else:
+                        print(f"[*] attaching to app: {target_process}")
+
+                    process_session = device.attach(attach_target)
+                    pid = None
+                except AttachTargetResolutionError as error:
+                    print(f"\n[-] Unable to resolve attach target: {error}")
+                    sys.exit(1)
                 except frida.ProcessNotFoundError:
                     print(f"\n[-] Process not found: {target_process}")
                     print("  Make sure the app is running. Possible solutions:")
-                    print("  1. Start app manually on device")
-                    print("  2. Use spawn mode with -s flag")
-                    print("  3. Check running processes: adb shell ps | grep {0}".format(target_process))
+                    print("  1. Start the app manually on the device")
+                    print("  2. Use spawn mode with -s")
+                    print("  3. Attach using its PID or Frida process name")
                     sys.exit(1)
                 except frida.ServerNotRunningError:
                     print("\n[-] Frida server is not running on the device")
-                    print("  Run with -f flag to install and start frida-server")
+                    print("  Run with -f to install and start frida-server")
                     sys.exit(1)
-                except Exception as e:
-                    print(f"\n[-] Failed to attach to process: {type(e).__name__}: {str(e)}")
-                    print("  Try restarting frida-server or check if app is running")
+                except Exception as error:
+                    print(
+                        f"\n[-] Failed to attach to process: "
+                        f"{type(error).__name__}: {error}"
+                    )
+                    print("  Check the device connection and Frida server")
                     sys.exit(1)
             print("[*] starting app profiling")
 
