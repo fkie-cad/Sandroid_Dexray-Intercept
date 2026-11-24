@@ -43,20 +43,10 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
      */
     private grOffs: number;
     /**
-     * Counter of how many general-purpose register slots have been
-     * consumed so far.
-     */
-    private grOffsIndex: number;
-    /**
      * Current offset (in bytes) from vrTop where the next float or
      * double argument will be read from.
      */
     private vrOffs: number;
-    /**
-     * Counter of how many FP/SIMD (vector) register slots have
-     * been consumed so far.
-     */
-    private vrOffsIndex: number;
 
     /**
      * Constructs a new ARM64 JNIEnv interceptor.
@@ -79,9 +69,7 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
         this.grTop = NULL;
         this.vrTop = NULL;
         this.grOffs = 0;
-        this.grOffsIndex = 0;
         this.vrOffs = 0;
-        this.vrOffsIndex = 0;
     }
 
     /**
@@ -356,9 +344,7 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
         this.grTop = vaList.add(Process.pointerSize).readPointer();
         this.vrTop = vaList.add(Process.pointerSize * vrStart).readPointer();
         this.grOffs = vaList.add(Process.pointerSize * grOffset).readS32();
-        this.grOffsIndex = 0;
         this.vrOffs = vaList.add(Process.pointerSize * grOffset + vrOffset).readS32();
-        this.vrOffsIndex = 0;
     }
 
     /**
@@ -369,55 +355,74 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
      * whether the argument is floating-point (float/double) or
      * integer/pointer, and:
      *
-     *  - if there are still FP/SIMD register slots available in
-     *    the vr_top/vr_offs region (up to MAX_VR_REG_NUM), returns
-     *    a pointer into that region and advances vrOffsIndex; or
-     *  - if there are still GPR slots available in the
-     *    gr_top/gr_offs region (up to MAX_GR_REG_NUM), returns a
-     *    pointer into that region and advances grOffsIndex; or
-     *  - otherwise, returns a pointer into the stack overflow
-     *    area, advancing stackIndex.
+     *  - if the corresponding signed offset identifies an available
+     *    register slot, returns a pointer relative to vr_top or
+     *    gr_top and advances that offset; or
+     *  - otherwise, returns the next stack argument location and
+     *    advances the shared stack index.
      *
-     * The caller is responsible for reading the value using the
-     * appropriate type (see readValue()).
+     * The offsets read from va_list account for registers used by
+     * the function's named arguments. A negative offset identifies
+     * an available register-save slot; zero or a positive offset
+     * indicates that the corresponding save area is exhausted.
+     *
+     * Register-save slots used here are:
+     *  - GP: eight bytes per integer or pointer argument
+     *  - FP/SIMD: 16 bytes per floating-point argument
+     *
+     * Stack-passed arguments are consumed in order through one
+     * shared cursor, including for mixed GP and FP signatures.
+     * The JNI primitive and reference arguments handled here
+     * occupy eight-byte stack slots after C vararg promotions.
+     *
+     * The caller reads the value with the appropriate type; see
+     * readValue() in the base class.
+     *
+     * Reference: AAPCS64, appendix "Variable argument lists",
+     * sections "The va_start() macro" and "The va_arg() macro".
      *
      * @param method  JavaMethod describing the Java-side parameter
      *                types for this invocation.
      * @param paramId Zero-based index of the parameter within the
      *                Java argument list.
+     * @returns       Pointer to the memory location holding the
+     *                argument value.
      */
     protected extractVaListArgValue (
         method: JavaMethod,
         paramId: number
     ): NativePointer {
-        const MAX_VR_REG_NUM = 8;
-        const VR_REG_SIZE = 2;
-        const MAX_GR_REG_NUM = 4;
-        let currentPtr = NULL;
+        const GR_SLOT_SIZE = 8;
+        const VR_SLOT_SIZE = 16;
+        const STACK_SLOT_SIZE = 8;
 
-        if (method.fridaParams[paramId] === "float" ||
-            method.fridaParams[paramId] === "double") {
-            if (this.vrOffsIndex < MAX_VR_REG_NUM) {
-                currentPtr = this.vrTop
-                    .add(this.vrOffs)
-                    .add(this.vrOffsIndex * Process.pointerSize * VR_REG_SIZE);
-                this.vrOffsIndex++;
-            } else {
-                currentPtr = this.stack.add(this.stackIndex * Process.pointerSize);
-                this.stackIndex++;
-            }
-        } else {
-            if (this.grOffsIndex < MAX_GR_REG_NUM) {
-                currentPtr = this.grTop
-                    .add(this.grOffs)
-                    .add(this.grOffsIndex * Process.pointerSize);
-                this.grOffsIndex++;
-            } else {
-                currentPtr = this.stack.add(this.stackIndex * Process.pointerSize);
-                this.stackIndex++;
-            }
+        const type = method.fridaParams[paramId];
+        const isFloatingPoint = type === "float" || type === "double";
+
+        if (
+            isFloatingPoint &&
+            this.vrOffs < 0 &&
+            this.vrOffs + VR_SLOT_SIZE <= 0
+        ) {
+            const currentPtr = this.vrTop.add(this.vrOffs);
+            this.vrOffs += VR_SLOT_SIZE;
+            return currentPtr;
         }
 
+        if (
+            !isFloatingPoint &&
+            this.grOffs < 0 &&
+            this.grOffs + GR_SLOT_SIZE <= 0
+        ) {
+            const currentPtr = this.grTop.add(this.grOffs);
+            this.grOffs += GR_SLOT_SIZE;
+            return currentPtr;
+        }
+
+        const currentPtr = this.stack.add(
+            this.stackIndex * STACK_SLOT_SIZE
+        );
+        this.stackIndex++;
         return currentPtr;
     }
 
@@ -432,9 +437,7 @@ class JNIEnvInterceptorARM64 extends JNIEnvInterceptor {
         this.grTop = NULL;
         this.vrTop = NULL;
         this.grOffs = 0;
-        this.grOffsIndex = 0;
         this.vrOffs = 0;
-        this.vrOffsIndex = 0;
     }
 }
 
