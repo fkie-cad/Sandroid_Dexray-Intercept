@@ -126,8 +126,43 @@ public class MethodTarget {
         // no-op; used to exercise CallStaticVoidMethod* families
     }
 
-    // 13) For CallCharMethod / V / A tests
+    // 14) For CallCharMethod / V / A tests
     public char shiftChar(char c) {
         return (char) (c + 1);
+    }
+
+    // 15) Variadic boundary targets: return 1 only when every argument matches.
+
+    public static int boundaryDoubles5(
+            double a, double b, double c, double d, double e) {
+        return a == 1.25 && b == 2.25 && c == 3.25
+                && d == 4.25 && e == 5.25 ? 1 : 0;
+    }
+
+    public static int boundaryDoubles9(
+            double a, double b, double c, double d, double e,
+            double f, double g, double h, double i) {
+        return a == 1.25 && b == 2.25 && c == 3.25
+                && d == 4.25 && e == 5.25 && f == 6.25
+                && g == 7.25 && h == 8.25 && i == 9.25 ? 1 : 0;
+    }
+
+    public static int boundaryInts6(
+            int a, int b, int c, int d, int e, int f) {
+        return a == 11 && b == 22 && c == 33
+                && d == 44 && e == 55 && f == 66 ? 1 : 0;
+    }
+
+    public static int boundaryMixed(
+            int a, double b, int c, double d, int e, double f,
+            int g, double h, int i, double j, int k, double l,
+            double m, double n, double o) {
+        return a == 11 && b == 1.25
+                && c == 22 && d == 2.25
+                && e == 33 && f == 3.25
+                && g == 44 && h == 4.25
+                && i == 55 && j == 5.25
+                && k == 66 && l == 6.25
+                && m == 7.25 && n == 8.25 && o == 9.25 ? 1 : 0;
     }
 }

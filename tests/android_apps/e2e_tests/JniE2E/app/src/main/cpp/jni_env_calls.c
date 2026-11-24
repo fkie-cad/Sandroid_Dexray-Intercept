@@ -1097,6 +1097,198 @@ static void test_char_instance_calls(JNIEnv *env, jobject target, jclass targetC
     TEST_ASSERT(r3 == (jchar)'N', "CallCharMethodA shiftChar('M')='N'");
 }
 
+/*
+ * Test 15: argument register and stack boundaries.
+ *
+ * Exercises plain, V, and A calls with floating-point, integer, and
+ * mixed signatures. Each Java target returns 1 only if every argument
+ * matches. The JNI profile must also be checked for the decoded values:
+ * correct application arguments alone do not prove correct tracing.
+ */
+static void test_variadic_argument_boundaries(JNIEnv *env, jclass targetClass) {
+    LOGI("");
+    LOGI("=== Call tests: Test 15 variadic argument boundaries ===");
+
+    /* Five floating-point arguments. */
+    {
+        jmethodID mid = (*env)->GetStaticMethodID(
+            env, targetClass, "boundaryDoubles5", "(DDDDD)I"
+        );
+        if (mid == NULL) {
+            LOGE("GetStaticMethodID(boundaryDoubles5) failed");
+            (*env)->ExceptionDescribe(env);
+            (*env)->ExceptionClear(env);
+            TEST_ASSERT(0, "boundaryDoubles5 method lookup");
+        } else {
+            jvalue args[5] = {
+                { .d = 1.25 }, { .d = 2.25 }, { .d = 3.25 },
+                { .d = 4.25 }, { .d = 5.25 }
+            };
+
+            LOGI(">> boundaryDoubles5: plain");
+            jint plain = (*env)->CallStaticIntMethod(
+                env, targetClass, mid,
+                (jdouble)1.25, (jdouble)2.25, (jdouble)3.25,
+                (jdouble)4.25, (jdouble)5.25
+            );
+            TEST_ASSERT(plain == 1, "boundaryDoubles5 plain");
+
+            LOGI(">> boundaryDoubles5: V");
+            jint v = call_static_int_method_v(
+                env, targetClass, mid,
+                (jdouble)1.25, (jdouble)2.25, (jdouble)3.25,
+                (jdouble)4.25, (jdouble)5.25
+            );
+            TEST_ASSERT(v == 1, "boundaryDoubles5 V");
+
+            LOGI(">> boundaryDoubles5: A");
+            jint a = (*env)->CallStaticIntMethodA(
+                env, targetClass, mid, args
+            );
+            TEST_ASSERT(a == 1, "boundaryDoubles5 A");
+        }
+    }
+
+    /* Nine floating-point arguments. */
+    {
+        jmethodID mid = (*env)->GetStaticMethodID(
+            env, targetClass, "boundaryDoubles9", "(DDDDDDDDD)I"
+        );
+        if (mid == NULL) {
+            LOGE("GetStaticMethodID(boundaryDoubles9) failed");
+            (*env)->ExceptionDescribe(env);
+            (*env)->ExceptionClear(env);
+            TEST_ASSERT(0, "boundaryDoubles9 method lookup");
+        } else {
+            jvalue args[9] = {
+                { .d = 1.25 }, { .d = 2.25 }, { .d = 3.25 },
+                { .d = 4.25 }, { .d = 5.25 }, { .d = 6.25 },
+                { .d = 7.25 }, { .d = 8.25 }, { .d = 9.25 }
+            };
+
+            LOGI(">> boundaryDoubles9: plain");
+            jint plain = (*env)->CallStaticIntMethod(
+                env, targetClass, mid,
+                (jdouble)1.25, (jdouble)2.25, (jdouble)3.25,
+                (jdouble)4.25, (jdouble)5.25, (jdouble)6.25,
+                (jdouble)7.25, (jdouble)8.25, (jdouble)9.25
+            );
+            TEST_ASSERT(plain == 1, "boundaryDoubles9 plain");
+
+            LOGI(">> boundaryDoubles9: V");
+            jint v = call_static_int_method_v(
+                env, targetClass, mid,
+                (jdouble)1.25, (jdouble)2.25, (jdouble)3.25,
+                (jdouble)4.25, (jdouble)5.25, (jdouble)6.25,
+                (jdouble)7.25, (jdouble)8.25, (jdouble)9.25
+            );
+            TEST_ASSERT(v == 1, "boundaryDoubles9 V");
+
+            LOGI(">> boundaryDoubles9: A");
+            jint a = (*env)->CallStaticIntMethodA(
+                env, targetClass, mid, args
+            );
+            TEST_ASSERT(a == 1, "boundaryDoubles9 A");
+        }
+    }
+
+    /* Six general-purpose arguments. */
+    {
+        jmethodID mid = (*env)->GetStaticMethodID(
+            env, targetClass, "boundaryInts6", "(IIIIII)I"
+        );
+        if (mid == NULL) {
+            LOGE("GetStaticMethodID(boundaryInts6) failed");
+            (*env)->ExceptionDescribe(env);
+            (*env)->ExceptionClear(env);
+            TEST_ASSERT(0, "boundaryInts6 method lookup");
+        } else {
+            jvalue args[6] = {
+                { .i = 11 }, { .i = 22 }, { .i = 33 },
+                { .i = 44 }, { .i = 55 }, { .i = 66 }
+            };
+
+            LOGI(">> boundaryInts6: plain");
+            jint plain = (*env)->CallStaticIntMethod(
+                env, targetClass, mid,
+                (jint)11, (jint)22, (jint)33,
+                (jint)44, (jint)55, (jint)66
+            );
+            TEST_ASSERT(plain == 1, "boundaryInts6 plain");
+
+            LOGI(">> boundaryInts6: V");
+            jint v = call_static_int_method_v(
+                env, targetClass, mid,
+                (jint)11, (jint)22, (jint)33,
+                (jint)44, (jint)55, (jint)66
+            );
+            TEST_ASSERT(v == 1, "boundaryInts6 V");
+
+            LOGI(">> boundaryInts6: A");
+            jint a = (*env)->CallStaticIntMethodA(
+                env, targetClass, mid, args
+            );
+            TEST_ASSERT(a == 1, "boundaryInts6 A");
+        }
+    }
+
+    /* Interleaved general-purpose and floating-point arguments. */
+    {
+        jmethodID mid = (*env)->GetStaticMethodID(
+            env, targetClass, "boundaryMixed",
+            "(ID" "ID" "ID" "ID" "ID" "ID" "DDD)I"
+        );
+        if (mid == NULL) {
+            LOGE("GetStaticMethodID(boundaryMixed) failed");
+            (*env)->ExceptionDescribe(env);
+            (*env)->ExceptionClear(env);
+            TEST_ASSERT(0, "boundaryMixed method lookup");
+        } else {
+            jvalue args[15] = {
+                { .i = 11 }, { .d = 1.25 },
+                { .i = 22 }, { .d = 2.25 },
+                { .i = 33 }, { .d = 3.25 },
+                { .i = 44 }, { .d = 4.25 },
+                { .i = 55 }, { .d = 5.25 },
+                { .i = 66 }, { .d = 6.25 },
+                { .d = 7.25 }, { .d = 8.25 }, { .d = 9.25 }
+            };
+
+            LOGI(">> boundaryMixed: plain");
+            jint plain = (*env)->CallStaticIntMethod(
+                env, targetClass, mid,
+                (jint)11, (jdouble)1.25,
+                (jint)22, (jdouble)2.25,
+                (jint)33, (jdouble)3.25,
+                (jint)44, (jdouble)4.25,
+                (jint)55, (jdouble)5.25,
+                (jint)66, (jdouble)6.25,
+                (jdouble)7.25, (jdouble)8.25, (jdouble)9.25
+            );
+            TEST_ASSERT(plain == 1, "boundaryMixed plain");
+
+            LOGI(">> boundaryMixed: V");
+            jint v = call_static_int_method_v(
+                env, targetClass, mid,
+                (jint)11, (jdouble)1.25,
+                (jint)22, (jdouble)2.25,
+                (jint)33, (jdouble)3.25,
+                (jint)44, (jdouble)4.25,
+                (jint)55, (jdouble)5.25,
+                (jint)66, (jdouble)6.25,
+                (jdouble)7.25, (jdouble)8.25, (jdouble)9.25
+            );
+            TEST_ASSERT(v == 1, "boundaryMixed V");
+
+            LOGI(">> boundaryMixed: A");
+            jint a = (*env)->CallStaticIntMethodA(
+                env, targetClass, mid, args
+            );
+            TEST_ASSERT(a == 1, "boundaryMixed A");
+        }
+    }
+}
+
 /* Entry point */
 
 JNIEXPORT void JNICALL
@@ -1187,6 +1379,10 @@ Java_com_test_jnie2e_EnvCallsTests_runTests(JNIEnv *env, jclass clazz) {
     LOGI("");
     LOGI(">> Running test_static_primitive_calls...");
     test_static_primitive_calls(env, targetClass);
+
+    LOGI("");
+    LOGI(">> Running test_variadic_argument_boundaries...");
+    test_variadic_argument_boundaries(env, targetClass);
 
     LOGI("");
     LOGI(">> Running test_nonvirtual_calls...");
