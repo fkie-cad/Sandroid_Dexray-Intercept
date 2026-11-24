@@ -8,6 +8,14 @@ package com.test.jnie2e;
 public class NonvirtualDerived extends NonvirtualBase {
 
     @Override
+    public int boundaryMixedNonvirtual(
+            int a, double b, int c, double d, int e, double f,
+            int g, double h, int i, double j, int k, double l,
+            double m, double n, double o) {
+        return -1; // Makes accidental virtual dispatch distinguishable.
+    }
+
+    @Override
     public int baseInt(int x) {
         return x * 100;
     }

@@ -133,6 +133,14 @@ public class MethodTarget {
 
     // 15) Variadic boundary targets: return 1 only when every argument matches.
 
+    // Instance counterpart for plain, V, and A boundary testing.
+    public int boundaryMixedInstance(
+            int a, double b, int c, double d, int e, double f,
+            int g, double h, int i, double j, int k, double l,
+            double m, double n, double o) {
+        return boundaryMixed(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o);
+    }
+
     public static int boundaryDoubles5(
             double a, double b, double c, double d, double e) {
         return a == 1.25 && b == 2.25 && c == 3.25

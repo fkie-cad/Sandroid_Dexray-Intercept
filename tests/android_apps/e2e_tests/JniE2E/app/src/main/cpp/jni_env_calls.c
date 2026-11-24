@@ -896,6 +896,85 @@ static void test_nonvirtual_calls(JNIEnv *env) {
         return;
     }
 
+    // Mixed arguments: the nonvirtual V helper has an additional
+    // named GP argument compared with the instance/static helpers.
+    {
+        jmethodID mid = (*env)->GetMethodID(
+            env, baseCls, "boundaryMixedNonvirtual",
+            "(ID" "ID" "ID" "ID" "ID" "ID" "DDD)I"
+        );
+
+        if (mid == NULL) {
+            LOGE("GetMethodID(boundaryMixedNonvirtual) failed");
+            (*env)->ExceptionDescribe(env);
+            (*env)->ExceptionClear(env);
+            TEST_ASSERT(0, "boundaryMixedNonvirtual method lookup");
+        } else {
+
+            /* Plain nonvirtual variadic call. */
+            jint plain = (*env)->CallNonvirtualIntMethod(
+                env, obj, baseCls, mid,
+                (jint)11, (jdouble)1.25,
+                (jint)22, (jdouble)2.25,
+                (jint)33, (jdouble)3.25,
+                (jint)44, (jdouble)4.25,
+                (jint)55, (jdouble)5.25,
+                (jint)66, (jdouble)6.25,
+                (jdouble)7.25, (jdouble)8.25, (jdouble)9.25
+            );
+
+            if ((*env)->ExceptionCheck(env)) {
+                (*env)->ExceptionDescribe(env);
+                (*env)->ExceptionClear(env);
+                TEST_ASSERT(0, "boundaryMixedNonvirtual plain completed without exception");
+            } else {
+                TEST_ASSERT(plain == 1, "boundaryMixedNonvirtual plain");
+            }
+
+            /* A variant: arguments are supplied in a jvalue array. */
+            jvalue args[15] = {
+                { .i = 11 }, { .d = 1.25 },
+                { .i = 22 }, { .d = 2.25 },
+                { .i = 33 }, { .d = 3.25 },
+                { .i = 44 }, { .d = 4.25 },
+                { .i = 55 }, { .d = 5.25 },
+                { .i = 66 }, { .d = 6.25 },
+                { .d = 7.25 }, { .d = 8.25 }, { .d = 9.25 }
+            };
+
+            jint a = (*env)->CallNonvirtualIntMethodA(
+                env, obj, baseCls, mid, args
+            );
+
+            if ((*env)->ExceptionCheck(env)) {
+                (*env)->ExceptionDescribe(env);
+                (*env)->ExceptionClear(env);
+                TEST_ASSERT(0, "boundaryMixedNonvirtual A completed without exception");
+            } else {
+                TEST_ASSERT(a == 1, "boundaryMixedNonvirtual A");
+            }
+
+            jint result = call_nonvirtual_int_method_v(
+                env, obj, baseCls, mid,
+                (jint)11, (jdouble)1.25,
+                (jint)22, (jdouble)2.25,
+                (jint)33, (jdouble)3.25,
+                (jint)44, (jdouble)4.25,
+                (jint)55, (jdouble)5.25,
+                (jint)66, (jdouble)6.25,
+                (jdouble)7.25, (jdouble)8.25, (jdouble)9.25
+            );
+
+            if ((*env)->ExceptionCheck(env)) {
+                (*env)->ExceptionDescribe(env);
+                (*env)->ExceptionClear(env);
+                TEST_ASSERT(0, "boundaryMixedNonvirtual V completed without exception");
+            } else {
+                TEST_ASSERT(result == 1, "boundaryMixedNonvirtual V");
+            }
+        }
+    }
+
     // --- Int: baseInt(int) -> int*10 in base ---
     jmethodID midInt = (*env)->GetMethodID(env, baseCls, "baseInt", "(I)I");
     if (midInt != NULL) {
@@ -1105,9 +1184,85 @@ static void test_char_instance_calls(JNIEnv *env, jobject target, jclass targetC
  * matches. The JNI profile must also be checked for the decoded values:
  * correct application arguments alone do not prove correct tracing.
  */
-static void test_variadic_argument_boundaries(JNIEnv *env, jclass targetClass) {
+static void test_variadic_argument_boundaries(
+        JNIEnv *env, jobject target, jclass targetClass) {
     LOGI("");
     LOGI("=== Call tests: Test 15 variadic argument boundaries ===");
+
+    /* Instance plain, V, and A calls with mixed arguments and register spillover. */
+    {
+        jmethodID mid = (*env)->GetMethodID(
+            env, targetClass, "boundaryMixedInstance",
+            "(ID" "ID" "ID" "ID" "ID" "ID" "DDD)I"
+        );
+
+        if (mid == NULL) {
+            LOGE("GetMethodID(boundaryMixedInstance) failed");
+            (*env)->ExceptionDescribe(env);
+            (*env)->ExceptionClear(env);
+            TEST_ASSERT(0, "boundaryMixedInstance method lookup");
+        } else {
+            /* Plain variadic call. */
+            jint plain = (*env)->CallIntMethod(
+                env, target, mid,
+                (jint)11, (jdouble)1.25,
+                (jint)22, (jdouble)2.25,
+                (jint)33, (jdouble)3.25,
+                (jint)44, (jdouble)4.25,
+                (jint)55, (jdouble)5.25,
+                (jint)66, (jdouble)6.25,
+                (jdouble)7.25, (jdouble)8.25, (jdouble)9.25
+            );
+
+            if ((*env)->ExceptionCheck(env)) {
+                (*env)->ExceptionDescribe(env);
+                (*env)->ExceptionClear(env);
+                TEST_ASSERT(0, "boundaryMixedInstance plain completed without exception");
+            } else {
+                TEST_ASSERT(plain == 1, "boundaryMixedInstance plain");
+            }
+
+            /* A variant: arguments are supplied in a jvalue array. */
+            jvalue args[15] = {
+                { .i = 11 }, { .d = 1.25 },
+                { .i = 22 }, { .d = 2.25 },
+                { .i = 33 }, { .d = 3.25 },
+                { .i = 44 }, { .d = 4.25 },
+                { .i = 55 }, { .d = 5.25 },
+                { .i = 66 }, { .d = 6.25 },
+                { .d = 7.25 }, { .d = 8.25 }, { .d = 9.25 }
+            };
+
+            jint a = (*env)->CallIntMethodA(env, target, mid, args);
+
+            if ((*env)->ExceptionCheck(env)) {
+                (*env)->ExceptionDescribe(env);
+                (*env)->ExceptionClear(env);
+                TEST_ASSERT(0, "boundaryMixedInstance A completed without exception");
+            } else {
+                TEST_ASSERT(a == 1, "boundaryMixedInstance A");
+            }
+
+            jint result = call_int_method_v(
+                env, target, mid,
+                (jint)11, (jdouble)1.25,
+                (jint)22, (jdouble)2.25,
+                (jint)33, (jdouble)3.25,
+                (jint)44, (jdouble)4.25,
+                (jint)55, (jdouble)5.25,
+                (jint)66, (jdouble)6.25,
+                (jdouble)7.25, (jdouble)8.25, (jdouble)9.25
+            );
+
+            if ((*env)->ExceptionCheck(env)) {
+                (*env)->ExceptionDescribe(env);
+                (*env)->ExceptionClear(env);
+                TEST_ASSERT(0, "boundaryMixedInstance V completed without exception");
+            } else {
+                TEST_ASSERT(result == 1, "boundaryMixedInstance V");
+            }
+        }
+    }
 
     /* Five floating-point arguments. */
     {
@@ -1382,7 +1537,7 @@ Java_com_test_jnie2e_EnvCallsTests_runTests(JNIEnv *env, jclass clazz) {
 
     LOGI("");
     LOGI(">> Running test_variadic_argument_boundaries...");
-    test_variadic_argument_boundaries(env, targetClass);
+    test_variadic_argument_boundaries(env, target, targetClass);
 
     LOGI("");
     LOGI(">> Running test_nonvirtual_calls...");

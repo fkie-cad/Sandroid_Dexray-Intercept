@@ -7,6 +7,15 @@ package com.test.jnie2e;
  */
 public class NonvirtualBase {
 
+    // Mixed-argument target for nonvirtual plain, V, and A boundary testing.
+    public int boundaryMixedNonvirtual(
+            int a, double b, int c, double d, int e, double f,
+            int g, double h, int i, double j, int k, double l,
+            double m, double n, double o) {
+        return MethodTarget.boundaryMixed(
+                a, b, c, d, e, f, g, h, i, j, k, l, m, n, o);
+    }
+
     public int baseInt(int x) {
         return x * 10;
     }
