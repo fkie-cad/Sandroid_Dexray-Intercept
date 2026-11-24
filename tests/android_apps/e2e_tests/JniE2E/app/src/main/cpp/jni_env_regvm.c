@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
 #include <pthread.h>
+#include <stdlib.h>
 
 #define LOG_TAG "JNI_ENV_REGVM"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
@@ -133,6 +134,94 @@ static void test_javavm_getenv(JNIEnv *env_main) {
     TEST_ASSERT(env2 == env_main, "JavaVM::GetEnv returns same JNIEnv* as caller");
 }
 
+/*
+ * JavaVM GetEnv failure paths: verify that an initially NULL output remains
+ * NULL for an unsupported JNI version and for an unattached native thread.
+ */
+
+typedef struct {
+    jint rc;
+    JNIEnv *env;
+} GetEnvFailureResult;
+
+static void test_javavm_getenv_unsupported_version(void) {
+    LOGI("");
+    LOGI("=== Reg/VM tests: GetEnv unsupported version ===");
+
+    if (g_vm == NULL) {
+        TEST_ASSERT(0, "GetEnv unsupported version: g_vm non-NULL");
+        return;
+    }
+
+    JNIEnv *env = NULL;
+    jint rc = (*g_vm)->GetEnv(g_vm, (void **)&env, (jint)0x7fffffff);
+
+    LOGI("GetEnv unsupported version: rc=%d, env=%p", (int)rc, (void *)env);
+    TEST_ASSERT(rc == JNI_EVERSION,
+                "GetEnv unsupported version returns JNI_EVERSION");
+    TEST_ASSERT(env == NULL,
+                "GetEnv unsupported version leaves output NULL");
+}
+
+static void *thread_getenv_unattached_fn(void *arg) {
+    (void)arg;
+
+    GetEnvFailureResult *result = malloc(sizeof(*result));
+    if (result == NULL) {
+        return NULL;
+    }
+
+    result->env = NULL;
+    result->rc = (*g_vm)->GetEnv(
+        g_vm, (void **)&result->env, JNI_VERSION_1_6
+    );
+
+    /* Deliberately do not attach or call through result->env. */
+    return result;
+}
+
+static void test_javavm_getenv_unattached_thread(void) {
+    LOGI("");
+    LOGI("=== Reg/VM tests: GetEnv on unattached thread ===");
+
+    if (g_vm == NULL) {
+        TEST_ASSERT(0, "GetEnv unattached thread: g_vm non-NULL");
+        return;
+    }
+
+    pthread_t thread;
+    int err = pthread_create(
+        &thread, NULL, thread_getenv_unattached_fn, NULL
+    );
+
+    TEST_ASSERT(err == 0, "pthread_create for unattached GetEnv succeeded");
+    if (err != 0) {
+        return;
+    }
+
+    void *thread_result = NULL;
+    err = pthread_join(thread, &thread_result);
+    TEST_ASSERT(err == 0, "pthread_join for unattached GetEnv succeeded");
+    if (err != 0) {
+        return;
+    }
+
+    GetEnvFailureResult *result = thread_result;
+    if (result == NULL) {
+        TEST_ASSERT(0, "GetEnv unattached thread result allocation succeeded");
+        return;
+    }
+
+    LOGI("GetEnv unattached thread: rc=%d, env=%p",
+         (int)result->rc, (void *)result->env);
+    TEST_ASSERT(result->rc == JNI_EDETACHED,
+                "GetEnv unattached thread returns JNI_EDETACHED");
+    TEST_ASSERT(result->env == NULL,
+                "GetEnv unattached thread leaves output NULL");
+
+    free(result);
+}
+
 /* Thread for AttachCurrentThread */
 
 static void *thread_attach_fn(void *arg) {
@@ -232,6 +321,8 @@ Java_com_test_jnie2e_EnvRegistrationVmTests_runNativeTests(JNIEnv *env, jclass c
 
     test_register_unregister(env);
     test_javavm_getenv(env);
+    test_javavm_getenv_unsupported_version();
+    test_javavm_getenv_unattached_thread();
     test_attach_detach_thread();
     test_attach_detach_daemon();
 
