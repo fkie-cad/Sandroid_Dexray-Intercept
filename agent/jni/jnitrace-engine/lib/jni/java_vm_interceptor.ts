@@ -128,28 +128,30 @@ class JavaVMInterceptor {
                     localArgs as NativeFunctionArgumentValue[]
                 ) as NativeCallbackReturnValue;
 
+                const originalRet = ret;
                 ret = self.callbackManager.doAfterCallback(method.name, ctx, ret);
 
-                if (method.name === "GetEnv" ||
+                // Substitute the output only when both the real call and the
+                // callback-visible result indicate success. In particular, a
+                // callback changing a failure to success does not guarantee
+                // that the real VM supplied a valid JNIEnv pointer.
+                if (
+                    (method.name === "GetEnv" ||
                         method.name === "AttachCurrentThread" ||
-                        method.name === "AttachCurrentThreadAsDaemon"
+                        method.name === "AttachCurrentThreadAsDaemon") &&
+                    originalRet === JNI_OK &&
+                    ret === JNI_OK
                 ) {
+                    // localArgs[1] is the JNIEnv** output parameter.
+                    const envOut = localArgs[JNI_ENV_INDEX] as NativePointer;
 
-                    if (ret === JNI_OK) {
-                        self.threads.setJNIEnv(
-                            threadId, 
-                            (localArgs[JNI_ENV_INDEX] as NativePointer).readPointer()
-                        );
-                    }
+                    self.threads.setJNIEnv(threadId, envOut.readPointer());
 
-                    let jniEnv: NativePointer;
-                    if (!self.jniEnvInterceptor.isInitialised()) {
-                        jniEnv = self.jniEnvInterceptor.create();
-                    } else {
-                        jniEnv = self.jniEnvInterceptor.get();
-                    }
-                    // CHANGED: explicit cast; localArgs[1] is JNIEnv** (pointer)
-                    (localArgs[JNI_ENV_INDEX] as NativePointer).writePointer(jniEnv);
+                    const jniEnv = self.jniEnvInterceptor.isInitialised()
+                        ? self.jniEnvInterceptor.get()
+                        : self.jniEnvInterceptor.create();
+
+                    envOut.writePointer(jniEnv);
                 }
 
                 return ret;
