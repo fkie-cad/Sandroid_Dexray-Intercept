@@ -35,14 +35,6 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
     private grOffset: number;
 
     /**
-     * Initial general-purpose register offset captured from va_list.
-     * Used as a baseline to compute how many GR slots have already
-     * been consumed.
-
-     */
-    private grOffsetStart: number;
-
-    /**
      * Current offset (in bytes) into the floating-point register area
      * of the va_list’s reg_save_area, used when extracting float and
      * double arguments from varargs.
@@ -50,13 +42,6 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
      */
     private fpOffset: number;
 
-    /**
-     * Initial floating-point register offset captured from va_list.
-     * Used as a baseline to compute how many FP slots have already
-     * been consumed.
-
-     */
-    private fpOffsetStart: number;
     /**
      * Pointer to va_list.overflow_arg_area, i.e. the stack region
      * where arguments are read from once the register save area
@@ -86,9 +71,7 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
     ) {
         super(references, threads, callbackManager);
         this.grOffset = 0;
-        this.grOffsetStart = 0;
         this.fpOffset = 0;
-        this.fpOffsetStart = 0;
         this.overflowPtr = NULL;
         this.regSavePtr = NULL;
     }
@@ -308,10 +291,8 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
         
         // gp_offset
         this.grOffset = vaList.readU32();
-        this.grOffsetStart = this.grOffset;
         // fp_offset
         this.fpOffset = vaList.add(FP_OFFSET).readU32();
-        this.fpOffsetStart = this.fpOffset;
         // overflow_arg_area
         this.overflowPtr = vaList.add(Process.pointerSize).readPointer();
         // reg_save_area
@@ -326,23 +307,33 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
      * whether the argument is floating-point (float/double) or
      * integer/pointer, and:
      *
-     *  - if there are still register slots available in
-     *    reg_save_area (according to gp_offset/fp_offset and
-     *    MAX_GR_REG_NUM / MAX_FP_REG_NUM), returns a pointer
-     *    into reg_save_area and advances the corresponding
-     *    offset; or
-     *  - otherwise, returns a pointer into overflow_arg_area,
-     *    computed using reverse indexing to match the stack
-     *    layout of the varargs portion.
+     *  - if a slot is available in the corresponding register-save
+     *    area, returns a pointer into reg_save_area and advances
+     *    the GP or FP offset; or
+     *  - otherwise, returns the current overflow_arg_area pointer
+     *    and advances it to the next stack-passed argument.
      *
-     * The caller is responsible for reading the value with the
-     * appropriate type (see readValue() in the base class).
+     * The offsets read from va_list already account for registers
+     * consumed by the caller's named arguments. This method therefore
+     * compares the current absolute offset against the end of the
+     * corresponding register area:
      *
-     * System V AMD64 ABI vararg registers:
-     *  - Up to 6 GP arguments: RDI, RSI, RDX, RCX, R8, R9
-     *  - Up to 8 FP arguments: XMM0-XMM7
-     *  - Additional arguments spill to the stack
-     * 
+     *  - GP: offsets 0..47, with six eight-byte slots
+     *  - FP: offsets 48..175, with eight 16-byte slots
+     *
+     * Once an argument's register class is exhausted, its value is
+     * read from overflow_arg_area. A single cursor advances through
+     * stack-passed arguments in consumption order, including mixed
+     * GP and FP signatures. The JNI primitive and reference arguments
+     * handled here occupy eight-byte stack slots after C vararg
+     * promotions.
+     *
+     * The caller reads the value with the appropriate type; see
+     * readValue() in the base class.
+     *
+     * Reference: System V AMD64 ABI, version 1.0, section 3.5.7,
+     * "Variable Argument Lists".
+     *
      * @param method  JavaMethod describing the Java-side parameter
      *                types for this invocation.
      * @param paramId Zero-based index of the parameter within the
@@ -354,43 +345,30 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
         method: JavaMethod,
         paramId: number
     ): NativePointer {
-        // Each FP (Floating Point) register slot in reg_save_area
-        // is 16 bytes = 2 * sizeof(void *)
-        const FP_REG_SIZE = 2;
-        // Maximum GR and FP register slots per SysV AMD64 ABI
-        const MAX_GR_REG_NUM = 6;  // up to 6 GP varargs (RDI,RSI,RDX,RCX,R8,R9)
-        const MAX_FP_REG_NUM = 8;  // up to 8 XMM varargs (XMM0-XMM7)
-        const OFFSET = 1;
+        const GR_OFFSET_LIMIT = 48;
+        const FP_OFFSET_LIMIT = 176;
+        const GR_SLOT_SIZE = 8;
+        const FP_SLOT_SIZE = 16;
+        const STACK_SLOT_SIZE = 8;
 
-        let currentPtr = NULL;
+        const type = method.fridaParams[paramId];
+        const isFloatingPoint = type === "float" || type === "double";
 
-        if (method.fridaParams[paramId] === "float" ||
-            method.fridaParams[paramId] === "double") {
-            // Floating-point argument
-            const fpDelta = this.fpOffset - this.fpOffsetStart;
-            if (fpDelta / Process.pointerSize < MAX_FP_REG_NUM) {
-                // Still have FP register slots available
-                currentPtr = this.regSavePtr.add(this.fpOffset);
-                this.fpOffset += Process.pointerSize * FP_REG_SIZE;
-            } else {
-                // Spilled to stack
-                const reverseId = method.fridaParams.length - paramId - OFFSET;
-                currentPtr = this.overflowPtr.add(reverseId * Process.pointerSize);
-            }
-        } else {
-            // Integer/pointer argument
-            const grDelta = this.grOffset - this.grOffsetStart;
-            if (grDelta / Process.pointerSize < MAX_GR_REG_NUM) {
-                // Still have GP register slots available
-                currentPtr = this.regSavePtr.add(this.grOffset);
-                this.grOffset += Process.pointerSize;
-            } else {
-                // Spilled to stack
-                const reverseId = method.fridaParams.length - paramId - OFFSET;
-                currentPtr = this.overflowPtr.add(reverseId * Process.pointerSize);
-            }
+        if (isFloatingPoint && this.fpOffset + FP_SLOT_SIZE <= FP_OFFSET_LIMIT) {
+            const currentPtr = this.regSavePtr.add(this.fpOffset);
+            this.fpOffset += FP_SLOT_SIZE;
+            return currentPtr;
         }
 
+        if (!isFloatingPoint && this.grOffset + GR_SLOT_SIZE <= GR_OFFSET_LIMIT) {
+            const currentPtr = this.regSavePtr.add(this.grOffset);
+            this.grOffset += GR_SLOT_SIZE;
+            return currentPtr;
+        }
+
+        // overflow_arg_area points to the next stack-passed argument.
+        const currentPtr = this.overflowPtr;
+        this.overflowPtr = this.overflowPtr.add(STACK_SLOT_SIZE);
         return currentPtr;
     }
 
@@ -401,9 +379,7 @@ class JNIEnvInterceptorX64 extends JNIEnvInterceptor {
      */
     protected resetVaListArgExtract (): void {
         this.grOffset = 0;
-        this.grOffsetStart = 0;
         this.fpOffset = 0;
-        this.fpOffsetStart = 0;
         this.overflowPtr = NULL;
         this.regSavePtr = NULL;
     }
